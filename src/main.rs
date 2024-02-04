@@ -37,16 +37,17 @@ fn fetch_person(tx: &mut Transaction<'_>, id: i32) -> Option<Person> {
     }
 }
 
-fn my_transaction(client: &mut Client) -> Option<Person> {
+fn with_tx<F, T>(client: &mut Client, q: F) -> Option<T>
+where
+    F: FnOnce(&mut Transaction<'_>) -> Option<T>,
+{
     let mut tx = client.transaction().unwrap();
 
-    let person = Person::new("Ferris", 42, None);
-    let id = insert_person(&mut tx, &person);
-    let person = fetch_person(&mut tx, id);
+    let ret = q(&mut tx);
 
     tx.commit().unwrap();
 
-    person
+    ret
 }
 
 fn main() {
@@ -56,7 +57,11 @@ fn main() {
     )
     .unwrap();
 
-    let person = my_transaction(&mut client);
+    let person = with_tx(&mut client, |tx| {
+        let person = Person::new("Ferris", 42, None);
+        let id = insert_person(tx, &person);
+        fetch_person(tx, id)
+    });
 
     match person {
         Some(person) => println!("found person {:?}", person),
