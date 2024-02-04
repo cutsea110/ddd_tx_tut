@@ -17,6 +17,7 @@ impl Person {
 }
 
 fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> i32 {
+    // execute ではなく query を使うことで id を取得できる
     let row = tx
         .query_one(
             "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
