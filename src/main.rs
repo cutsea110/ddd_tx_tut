@@ -20,12 +20,62 @@ impl Person {
 trait PersonRepository {
     type Tx;
 
-    fn with_tx<F, T, E>(&mut self, q: F) -> Result<T, E>
-    where
-        F: FnOnce(&mut Self::Tx) -> Result<T, E>;
-
     fn insert_person(tx: &mut Self::Tx, person: &Person) -> PersonId;
     fn fetch_person(tx: &mut Self::Tx, id: PersonId) -> Option<Person>;
+}
+
+struct PersonRepositoryImpl<'a> {
+    conn_str: &'a str,
+    client: Client,
+}
+impl<'a> PersonRepositoryImpl<'a> {
+    fn new(conn_str: &'a str) -> Self {
+        let client = Client::connect(conn_str, NoTls).unwrap();
+        Self { conn_str, client }
+    }
+
+    fn with_tx<F, T, E>(&mut self, q: F) -> Result<T, E>
+    where
+        F: FnOnce(&mut Transaction<'_>) -> Result<T, E>,
+    {
+        let mut tx = self.client.transaction().unwrap();
+
+        match q(&mut tx) {
+            Ok(v) => {
+                tx.commit().unwrap();
+                Ok(v)
+            }
+
+            Err(e) => {
+                tx.rollback().unwrap();
+                Err(e)
+            }
+        }
+    }
+}
+impl<'a> PersonRepository for PersonRepositoryImpl<'a> {
+    type Tx = Transaction<'a>;
+
+    fn insert_person(tx: &mut Self::Tx, person: &Person) -> PersonId {
+        let row = tx
+            .query_one(
+                "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
+                &[&person.name, &person.age, &person.data],
+            )
+            .unwrap();
+
+        row.get(0)
+    }
+
+    fn fetch_person(tx: &mut Self::Tx, id: PersonId) -> Option<Person> {
+        match tx.query_one("SELECT name, age, data FROM person WHERE id = $1", &[&id]) {
+            Ok(row) => Some(Person::new(row.get(0), row.get(1), row.get(2))),
+            Err(e) => {
+                eprintln!("error fetching person: {}", e);
+                None
+            }
+        }
+    }
 }
 
 fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> PersonId {
