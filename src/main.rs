@@ -1,5 +1,6 @@
 use postgres::{Client, NoTls, Transaction};
 
+type PersonId = i32;
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct Person {
     name: String,
@@ -16,7 +17,7 @@ impl Person {
     }
 }
 
-fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> i32 {
+fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> PersonId {
     // execute ではなく query を使うことで id を取得できる
     let row = tx
         .query_one(
@@ -28,7 +29,7 @@ fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> i32 {
     row.get(0)
 }
 
-fn fetch_person(tx: &mut Transaction<'_>, id: i32) -> Option<Person> {
+fn fetch_person(tx: &mut Transaction<'_>, id: PersonId) -> Option<Person> {
     match tx.query_one("SELECT name, age, data FROM person WHERE id = $1", &[&id]) {
         Ok(row) => Some(Person::new(row.get(0), row.get(1), row.get(2))),
         Err(e) => {
