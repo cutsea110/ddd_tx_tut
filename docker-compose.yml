@@ -1,0 +1,13 @@
+version: '3'
+services:
+  db:
+    build: .
+    ports:
+      - 15432:5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: sampledb
+    volumes:
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+
