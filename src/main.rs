@@ -17,6 +17,17 @@ impl Person {
     }
 }
 
+trait PersonRepository {
+    type Tx;
+
+    fn with_tx<F, T, E>(&mut self, q: F) -> Result<T, E>
+    where
+        F: FnOnce(&mut Self::Tx) -> Result<T, E>;
+
+    fn insert_person(tx: &mut Self::Tx, person: &Person) -> PersonId;
+    fn fetch_person(tx: &mut Self::Tx, id: PersonId) -> Option<Person>;
+}
+
 fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> PersonId {
     // execute ではなく query を使うことで id を取得できる
     let row = tx
