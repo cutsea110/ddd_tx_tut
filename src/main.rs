@@ -582,6 +582,7 @@ trait PersonRepository<'a> {
 
 pub mod pg_db {
     use postgres::{Client, Transaction};
+    use std::fmt;
 
     use super::PersonRepository;
     use super::{Person, PersonId};
@@ -590,6 +591,11 @@ pub mod pg_db {
     pub struct PgPersonRepository<'a> {
         conn_str: &'a str,
         client: Client,
+    }
+    impl fmt::Display for PgPersonRepository<'_> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "PgPersonRepository {{ conn_str: {} }}", self.conn_str)
+        }
     }
     impl<'a> PgPersonRepository<'a> {
         pub fn new(conn_str: &'a str) -> Self {
