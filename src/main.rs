@@ -1,5 +1,3 @@
-use postgres::{Client, NoTls, Transaction};
-
 pub mod tx {
     pub trait Tx<Ctx> {
         type Item;
@@ -645,7 +643,7 @@ pub mod pg_db {
         }
     }
 }
-use pg_db::PgPersonRepository;
+use pg_db::PgPersonRepository as db;
 
 fn main() {
     let mut dao =
@@ -654,10 +652,7 @@ fn main() {
     let person = Person::new("Gauss", 21, None);
 
     let result = dao
-        .run_tx(
-            PgPersonRepository::insert_person(&person)
-                .and_then(|id| PgPersonRepository::fetch_person(id)),
-        )
+        .run_tx(db::insert_person(&person).and_then(|id| db::fetch_person(id)))
         .unwrap();
 
     println!("{:?}", result);
