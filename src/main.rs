@@ -578,14 +578,8 @@ trait PersonRepository<'a> {
     where
         Tx: tx::Tx<Self::Ctx, Item = T, Err = E>;
 
-    fn insert_person(
-        &mut self,
-        person: &Person,
-    ) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = ()>;
-    fn fetch_person(
-        &mut self,
-        id: PersonId,
-    ) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = ()>;
+    fn insert_person(person: &Person) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = ()>;
+    fn fetch_person(id: PersonId) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = ()>;
 }
 
 pub mod pg_db {
@@ -625,10 +619,7 @@ pub mod pg_db {
             result
         }
 
-        fn insert_person(
-            &mut self,
-            person: &Person,
-        ) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = ()> {
+        fn insert_person(person: &Person) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = ()> {
             tx::with_tx(move |tx: &mut Self::Ctx| {
                 let row = tx
                     .query_one(
@@ -641,10 +632,7 @@ pub mod pg_db {
             })
         }
 
-        fn fetch_person(
-            &mut self,
-            id: PersonId,
-        ) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = ()> {
+        fn fetch_person(id: PersonId) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = ()> {
             tx::with_tx(move |tx: &mut Self::Ctx| {
                 match tx.query_one("SELECT name, age, data FROM person WHERE id = $1", &[&id]) {
                     Ok(row) => Ok(Some(Person::new(row.get(0), row.get(1), row.get(2)))),
@@ -657,74 +645,20 @@ pub mod pg_db {
         }
     }
 }
-
-fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> PersonId {
-    // execute ではなく query を使うことで id を取得できる
-    let row = tx
-        .query_one(
-            "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
-            &[&person.name, &person.age, &person.data],
-        )
-        .unwrap();
-
-    row.get(0)
-}
-
-fn fetch_person(tx: &mut Transaction<'_>, id: PersonId) -> Option<Person> {
-    match tx.query_one("SELECT name, age, data FROM person WHERE id = $1", &[&id]) {
-        Ok(row) => Some(Person::new(row.get(0), row.get(1), row.get(2))),
-        Err(e) => {
-            eprintln!("error fetching person: {}", e);
-            None
-        }
-    }
-}
-
-// usually, you would use this transaction
-fn pg_run_tx<F, T, E>(client: &mut Client, f: F) -> Result<T, E>
-where
-    F: FnOnce(&mut Transaction<'_>) -> Result<T, E>,
-{
-    let mut ctx = client.transaction().expect("begin transaction");
-
-    match tx::with_tx(f).run(&mut ctx) {
-        Ok(result) => {
-            ctx.commit().expect("commit transaction");
-            Ok(result)
-        }
-        Err(e) => {
-            ctx.rollback().expect("rollback transaction");
-            Err(e)
-        }
-    }
-}
-
-// always rollback at the case of test
-fn pg_run_tx_test<F, T, E>(client: &mut Client, f: F) -> Result<T, E>
-where
-    F: FnOnce(&mut Transaction<'_>) -> Result<T, E>,
-{
-    let mut ctx = client.transaction().expect("begin transaction");
-
-    let result = tx::with_tx(f).run(&mut ctx);
-
-    ctx.rollback().expect("rollback transaction");
-
-    result
-}
+use pg_db::PgPersonRepository;
 
 fn main() {
-    let mut client = Client::connect(
-        "postgresql://admin:adminpass@localhost:15432/sampledb",
-        NoTls,
-    )
-    .expect("create connection");
+    let mut dao =
+        pg_db::PgPersonRepository::new("postgresql://admin:adminpass@localhost:15432/sampledb");
 
-    let result = pg_run_tx_test(&mut client, |tx| {
-        let person = Person::new("Gauss", 21, None);
-        let id = insert_person(tx, &person);
-        fetch_person(tx, id).ok_or(())
-    });
+    let person = Person::new("Gauss", 21, None);
+
+    let result = dao
+        .run_tx(
+            PgPersonRepository::insert_person(&person)
+                .and_then(|id| PgPersonRepository::fetch_person(id)),
+        )
+        .unwrap();
 
     println!("{:?}", result);
 }
