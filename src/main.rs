@@ -571,6 +571,93 @@ impl Person {
     }
 }
 
+trait PersonRepository<'a> {
+    type Ctx;
+
+    fn run_tx<Tx, T, E>(&'a mut self, tx: Tx) -> Result<T, E>
+    where
+        Tx: tx::Tx<Self::Ctx, Item = T, Err = E>;
+
+    fn insert_person(
+        &mut self,
+        person: &Person,
+    ) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = ()>;
+    fn fetch_person(
+        &mut self,
+        id: PersonId,
+    ) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = ()>;
+}
+
+pub mod pg_db {
+    use postgres::{Client, Transaction};
+
+    use super::PersonRepository;
+    use super::{Person, PersonId};
+    use crate::tx;
+
+    pub struct PgPersonRepository<'a> {
+        conn_str: &'a str,
+        client: Client,
+    }
+    impl<'a> PgPersonRepository<'a> {
+        pub fn new(conn_str: &'a str) -> Self {
+            let client = Client::connect(conn_str, postgres::NoTls).unwrap();
+            Self { conn_str, client }
+        }
+    }
+    impl<'a> PersonRepository<'a> for PgPersonRepository<'a> {
+        type Ctx = Transaction<'a>;
+
+        fn run_tx<Tx, T, E>(&'a mut self, tx: Tx) -> Result<T, E>
+        where
+            Tx: tx::Tx<Self::Ctx, Item = T, Err = E>,
+        {
+            let mut ctx = self.client.transaction().unwrap();
+
+            let result = tx.run(&mut ctx);
+
+            if result.is_ok() {
+                ctx.commit().unwrap();
+            } else {
+                ctx.rollback().unwrap();
+            }
+
+            result
+        }
+
+        fn insert_person(
+            &mut self,
+            person: &Person,
+        ) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = ()> {
+            tx::with_tx(move |tx: &mut Self::Ctx| {
+                let row = tx
+                    .query_one(
+                        "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
+                        &[&person.name, &person.age, &person.data],
+                    )
+                    .unwrap();
+
+                Ok(row.get(0))
+            })
+        }
+
+        fn fetch_person(
+            &mut self,
+            id: PersonId,
+        ) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = ()> {
+            tx::with_tx(move |tx: &mut Self::Ctx| {
+                match tx.query_one("SELECT name, age, data FROM person WHERE id = $1", &[&id]) {
+                    Ok(row) => Ok(Some(Person::new(row.get(0), row.get(1), row.get(2)))),
+                    Err(e) => {
+                        eprintln!("error fetching person: {}", e);
+                        Ok(None)
+                    }
+                }
+            })
+        }
+    }
+}
+
 fn insert_person(tx: &mut Transaction<'_>, person: &Person) -> PersonId {
     // execute ではなく query を使うことで id を取得できる
     let row = tx
