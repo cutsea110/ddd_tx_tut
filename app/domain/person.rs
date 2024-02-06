@@ -28,7 +28,7 @@ pub trait PersonRepository<'a> {
     fn insert_person(person: &Person) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = Self::Err>;
     fn fetch_person(id: PersonId)
         -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err>;
-    fn collect_persons() -> impl tx::Tx<Self::Ctx, Item = Vec<Person>, Err = Self::Err>;
+    fn collect_persons() -> impl tx::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>;
     fn update_person(
         id: PersonId,
         person: &Person,

@@ -78,26 +78,23 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         id: PersonId,
     ) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err> {
         tx::with_tx(move |tx: &mut Self::Ctx| {
-            match tx.query_one("SELECT name, age, data FROM person WHERE id = $1", &[&id]) {
-                Ok(row) => Ok(Some(Person::new(row.get(0), row.get(1), row.get(2)))),
-                Err(e) => {
-                    eprintln!("error fetching person: {}", e);
-                    Ok(None)
-                }
-            }
+            tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
+                .map(|row| row.map(|row| Person::new(row.get(0), row.get(1), row.get(2))))
+                .map_err(|e| PgDbError::QueryFailed(e))
         })
     }
 
-    fn collect_persons() -> impl tx::Tx<Self::Ctx, Item = Vec<Person>, Err = Self::Err> {
+    fn collect_persons() -> impl tx::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>
+    {
         tx::with_tx(move |tx: &mut Self::Ctx| {
             let rows = tx
                 .query("SELECT id, name, age, data FROM person", &[])
-                .map_err(|e| PgDbError::QueryFailed(e))?;
-
-            Ok(rows
+                .map_err(|e| PgDbError::QueryFailed(e))?
                 .iter()
-                .map(|row| Person::new(row.get(1), row.get(2), row.get(3)))
-                .collect())
+                .map(|row| (row.get(0), Person::new(row.get(1), row.get(2), row.get(3))))
+                .collect();
+
+            Ok(rows)
         })
     }
 
