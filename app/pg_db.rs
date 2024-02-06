@@ -1,7 +1,7 @@
 use postgres::{Client, Transaction};
 use std::fmt;
 
-use crate::domain::{self, Person, PersonId, PersonRepositoryError};
+use crate::domain::person::{self, Person, PersonId, PersonRepositoryError};
 use tx_rs;
 
 pub struct PgPersonRepository<'a> {
@@ -22,10 +22,10 @@ impl<'a> PgPersonRepository<'a> {
         Self { conn_str, client }
     }
 }
-impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
+impl<'a> person::PersonRepository<'a> for PgPersonRepository<'a> {
     type Ctx = Transaction<'a>;
 
-    fn run_tx<Tx, T>(&'a mut self, tx: Tx) -> domain::Result<T>
+    fn run_tx<Tx, T>(&'a mut self, tx: Tx) -> person::Result<T>
     where
         Tx: tx_rs::Tx<Self::Ctx, Item = T, Err = PersonRepositoryError>,
     {

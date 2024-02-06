@@ -1,3 +1,1 @@
-mod person;
-
-pub use person::*;
+pub mod person;

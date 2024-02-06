@@ -1,7 +1,7 @@
 mod domain;
 mod pg_db;
 
-use domain::{Person, PersonRepository};
+use domain::person::{Person, PersonRepository};
 use pg_db::PgPersonRepository as db;
 use tx_rs::{with_tx, Tx};
 
