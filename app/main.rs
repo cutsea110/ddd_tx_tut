@@ -18,40 +18,36 @@ pub enum MyError {
 type Result<T> = std::result::Result<T, MyError>;
 
 // TODO: make this trait and independent from concrete repository
-pub mod usecase {
-    use super::*;
+fn register_person(person: &Person) -> Result<Option<Person>> {
+    db::new(DB_URL)
+        .run_tx(db::create(person).and_then(|id| db::fetch(id)))
+        .map_err(|_| MyError::Dummy)
+}
 
-    pub fn register_person(person: &Person) -> Result<Option<Person>> {
-        db::new(DB_URL)
-            .run_tx(db::create(person).and_then(|id| db::fetch(id)))
-            .map_err(|_| MyError::Dummy)
-    }
+fn batch_register_persons(persons: &[Person]) -> Result<Vec<PersonId>> {
+    db::new(DB_URL)
+        .run_tx(with_tx(|tx| {
+            let mut ids = vec![];
+            for p in persons {
+                let id = db::create(p).run(tx)?;
+                ids.push(id);
+            }
+            Ok(ids)
+        }))
+        .map_err(|_| MyError::Dummy)
+}
 
-    pub fn batch_register_persons(persons: &[Person]) -> Result<Vec<PersonId>> {
-        db::new(DB_URL)
-            .run_tx(with_tx(|tx| {
-                let mut ids = vec![];
-                for p in persons {
-                    let id = db::create(p).run(tx)?;
-                    ids.push(id);
-                }
-                Ok(ids)
-            }))
-            .map_err(|_| MyError::Dummy)
-    }
-
-    pub fn unregister_all_persons() -> Result<()> {
-        db::new(DB_URL)
-            .run_tx(with_tx(|tx| {
-                let ps = db::collect().run(tx)?;
-                for (id, p) in ps {
-                    println!("{} {}", id, p);
-                    db::delete(id).run(tx)?;
-                }
-                Ok(())
-            }))
-            .map_err(|_| MyError::Dummy)
-    }
+fn unregister_all_persons() -> Result<()> {
+    db::new(DB_URL)
+        .run_tx(with_tx(|tx| {
+            let ps = db::collect().run(tx)?;
+            for (id, p) in ps {
+                println!("{} {}", id, p);
+                db::delete(id).run(tx)?;
+            }
+            Ok(())
+        }))
+        .map_err(|_| MyError::Dummy)
 }
 
 fn main() {
