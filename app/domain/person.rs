@@ -39,17 +39,12 @@ pub trait PersonRepository<'a> {
     where
         Tx: tx_rs::Tx<Self::Ctx, Item = T, Err = Self::Err>;
 
-    fn insert_person(
-        person: &Person,
-    ) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId, Err = Self::Err>;
-    fn fetch_person(
-        id: PersonId,
-    ) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err>;
-    fn collect_persons(
-    ) -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>;
-    fn update_person(
+    fn create(person: &Person) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId, Err = Self::Err>;
+    fn fetch(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err>;
+    fn collect() -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>;
+    fn update(
         id: PersonId,
         person: &Person,
     ) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err>;
-    fn delete_person(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err>;
+    fn delete(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err>;
 }

@@ -13,10 +13,7 @@ fn main() {
     // test insert and fetch
     {
         let result = db::new(DB_URL)
-            .run_tx(
-                db::insert_person(&Person::new("cutsea", 53, None))
-                    .and_then(|id| db::fetch_person(id)),
-            )
+            .run_tx(db::create(&Person::new("cutsea", 53, None)).and_then(|id| db::fetch(id)))
             .expect("run tx");
 
         println!("{:?}", result);
@@ -34,7 +31,7 @@ fn main() {
                     Person::new("Euler", 23, Some(b"Mathematical analysis".as_ref())),
                 ];
                 for p in ps {
-                    let id = db::insert_person(&p).run(tx)?;
+                    let id = db::create(&p).run(tx)?;
                     ids.push(id);
                 }
 
@@ -49,10 +46,10 @@ fn main() {
     {
         let _ = db::new(DB_URL)
             .run_tx(with_tx(|tx| {
-                let ps = db::collect_persons().run(tx)?;
+                let ps = db::collect().run(tx)?;
                 for (id, p) in ps {
                     println!("{}: {}", id, p);
-                    db::delete_person(id).run(tx)?;
+                    db::delete(id).run(tx)?;
                 }
                 Ok(())
             }))

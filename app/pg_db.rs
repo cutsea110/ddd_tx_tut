@@ -61,9 +61,7 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         result
     }
 
-    fn insert_person(
-        person: &Person,
-    ) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId, Err = Self::Err> {
+    fn create(person: &Person) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId, Err = Self::Err> {
         tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             let row = tx
                 .query_one(
@@ -76,9 +74,7 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         })
     }
 
-    fn fetch_person(
-        id: PersonId,
-    ) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err> {
+    fn fetch(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err> {
         tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
                 .map(|row| row.map(|row| Person::new(row.get(0), row.get(1), row.get(2))))
@@ -86,8 +82,7 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         })
     }
 
-    fn collect_persons(
-    ) -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err> {
+    fn collect() -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err> {
         tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             let rows = tx
                 .query("SELECT id, name, age, data FROM person", &[])
@@ -100,7 +95,7 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         })
     }
 
-    fn update_person(
+    fn update(
         id: PersonId,
         person: &Person,
     ) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err> {
@@ -115,7 +110,7 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         })
     }
 
-    fn delete_person(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err> {
+    fn delete(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err> {
         tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             tx.execute("DELETE FROM person WHERE id = $1", &[&id])
                 .map_err(|e| PgDbError::QueryFailed(e))?;
