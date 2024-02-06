@@ -10,10 +10,11 @@ const DB_URL: &str = "postgresql://admin:adminpass@localhost:15432/sampledb";
 fn main() {
     // test insert and fetch
     {
-        let person = Person::new("cutsea", 53, None);
-
         let result = db::new(DB_URL)
-            .run_tx(db::insert_person(&person).and_then(|id| db::fetch_person(id)))
+            .run_tx(
+                db::insert_person(&Person::new("cutsea", 53, None))
+                    .and_then(|id| db::fetch_person(id)),
+            )
             .expect("run tx");
 
         println!("{:?}", result);
