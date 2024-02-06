@@ -16,7 +16,7 @@ impl fmt::Display for PgPersonRepository<'_> {
 impl<'a> PgPersonRepository<'a> {
     pub fn new(conn_str: &'a str) -> Self {
         let client = Client::connect(conn_str, postgres::NoTls)
-            .map_err(|_| PersonRepositoryError::Dummy)
+            .map_err(|_| PersonRepositoryError::ConnectFailed)
             .expect("connect to database");
 
         Self { conn_str, client }
@@ -32,14 +32,16 @@ impl<'a> person::PersonRepository<'a> for PgPersonRepository<'a> {
         let mut ctx = self
             .client
             .transaction()
-            .map_err(|_| PersonRepositoryError::Dummy)?;
+            .map_err(|_| PersonRepositoryError::TransactionFailed)?;
 
         let result = tx.run(&mut ctx);
 
         if result.is_ok() {
-            ctx.commit().map_err(|_| PersonRepositoryError::Dummy)?;
+            ctx.commit()
+                .map_err(|_| PersonRepositoryError::CommitFailed)?;
         } else {
-            ctx.rollback().map_err(|_| PersonRepositoryError::Dummy)?;
+            ctx.rollback()
+                .map_err(|_| PersonRepositoryError::RollbackFailed)?;
         }
 
         result
@@ -54,7 +56,7 @@ impl<'a> person::PersonRepository<'a> for PgPersonRepository<'a> {
                     "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
                     &[&person.name, &person.age, &person.data],
                 )
-                .map_err(|_| PersonRepositoryError::Dummy)?;
+                .map_err(|_| PersonRepositoryError::CreateFailed)?;
 
             Ok(row.get(0))
         })
@@ -66,7 +68,7 @@ impl<'a> person::PersonRepository<'a> for PgPersonRepository<'a> {
         tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
                 .map(|row| row.map(|row| Person::new(row.get(0), row.get(1), row.get(2))))
-                .map_err(|_| PersonRepositoryError::Dummy)
+                .map_err(|_| PersonRepositoryError::FetchFailed)
         })
     }
 
@@ -76,7 +78,7 @@ impl<'a> person::PersonRepository<'a> for PgPersonRepository<'a> {
         tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             let rows = tx
                 .query("SELECT id, name, age, data FROM person", &[])
-                .map_err(|_| PersonRepositoryError::Dummy)?
+                .map_err(|_| PersonRepositoryError::CollectFailed)?
                 .iter()
                 .map(|row| (row.get(0), Person::new(row.get(1), row.get(2), row.get(3))))
                 .collect();
@@ -94,7 +96,7 @@ impl<'a> person::PersonRepository<'a> for PgPersonRepository<'a> {
                 "UPDATE person SET name = $1, age = $2, data = $3 WHERE id = $4",
                 &[&person.name, &person.age, &person.data, &id],
             )
-            .map_err(|_| PersonRepositoryError::Dummy)?;
+            .map_err(|_| PersonRepositoryError::UpdateFailed)?;
 
             Ok(())
         })
@@ -103,7 +105,7 @@ impl<'a> person::PersonRepository<'a> for PgPersonRepository<'a> {
     fn delete(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = PersonRepositoryError> {
         tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             tx.execute("DELETE FROM person WHERE id = $1", &[&id])
-                .map_err(|_| PersonRepositoryError::Dummy)?;
+                .map_err(|_| PersonRepositoryError::DeleteFailed)?;
 
             Ok(())
         })

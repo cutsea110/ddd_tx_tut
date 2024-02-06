@@ -5,8 +5,24 @@ use tx_rs;
 
 #[derive(Debug, Error)]
 pub enum PersonRepositoryError {
-    #[error("Dummy")]
-    Dummy,
+    #[error("connect failed")]
+    ConnectFailed,
+    #[error("transaction failed")]
+    TransactionFailed,
+    #[error("commit failed")]
+    CommitFailed,
+    #[error("rollback failed")]
+    RollbackFailed,
+    #[error("create failed")]
+    CreateFailed,
+    #[error("fetch failed")]
+    FetchFailed,
+    #[error("collect failed")]
+    CollectFailed,
+    #[error("update failed")]
+    UpdateFailed,
+    #[error("delete failed")]
+    DeleteFailed,
 }
 
 pub type Result<T> = std::result::Result<T, PersonRepositoryError>;
