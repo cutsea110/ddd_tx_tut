@@ -2,6 +2,9 @@ use postgres::{Client, Transaction};
 use std::fmt;
 use thiserror::Error;
 
+use crate::domain::{self, Person, PersonId};
+use tx_rs::tx;
+
 #[derive(Debug, Error)]
 pub enum PgDbError {
     #[error("query failed: {0:?}")]
@@ -15,10 +18,6 @@ pub enum PgDbError {
     #[error("failed to rollback")]
     RollbackFailed,
 }
-
-use super::PersonRepository;
-use super::{Person, PersonId};
-use tx_rs::tx;
 
 pub struct PgPersonRepository<'a> {
     conn_str: &'a str,
@@ -38,7 +37,7 @@ impl<'a> PgPersonRepository<'a> {
         Self { conn_str, client }
     }
 }
-impl<'a> PersonRepository<'a> for PgPersonRepository<'a> {
+impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
     type Ctx = Transaction<'a>;
     type Err = PgDbError;
 
