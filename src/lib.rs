@@ -1,1 +1,3 @@
-pub mod tx;
+mod tx;
+
+pub use tx::*;

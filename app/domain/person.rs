@@ -1,6 +1,6 @@
 use core::fmt;
 
-use tx_rs::tx;
+use tx_rs;
 
 pub type PersonId = i32;
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -37,15 +37,19 @@ pub trait PersonRepository<'a> {
 
     fn run_tx<Tx, T>(&'a mut self, tx: Tx) -> Result<T, Self::Err>
     where
-        Tx: tx::Tx<Self::Ctx, Item = T, Err = Self::Err>;
+        Tx: tx_rs::Tx<Self::Ctx, Item = T, Err = Self::Err>;
 
-    fn insert_person(person: &Person) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = Self::Err>;
-    fn fetch_person(id: PersonId)
-        -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err>;
-    fn collect_persons() -> impl tx::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>;
+    fn insert_person(
+        person: &Person,
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId, Err = Self::Err>;
+    fn fetch_person(
+        id: PersonId,
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err>;
+    fn collect_persons(
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>;
     fn update_person(
         id: PersonId,
         person: &Person,
-    ) -> impl tx::Tx<Self::Ctx, Item = (), Err = Self::Err>;
-    fn delete_person(id: PersonId) -> impl tx::Tx<Self::Ctx, Item = (), Err = Self::Err>;
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err>;
+    fn delete_person(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err>;
 }

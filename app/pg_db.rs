@@ -3,7 +3,7 @@ use std::fmt;
 use thiserror::Error;
 
 use crate::domain::{self, Person, PersonId};
-use tx_rs::tx;
+use tx_rs;
 
 #[derive(Debug, Error)]
 pub enum PgDbError {
@@ -43,7 +43,7 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
 
     fn run_tx<Tx, T>(&'a mut self, tx: Tx) -> Result<T, Self::Err>
     where
-        Tx: tx::Tx<Self::Ctx, Item = T, Err = Self::Err>,
+        Tx: tx_rs::Tx<Self::Ctx, Item = T, Err = Self::Err>,
     {
         let mut ctx = self
             .client
@@ -61,8 +61,10 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         result
     }
 
-    fn insert_person(person: &Person) -> impl tx::Tx<Self::Ctx, Item = PersonId, Err = Self::Err> {
-        tx::with_tx(move |tx: &mut Self::Ctx| {
+    fn insert_person(
+        person: &Person,
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId, Err = Self::Err> {
+        tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             let row = tx
                 .query_one(
                     "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
@@ -76,17 +78,17 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
 
     fn fetch_person(
         id: PersonId,
-    ) -> impl tx::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err> {
-        tx::with_tx(move |tx: &mut Self::Ctx| {
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err> {
+        tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
                 .map(|row| row.map(|row| Person::new(row.get(0), row.get(1), row.get(2))))
                 .map_err(|e| PgDbError::QueryFailed(e))
         })
     }
 
-    fn collect_persons() -> impl tx::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>
-    {
-        tx::with_tx(move |tx: &mut Self::Ctx| {
+    fn collect_persons(
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err> {
+        tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             let rows = tx
                 .query("SELECT id, name, age, data FROM person", &[])
                 .map_err(|e| PgDbError::QueryFailed(e))?
@@ -101,8 +103,8 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
     fn update_person(
         id: PersonId,
         person: &Person,
-    ) -> impl tx::Tx<Self::Ctx, Item = (), Err = Self::Err> {
-        tx::with_tx(move |tx: &mut Self::Ctx| {
+    ) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err> {
+        tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             tx.execute(
                 "UPDATE person SET name = $1, age = $2, data = $3 WHERE id = $4",
                 &[&person.name, &person.age, &person.data, &id],
@@ -113,8 +115,8 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
         })
     }
 
-    fn delete_person(id: PersonId) -> impl tx::Tx<Self::Ctx, Item = (), Err = Self::Err> {
-        tx::with_tx(move |tx: &mut Self::Ctx| {
+    fn delete_person(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err> {
+        tx_rs::with_tx(move |tx: &mut Self::Ctx| {
             tx.execute("DELETE FROM person WHERE id = $1", &[&id])
                 .map_err(|e| PgDbError::QueryFailed(e))?;
 
