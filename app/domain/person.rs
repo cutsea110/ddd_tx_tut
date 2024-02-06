@@ -1,6 +1,15 @@
 use core::fmt;
+use thiserror::Error;
 
 use tx_rs;
+
+#[derive(Debug, Error)]
+pub enum PersonRepositoryError {
+    #[error("Dummy")]
+    Dummy,
+}
+
+pub type Result<T> = std::result::Result<T, PersonRepositoryError>;
 
 pub type PersonId = i32;
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -33,18 +42,14 @@ impl Person {
 
 pub trait PersonRepository<'a> {
     type Ctx;
-    type Err;
 
-    fn run_tx<Tx, T>(&'a mut self, tx: Tx) -> Result<T, Self::Err>
+    fn run_tx<Tx, T>(&'a mut self, tx: Tx) -> Result<T>
     where
-        Tx: tx_rs::Tx<Self::Ctx, Item = T, Err = Self::Err>;
+        Tx: tx_rs::Tx<Self::Ctx, Item = T, Err = PersonRepositoryError>;
 
-    fn create(person: &Person) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId, Err = Self::Err>;
-    fn fetch(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>, Err = Self::Err>;
-    fn collect() -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>, Err = Self::Err>;
-    fn update(
-        id: PersonId,
-        person: &Person,
-    ) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err>;
-    fn delete(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = (), Err = Self::Err>;
+    fn create(person: &Person) -> impl tx_rs::Tx<Self::Ctx, Item = PersonId>;
+    fn fetch(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = Option<Person>>;
+    fn collect() -> impl tx_rs::Tx<Self::Ctx, Item = Vec<(PersonId, Person)>>;
+    fn update(id: PersonId, person: &Person) -> impl tx_rs::Tx<Self::Ctx, Item = ()>;
+    fn delete(id: PersonId) -> impl tx_rs::Tx<Self::Ctx, Item = ()>;
 }
