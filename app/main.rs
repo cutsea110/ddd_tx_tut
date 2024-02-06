@@ -1,9 +1,11 @@
 mod domain;
 mod pg_db;
+mod usecase;
 
 use domain::{Person, PersonRepository};
 use pg_db::PgPersonRepository as db;
 use tx_rs::tx::{with_tx, Tx};
+use usecase::PersonUsecase;
 
 const DB_URL: &str = "postgresql://admin:adminpass@localhost:15432/sampledb";
 
