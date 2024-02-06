@@ -25,10 +25,10 @@ fn main() {
             .run_tx(with_tx(|tx| {
                 let mut ids = vec![];
                 let ps = [
-                    Person::new("Gauss", 21, None),
-                    Person::new("Galois", 16, None),
-                    Person::new("Abel", 26, None),
-                    Person::new("Euler", 23, None),
+                    Person::new("Gauss", 21, Some(b"Number theory".as_ref())),
+                    Person::new("Galois", 16, Some(b"Group theory".as_ref())),
+                    Person::new("Abel", 26, Some(b"Group theory".as_ref())),
+                    Person::new("Euler", 23, Some(b"Mathematical analysis".as_ref())),
                 ];
                 for p in ps {
                     let id = db::insert_person(&p).run(tx)?;
@@ -48,7 +48,7 @@ fn main() {
             .run_tx(with_tx(|tx| {
                 let ps = db::collect_persons().run(tx)?;
                 for (id, p) in ps {
-                    println!("{}: {:?}", id, p);
+                    println!("{}: {}", id, p);
                     db::delete_person(id).run(tx)?;
                 }
                 Ok(())

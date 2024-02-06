@@ -1,3 +1,5 @@
+use core::fmt;
+
 use tx_rs::tx;
 
 pub type PersonId = i32;
@@ -7,6 +9,18 @@ pub struct Person {
     pub age: i32,
     pub data: Option<Vec<u8>>,
 }
+impl fmt::Display for Person {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Person {{ name: {}, age: {}, data: '{}' }}",
+            self.name,
+            self.age,
+            std::str::from_utf8(&self.data.as_ref().unwrap_or(&vec![])).unwrap_or("N/A")
+        )
+    }
+}
+
 impl Person {
     pub fn new(name: &str, age: i32, data: Option<&[u8]>) -> Self {
         Self {
