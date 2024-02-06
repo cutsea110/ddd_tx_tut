@@ -17,6 +17,13 @@ pub enum MyError {
 
 type Result<T> = std::result::Result<T, MyError>;
 
+fn run_tx<Ctx, Tx, T>(repo: &mut Ctx, tx: Tx) -> Result<T>
+where
+    Tx: tx_rs::Tx<Ctx, Item = T, Err = MyError>,
+{
+    tx.run(repo)
+}
+
 // TODO: make this trait and independent from concrete repository
 fn register_person(person: &Person) -> Result<Option<Person>> {
     db::new(DB_URL)
