@@ -87,4 +87,41 @@ impl<'a> domain::PersonRepository<'a> for PgPersonRepository<'a> {
             }
         })
     }
+
+    fn collect_persons() -> impl tx::Tx<Self::Ctx, Item = Vec<Person>, Err = Self::Err> {
+        tx::with_tx(move |tx: &mut Self::Ctx| {
+            let rows = tx
+                .query("SELECT id, name, age, data FROM person", &[])
+                .map_err(|e| PgDbError::QueryFailed(e))?;
+
+            Ok(rows
+                .iter()
+                .map(|row| Person::new(row.get(1), row.get(2), row.get(3)))
+                .collect())
+        })
+    }
+
+    fn update_person(
+        id: PersonId,
+        person: &Person,
+    ) -> impl tx::Tx<Self::Ctx, Item = (), Err = Self::Err> {
+        tx::with_tx(move |tx: &mut Self::Ctx| {
+            tx.execute(
+                "UPDATE person SET name = $1, age = $2, data = $3 WHERE id = $4",
+                &[&person.name, &person.age, &person.data, &id],
+            )
+            .map_err(|e| PgDbError::QueryFailed(e))?;
+
+            Ok(())
+        })
+    }
+
+    fn delete_person(id: PersonId) -> impl tx::Tx<Self::Ctx, Item = (), Err = Self::Err> {
+        tx::with_tx(move |tx: &mut Self::Ctx| {
+            tx.execute("DELETE FROM person WHERE id = $1", &[&id])
+                .map_err(|e| PgDbError::QueryFailed(e))?;
+
+            Ok(())
+        })
+    }
 }
