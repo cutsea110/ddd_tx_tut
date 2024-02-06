@@ -1,56 +1,75 @@
 mod domain;
 mod pg_db;
 
-use domain::person::{Person, PersonRepository};
+use thiserror::Error;
+
+use domain::person::{Person, PersonId, PersonRepository};
 use pg_db::PgPersonRepository as db;
 use tx_rs::{with_tx, Tx};
 
 const DB_URL: &str = "postgresql://admin:adminpass@localhost:15432/sampledb";
 
-fn main() {
-    // test insert and fetch
-    {
-        let result = db::new(DB_URL)
-            .run_tx(db::create(&Person::new("cutsea", 53, None)).and_then(|id| db::fetch(id)))
-            .expect("run tx");
+#[derive(Error, Debug)]
+pub enum MyError {
+    #[error("dummy error")]
+    Dummy,
+}
 
-        println!("{:?}", result);
+type Result<T> = std::result::Result<T, MyError>;
+
+// TODO: make this trait and independent from concrete repository
+pub mod usecase {
+    use super::*;
+
+    pub fn register_person(person: &Person) -> Result<Option<Person>> {
+        db::new(DB_URL)
+            .run_tx(db::create(person).and_then(|id| db::fetch(id)))
+            .map_err(|_| MyError::Dummy)
     }
 
-    // test insert persons
-    {
-        let ids = db::new(DB_URL)
+    pub fn batch_register_persons(persons: &[Person]) -> Result<Vec<PersonId>> {
+        db::new(DB_URL)
             .run_tx(with_tx(|tx| {
                 let mut ids = vec![];
-                let ps = [
-                    Person::new("Gauss", 21, Some(b"Number theory".as_ref())),
-                    Person::new("Galois", 16, Some(b"Group theory".as_ref())),
-                    Person::new("Abel", 26, Some(b"Group theory".as_ref())),
-                    Person::new("Euler", 23, Some(b"Mathematical analysis".as_ref())),
-                ];
-                for p in ps {
-                    let id = db::create(&p).run(tx)?;
+                for p in persons {
+                    let id = db::create(p).run(tx)?;
                     ids.push(id);
                 }
-
                 Ok(ids)
             }))
-            .expect("run tx");
-
-        println!("{:?}", ids);
+            .map_err(|_| MyError::Dummy)
     }
 
-    // test collect and delete
-    {
-        let _ = db::new(DB_URL)
+    pub fn unregister_all_persons() -> Result<()> {
+        db::new(DB_URL)
             .run_tx(with_tx(|tx| {
                 let ps = db::collect().run(tx)?;
                 for (id, p) in ps {
-                    println!("{}: {}", id, p);
+                    println!("{} {}", id, p);
                     db::delete(id).run(tx)?;
                 }
                 Ok(())
             }))
-            .expect("run tx");
+            .map_err(|_| MyError::Dummy)
     }
+}
+
+fn main() {
+    // test insert and fetch
+    let p = register_person(&Person::new("cutsea", 53, None)).expect("register cutsea");
+    println!("registered: {:?}", p);
+
+    // test insert persons
+    let ps = [
+        Person::new("Gauss", 21, Some(b"Number theory".as_ref())),
+        Person::new("Galois", 16, Some(b"Group theory".as_ref())),
+        Person::new("Abel", 26, Some(b"Group theory".as_ref())),
+        Person::new("Euler", 23, Some(b"Mathematical analysis".as_ref())),
+    ];
+    let ids = batch_register_persons(&ps).expect("batch register");
+    println!("registered ids: {:?}", ids);
+
+    // test collect and delete
+    unregister_all_persons().expect("unregister all");
+    println!("unregistered all");
 }
