@@ -571,6 +571,59 @@ impl Person {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum RepositoryError {
+    #[error("insert error")]
+    InsertError,
+    #[error("select error")]
+    SelectError,
+}
+trait PersonRepository<Ctx> {
+    fn insert(&mut self, person: &Person)
+        -> impl tx_rs::Tx<Ctx, Item = i32, Err = RepositoryError>;
+    fn select(&mut self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = RepositoryError>;
+}
+struct PgPersonRepository {
+    client: Client,
+}
+impl<'a> PersonRepository<postgres::Transaction<'a>> for PgPersonRepository {
+    fn insert(
+        &mut self,
+        person: &Person,
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = RepositoryError> {
+        tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
+            tx.query_one(
+                "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
+                &[&person.name, &person.age, &person.data],
+            )
+            .map(|row| row.get::<usize, i32>(0))
+            .map_err(|_| RepositoryError::InsertError)
+        })
+    }
+    fn select(
+        &mut self,
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Vec<(i32, Person)>, Err = RepositoryError>
+    {
+        tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
+            tx.query("SELECT id, name, age, data FROM person", &[])
+                .map(|rows| {
+                    rows.iter()
+                        .map(|row| {
+                            let id = row.get(0);
+                            let person = Person {
+                                name: row.get(1),
+                                age: row.get(2),
+                                data: row.get(3),
+                            };
+                            (id, person)
+                        })
+                        .collect()
+                })
+                .map_err(|_| RepositoryError::SelectError)
+        })
+    }
+}
+
 trait PersonUsecase {
     fn entry(&mut self, person: &Person) -> Result<i32, MyError>;
     fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError>;
