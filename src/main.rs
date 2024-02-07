@@ -36,14 +36,23 @@ impl Usecase {
     where
         F: FnOnce(&mut postgres::Transaction<'_>) -> Result<T, MyError>,
     {
-        todo!()
+        let mut transaction = self.client.transaction().unwrap();
+        let result = f(&mut transaction);
+        match result {
+            Ok(v) => {
+                transaction.commit().unwrap();
+                Ok(v)
+            }
+            Err(e) => {
+                transaction.rollback().unwrap();
+                Err(e)
+            }
+        }
     }
 
     pub fn entry(&mut self, person: &Person) -> Result<i32, MyError> {
-        let mut transaction = self.client.transaction().unwrap();
-
-        let id = transaction
-            .query_one(
+        self.run_tx(|tx| {
+            tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
                 &[
                     &person.name,
@@ -52,36 +61,31 @@ impl Usecase {
                 ],
             )
             .map(|r| r.get(0))
-            .map_err(|_| MyError::Dummy);
-
-        transaction.commit().unwrap();
-
-        return id;
+            .map_err(|_| MyError::Dummy)
+        })
     }
 
     pub fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError> {
-        let mut result = vec![];
+        self.run_tx(|tx| {
+            let mut result = vec![];
 
-        let mut transaction = self.client.transaction().unwrap();
+            for row in tx
+                .query("SELECT id, name, age, data FROM person", &[])
+                .unwrap()
+            {
+                let id: i32 = row.get(0);
+                let name: &str = row.get(1);
+                let age: i32 = row.get(2);
+                let data: Option<&[u8]> = row.get(3);
 
-        for row in transaction
-            .query("SELECT id, name, age, data FROM person", &[])
-            .unwrap()
-        {
-            let id: i32 = row.get(0);
-            let name: &str = row.get(1);
-            let age: i32 = row.get(2);
-            let data: Option<&[u8]> = row.get(3);
+                result.push((
+                    id,
+                    Person::new(name, age, data.map(|d| std::str::from_utf8(d).unwrap())),
+                ));
+            }
 
-            result.push((
-                id,
-                Person::new(name, age, data.map(|d| std::str::from_utf8(d).unwrap())),
-            ));
-        }
-
-        transaction.rollback().unwrap();
-
-        Ok(result)
+            Ok(result)
+        })
     }
 }
 
