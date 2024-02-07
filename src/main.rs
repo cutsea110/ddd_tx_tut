@@ -586,6 +586,13 @@ trait PersonRepository<Ctx> {
 struct PgPersonRepository {
     client: Client,
 }
+impl PgPersonRepository {
+    pub fn new(url: &str) -> Self {
+        let client = Client::connect(url, NoTls).unwrap();
+
+        Self { client }
+    }
+}
 impl<'a> PersonRepository<postgres::Transaction<'a>> for PgPersonRepository {
     fn insert(
         &mut self,
@@ -630,7 +637,32 @@ trait PersonUsecase {
 }
 
 struct PersonUsecaseImpl {
-    client: Client,
+    repo: Box<PgPersonRepository>,
+}
+impl PersonUsecaseImpl {
+    pub fn new(repo: PgPersonRepository) -> Self {
+        Self {
+            repo: Box::new(repo),
+        }
+    }
+
+    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
+    where
+        F: FnOnce(&mut postgres::Transaction<'_>) -> Result<T, MyError>,
+    {
+        let mut transaction = self.repo.client.transaction().unwrap();
+        let result = f(&mut transaction);
+        match result {
+            Ok(v) => {
+                transaction.commit().unwrap();
+                Ok(v)
+            }
+            Err(e) => {
+                transaction.rollback().unwrap();
+                Err(e)
+            }
+        }
+    }
 }
 impl PersonUsecase for PersonUsecaseImpl {
     fn entry(&mut self, person: &Person) -> Result<i32, MyError> {
@@ -672,34 +704,9 @@ impl PersonUsecase for PersonUsecaseImpl {
     }
 }
 
-impl PersonUsecaseImpl {
-    pub fn new(url: &str) -> Self {
-        let client = Client::connect(url, NoTls).unwrap();
-        Self { client }
-    }
-
-    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
-    where
-        F: FnOnce(&mut postgres::Transaction<'_>) -> Result<T, MyError>,
-    {
-        let mut transaction = self.client.transaction().unwrap();
-        let result = f(&mut transaction);
-        match result {
-            Ok(v) => {
-                transaction.commit().unwrap();
-                Ok(v)
-            }
-            Err(e) => {
-                transaction.rollback().unwrap();
-                Err(e)
-            }
-        }
-    }
-}
-
 fn main() {
-    let mut usecase =
-        PersonUsecaseImpl::new("postgresql://admin:adminpass@localhost:15432/sampledb");
+    let pg_db = PgPersonRepository::new("postgresql://admin:adminpass@localhost:15432/sampledb");
+    let mut usecase = PersonUsecaseImpl::new(pg_db);
 
     let persons = vec![
         Person::new("Gauss", 27, Some("King of Math")),
