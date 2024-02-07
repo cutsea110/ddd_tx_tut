@@ -1,4 +1,27 @@
 use postgres::{Client, NoTls};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum MyError {
+    #[error("dummy error")]
+    Dummy,
+}
+
+#[derive(Debug)]
+struct Person {
+    name: String,
+    age: i32,
+    data: Option<String>,
+}
+impl Person {
+    pub fn new(name: &str, age: i32, data: Option<&str>) -> Self {
+        Self {
+            name: name.to_string(),
+            age,
+            data: data.map(|d| d.to_string()),
+        }
+    }
+}
 
 struct Usecase {
     client: Client,
@@ -9,22 +32,34 @@ impl Usecase {
         Self { client }
     }
 
-    pub fn entry(&mut self, name: &str, age: i32, data: Option<&[u8]>) -> i32 {
+    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
+    where
+        F: FnOnce(&mut postgres::Transaction<'_>) -> Result<T, MyError>,
+    {
+        todo!()
+    }
+
+    pub fn entry(&mut self, person: &Person) -> Result<i32, MyError> {
         let mut transaction = self.client.transaction().unwrap();
 
-        let row = transaction
+        let id = transaction
             .query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
-                &[&name, &age, &data],
+                &[
+                    &person.name,
+                    &person.age,
+                    &person.data.clone().map(|d| d.into_bytes()),
+                ],
             )
-            .unwrap();
+            .map(|r| r.get(0))
+            .map_err(|_| MyError::Dummy);
 
         transaction.commit().unwrap();
 
-        return row.get(0);
+        return id;
     }
 
-    pub fn collect(&mut self) -> Vec<(i32, String, i32, Option<String>)> {
+    pub fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError> {
         let mut result = vec![];
 
         let mut transaction = self.client.transaction().unwrap();
@@ -40,35 +75,32 @@ impl Usecase {
 
             result.push((
                 id,
-                name.to_string(),
-                age,
-                data.map(|d| String::from_utf8_lossy(d).to_string()),
+                Person::new(name, age, data.map(|d| std::str::from_utf8(d).unwrap())),
             ));
         }
 
         transaction.rollback().unwrap();
 
-        result
+        Ok(result)
     }
 }
 
 fn main() {
     let mut usecase = Usecase::new("postgresql://admin:adminpass@localhost:15432/sampledb");
 
-    let id = usecase.entry("Gauss", 27, Some(b"King of Math"));
-    println!("inserted person {}", id);
-    let id = usecase.entry("Galois", 20, Some(b"Group Theory"));
-    println!("inserted person {}", id);
-    let id = usecase.entry("Abel", 26, Some(b"Abelian Group"));
-    println!("inserted person {}", id);
-    let id = usecase.entry("Euler", 23, Some(b"Euler's Formula"));
-    println!("inserted person {}", id);
+    let persons = vec![
+        Person::new("Gauss", 27, Some("King of Math")),
+        Person::new("Galois", 20, Some("Group Theory")),
+        Person::new("Abel", 26, Some("Abelian Group")),
+        Person::new("Euler", 23, Some("Euler's Formula")),
+    ];
+    for person in persons {
+        let id = usecase.entry(&person).unwrap();
+        println!("inserted person {}", id);
+    }
 
-    let rows = usecase.collect();
+    let rows = usecase.collect().unwrap();
     for row in rows {
-        println!(
-            "found person id={} name='{}' age={} data='{:?}'",
-            row.0, row.1, row.2, row.3
-        );
+        println!("found {:?}", row);
     }
 }
