@@ -6,14 +6,4 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.79"
 postgres = "0.19.7"
-thiserror = "1.0.56"
-
-[lib]
-name = "tx_rs"
-path = "src/lib.rs"
-
-[[bin]]
-name = "app"
-path = "app/main.rs"
