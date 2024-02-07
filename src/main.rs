@@ -579,9 +579,8 @@ pub enum RepositoryError {
     SelectError,
 }
 trait PersonRepository<Ctx> {
-    fn insert(&mut self, person: &Person)
-        -> impl tx_rs::Tx<Ctx, Item = i32, Err = RepositoryError>;
-    fn select(&mut self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = RepositoryError>;
+    fn insert(&self, person: &Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = RepositoryError>;
+    fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = RepositoryError>;
 }
 struct PgPersonRepository {
     client: Client,
@@ -595,7 +594,7 @@ impl PgPersonRepository {
 }
 impl<'a> PersonRepository<postgres::Transaction<'a>> for PgPersonRepository {
     fn insert(
-        &mut self,
+        &self,
         person: &Person,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = RepositoryError> {
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
@@ -608,7 +607,7 @@ impl<'a> PersonRepository<postgres::Transaction<'a>> for PgPersonRepository {
         })
     }
     fn select(
-        &mut self,
+        &self,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Vec<(i32, Person)>, Err = RepositoryError>
     {
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
