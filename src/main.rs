@@ -645,12 +645,12 @@ impl PersonUsecaseImpl {
         }
     }
 
-    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
+    fn run_tx<'a, T, F>(&'a mut self, f: F) -> Result<T, MyError>
     where
-        F: FnOnce(&mut postgres::Transaction<'_>) -> Result<T, MyError>,
+        F: tx_rs::Tx<postgres::Transaction<'a>, Item = T, Err = MyError>,
     {
         let mut transaction = self.repo.client.transaction().unwrap();
-        let result = f(&mut transaction);
+        let result = f.run(&mut transaction);
         match result {
             Ok(v) => {
                 transaction.commit().unwrap();
@@ -665,7 +665,7 @@ impl PersonUsecaseImpl {
 }
 impl PersonUsecase for PersonUsecaseImpl {
     fn entry(&mut self, person: &Person) -> Result<i32, MyError> {
-        self.run_tx(|tx| {
+        self.run_tx(|tx: &mut postgres::Transaction<'_>| {
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
                 &[
@@ -680,7 +680,7 @@ impl PersonUsecase for PersonUsecaseImpl {
     }
 
     fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError> {
-        self.run_tx(|tx| {
+        self.run_tx(|tx: &mut postgres::Transaction<'_>| {
             let mut result = vec![];
 
             for row in tx
