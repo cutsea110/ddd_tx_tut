@@ -23,34 +23,16 @@ impl Person {
     }
 }
 
-struct Usecase {
+trait PersonUsecase {
+    fn entry(&mut self, person: &Person) -> Result<i32, MyError>;
+    fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError>;
+}
+
+struct PersonUsecaseImpl {
     client: Client,
 }
-impl Usecase {
-    pub fn new(url: &str) -> Self {
-        let client = Client::connect(url, NoTls).unwrap();
-        Self { client }
-    }
-
-    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
-    where
-        F: FnOnce(&mut postgres::Transaction<'_>) -> Result<T, MyError>,
-    {
-        let mut transaction = self.client.transaction().unwrap();
-        let result = f(&mut transaction);
-        match result {
-            Ok(v) => {
-                transaction.commit().unwrap();
-                Ok(v)
-            }
-            Err(e) => {
-                transaction.rollback().unwrap();
-                Err(e)
-            }
-        }
-    }
-
-    pub fn entry(&mut self, person: &Person) -> Result<i32, MyError> {
+impl PersonUsecase for PersonUsecaseImpl {
+    fn entry(&mut self, person: &Person) -> Result<i32, MyError> {
         self.run_tx(|tx| {
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
@@ -65,7 +47,7 @@ impl Usecase {
         })
     }
 
-    pub fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError> {
+    fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError> {
         self.run_tx(|tx| {
             let mut result = vec![];
 
@@ -89,8 +71,34 @@ impl Usecase {
     }
 }
 
+impl PersonUsecaseImpl {
+    pub fn new(url: &str) -> Self {
+        let client = Client::connect(url, NoTls).unwrap();
+        Self { client }
+    }
+
+    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
+    where
+        F: FnOnce(&mut postgres::Transaction<'_>) -> Result<T, MyError>,
+    {
+        let mut transaction = self.client.transaction().unwrap();
+        let result = f(&mut transaction);
+        match result {
+            Ok(v) => {
+                transaction.commit().unwrap();
+                Ok(v)
+            }
+            Err(e) => {
+                transaction.rollback().unwrap();
+                Err(e)
+            }
+        }
+    }
+}
+
 fn main() {
-    let mut usecase = Usecase::new("postgresql://admin:adminpass@localhost:15432/sampledb");
+    let mut usecase =
+        PersonUsecaseImpl::new("postgresql://admin:adminpass@localhost:15432/sampledb");
 
     let persons = vec![
         Person::new("Gauss", 27, Some("King of Math")),
