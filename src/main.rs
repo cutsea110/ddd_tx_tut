@@ -1,3 +1,5 @@
+use core::fmt;
+
 use postgres::{Client, NoTls};
 use thiserror::Error;
 
@@ -571,6 +573,17 @@ impl Person {
         }
     }
 }
+impl fmt::Display for Person {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Person {{ name: {}, age: {}, data: {} }}",
+            self.name,
+            self.age,
+            std::str::from_utf8(&self.data.as_ref().unwrap_or(&vec![])).unwrap_or("")
+        )
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum DaoError {
@@ -687,7 +700,7 @@ fn main() {
 
     let result = usecase.collect().run(&mut ctx).unwrap();
     for (id, person) in result {
-        println!("id: {}, person: {:?}", id, person);
+        println!("id: {}, person: {}", id, person);
     }
 
     ctx.commit().unwrap();
