@@ -662,15 +662,17 @@ impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
 fn main() {
-    let dao = PgPersonDao::new("postgres://admin:adminpass@localhost:15432/sampledb");
+    let url = "postgres://admin:adminpass@localhost:15432/sampledb";
+
+    let dao = PgPersonDao::new(url);
+    let mut client = Client::connect(&dao.url, NoTls).unwrap();
+    let mut ctx = client.transaction().unwrap();
+
     let mut usecase = PersonUsecaseImpl {
         dao: Box::new(dao.clone()),
     };
 
     let person = Person::new("cutsea", 53, None);
-
-    let mut client = Client::connect(&dao.url, NoTls).unwrap();
-    let mut ctx = client.transaction().unwrap();
 
     let tx = usecase.entry(&person);
 
