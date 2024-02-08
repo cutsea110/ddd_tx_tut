@@ -560,14 +560,14 @@ pub enum MyError {
 struct Person {
     name: String,
     age: i32,
-    data: Option<String>,
+    data: Option<Vec<u8>>,
 }
 impl Person {
-    pub fn new(name: &str, age: i32, data: Option<&str>) -> Self {
+    pub fn new(name: &str, age: i32, data: Option<&[u8]>) -> Self {
         Self {
             name: name.to_string(),
             age,
-            data: data.map(|d| d.to_string()),
+            data: data.map(|d| d.to_vec()),
         }
     }
 }
@@ -600,10 +600,9 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         person: Person,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = DaoError> {
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
-            let data = person.data.as_ref().map(|d| d.as_bytes());
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
-                &[&person.name, &person.age, &data],
+                &[&person.name, &person.age, &person.data],
             )
             .map(|row| row.get::<usize, i32>(0))
             .map_err(|_| DaoError::InsertError)
@@ -617,11 +616,8 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                 .map(|rows| {
                     rows.iter()
                         .map(|row| {
-                            let id = row.get(0);
-                            let name: &str = row.get::<usize, &str>(1);
-                            let age: i32 = row.get(2);
-                            let data: &[u8] = row.get(3);
-                            let person = Person::new(name, age, std::str::from_utf8(data).ok());
+                            let id = row.get::<usize, i32>(0);
+                            let person = Person::new(row.get(1), row.get(2), row.get(3));
                             (id, person)
                         })
                         .collect()
@@ -674,8 +670,25 @@ fn main() {
     let tx = usecase.entry(Person::new("cutsea", 53, None));
 
     let result = tx.run(&mut ctx);
+    println!("Hello, world! {:?}", result);
+
+    let persons = vec![
+        Person::new("Gauss", 34, Some(b"King of Math".as_ref())),
+        Person::new("Galois", 20, Some(b"Group Theory".as_ref())),
+        Person::new("Riemann", 39, Some(b"Riemann Hypothesis".as_ref())),
+        Person::new("Ramanujan", 32, Some(b"Ramanujan Conjecture".as_ref())),
+        Person::new("Euler", 76, Some(b"Euler's identity".as_ref())),
+        Person::new("Abel", 26, Some(b"Abel's theorem".as_ref())),
+    ];
+    for person in persons {
+        let result = usecase.entry(person).run(&mut ctx);
+        println!("insert person: {:?}", result);
+    }
+
+    let result = usecase.collect().run(&mut ctx).unwrap();
+    for (id, person) in result {
+        println!("id: {}, person: {:?}", id, person);
+    }
 
     ctx.commit().unwrap();
-
-    println!("Hello, world! {:?}", result);
 }
