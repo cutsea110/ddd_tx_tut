@@ -548,6 +548,7 @@ pub mod tx_rs {
         }
     }
 }
+use tx_rs::Tx;
 
 #[derive(Error, Debug)]
 pub enum MyError {
@@ -572,44 +573,43 @@ impl Person {
 }
 
 #[derive(Error, Debug)]
-pub enum RepositoryError {
+pub enum DaoError {
     #[error("insert error")]
     InsertError,
     #[error("select error")]
     SelectError,
 }
-trait PersonRepository<Ctx> {
-    fn insert(&self, person: &Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = RepositoryError>;
-    fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = RepositoryError>;
+trait PersonDao<Ctx> {
+    fn insert(&self, person: &Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = DaoError>;
+    fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = DaoError>;
 }
-struct PgPersonRepository {
+struct PgPersonDao {
     client: Client,
 }
-impl PgPersonRepository {
+impl PgPersonDao {
     pub fn new(url: &str) -> Self {
         let client = Client::connect(url, NoTls).unwrap();
 
         Self { client }
     }
 }
-impl<'a> PersonRepository<postgres::Transaction<'a>> for PgPersonRepository {
+impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     fn insert(
         &self,
         person: &Person,
-    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = RepositoryError> {
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = DaoError> {
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
                 &[&person.name, &person.age, &person.data],
             )
             .map(|row| row.get::<usize, i32>(0))
-            .map_err(|_| RepositoryError::InsertError)
+            .map_err(|_| DaoError::InsertError)
         })
     }
     fn select(
         &self,
-    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Vec<(i32, Person)>, Err = RepositoryError>
-    {
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Vec<(i32, Person)>, Err = DaoError> {
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
             tx.query("SELECT id, name, age, data FROM person", &[])
                 .map(|rows| {
@@ -625,101 +625,31 @@ impl<'a> PersonRepository<postgres::Transaction<'a>> for PgPersonRepository {
                         })
                         .collect()
                 })
-                .map_err(|_| RepositoryError::SelectError)
+                .map_err(|_| DaoError::SelectError)
         })
     }
 }
 
-trait PersonUsecase {
-    fn entry(&mut self, person: &Person) -> Result<i32, MyError>;
-    fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError>;
+trait HavePersonDao<Ctx> {
+    fn get_dao(&self) -> Box<&impl PersonDao<Ctx>>;
 }
-
-struct PersonUsecaseImpl {
-    repo: Box<PgPersonRepository>,
-}
-impl PersonUsecaseImpl {
-    pub fn new(repo: PgPersonRepository) -> Self {
-        Self {
-            repo: Box::new(repo),
-        }
-    }
-
-    fn run_tx<'a, T, F>(&'a mut self, f: F) -> Result<T, MyError>
+trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
+    fn entry<'a>(&'a mut self, person: &Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = MyError>
     where
-        F: tx_rs::Tx<postgres::Transaction<'a>, Item = T, Err = MyError>,
+        Ctx: 'a,
     {
-        let mut transaction = self.repo.client.transaction().unwrap();
-        let result = f.run(&mut transaction);
-        match result {
-            Ok(v) => {
-                transaction.commit().unwrap();
-                Ok(v)
-            }
-            Err(e) => {
-                transaction.rollback().unwrap();
-                Err(e)
-            }
-        }
+        let dao = self.get_dao();
+        dao.insert(person).map_err(|_| MyError::Dummy)
     }
-}
-impl PersonUsecase for PersonUsecaseImpl {
-    fn entry(&mut self, person: &Person) -> Result<i32, MyError> {
-        self.run_tx(|tx: &mut postgres::Transaction<'_>| {
-            tx.query_one(
-                "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
-                &[
-                    &person.name,
-                    &person.age,
-                    &person.data.clone().map(|d| d.into_bytes()),
-                ],
-            )
-            .map(|r| r.get(0))
-            .map_err(|_| MyError::Dummy)
-        })
-    }
-
-    fn collect(&mut self) -> Result<Vec<(i32, Person)>, MyError> {
-        self.run_tx(|tx: &mut postgres::Transaction<'_>| {
-            let mut result = vec![];
-
-            for row in tx
-                .query("SELECT id, name, age, data FROM person", &[])
-                .unwrap()
-            {
-                let id: i32 = row.get(0);
-                let name: &str = row.get(1);
-                let age: i32 = row.get(2);
-                let data: Option<&[u8]> = row.get(3);
-
-                result.push((
-                    id,
-                    Person::new(name, age, data.map(|d| std::str::from_utf8(d).unwrap())),
-                ));
-            }
-
-            Ok(result)
-        })
+    fn collect<'a>(&'a mut self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = MyError>
+    where
+        Ctx: 'a,
+    {
+        let dao = self.get_dao();
+        dao.select().map_err(|_| MyError::Dummy)
     }
 }
 
 fn main() {
-    let pg_db = PgPersonRepository::new("postgresql://admin:adminpass@localhost:15432/sampledb");
-    let mut usecase = PersonUsecaseImpl::new(pg_db);
-
-    let persons = vec![
-        Person::new("Gauss", 27, Some("King of Math")),
-        Person::new("Galois", 20, Some("Group Theory")),
-        Person::new("Abel", 26, Some("Abelian Group")),
-        Person::new("Euler", 23, Some("Euler's Formula")),
-    ];
-    for person in persons {
-        let id = usecase.entry(&person).unwrap();
-        println!("inserted person {}", id);
-    }
-
-    let rows = usecase.collect().unwrap();
-    for row in rows {
-        println!("found {:?}", row);
-    }
+    println!("Hello, world!");
 }
