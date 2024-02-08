@@ -583,14 +583,15 @@ trait PersonDao<Ctx> {
     fn insert(&self, person: &Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = DaoError>;
     fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = DaoError>;
 }
+#[derive(Debug, Clone)]
 struct PgPersonDao {
-    client: Client,
+    url: String,
 }
 impl PgPersonDao {
     pub fn new(url: &str) -> Self {
-        let client = Client::connect(url, NoTls).unwrap();
-
-        Self { client }
+        Self {
+            url: url.to_string(),
+        }
     }
 }
 impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
@@ -599,9 +600,10 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         person: &Person,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = DaoError> {
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
+            let data = person.data.as_ref().map(|d| d.as_bytes());
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
-                &[&person.name, &person.age, &person.data],
+                &[&person.name, &person.age, &data],
             )
             .map(|row| row.get::<usize, i32>(0))
             .map_err(|_| DaoError::InsertError)
@@ -616,11 +618,10 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                     rows.iter()
                         .map(|row| {
                             let id = row.get(0);
-                            let person = Person {
-                                name: row.get(1),
-                                age: row.get(2),
-                                data: row.get(3),
-                            };
+                            let name: &str = row.get::<usize, &str>(1);
+                            let age: i32 = row.get(2);
+                            let data: &[u8] = row.get(3);
+                            let person = Person::new(name, age, std::str::from_utf8(data).ok());
                             (id, person)
                         })
                         .collect()
@@ -649,7 +650,33 @@ trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         dao.select().map_err(|_| MyError::Dummy)
     }
 }
+#[derive(Debug, Clone)]
+struct PersonUsecaseImpl {
+    dao: Box<PgPersonDao>,
+}
+impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
+    fn get_dao<'a>(&'a self) -> Box<&PgPersonDao> {
+        Box::new(&self.dao)
+    }
+}
+impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
 fn main() {
-    println!("Hello, world!");
+    let dao = PgPersonDao::new("postgres://admin:adminpass@localhost:15432/sampledb");
+    let mut usecase = PersonUsecaseImpl {
+        dao: Box::new(dao.clone()),
+    };
+
+    let person = Person::new("cutsea", 53, None);
+
+    let mut client = Client::connect(&dao.url, NoTls).unwrap();
+    let mut ctx = client.transaction().unwrap();
+
+    let tx = usecase.entry(&person);
+
+    let result = tx.run(&mut ctx);
+
+    ctx.commit().unwrap();
+
+    println!("Hello, world! {:?}", result);
 }
