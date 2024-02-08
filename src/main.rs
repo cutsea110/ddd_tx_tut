@@ -580,7 +580,7 @@ pub enum DaoError {
     SelectError,
 }
 trait PersonDao<Ctx> {
-    fn insert(&self, person: &Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = DaoError>;
+    fn insert(&self, person: Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = DaoError>;
     fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = DaoError>;
 }
 #[derive(Debug, Clone)]
@@ -597,9 +597,9 @@ impl PgPersonDao {
 impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     fn insert(
         &self,
-        person: &Person,
+        person: Person,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = DaoError> {
-        tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
+        tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             let data = person.data.as_ref().map(|d| d.as_bytes());
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
@@ -635,7 +635,7 @@ trait HavePersonDao<Ctx> {
     fn get_dao(&self) -> Box<&impl PersonDao<Ctx>>;
 }
 trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
-    fn entry<'a>(&'a mut self, person: &Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = MyError>
+    fn entry<'a>(&'a mut self, person: Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = MyError>
     where
         Ctx: 'a,
     {
@@ -662,9 +662,8 @@ impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
 fn main() {
-    let url = "postgres://admin:adminpass@localhost:15432/sampledb";
+    let dao = PgPersonDao::new("postgres://admin:adminpass@localhost:15432/sampledb");
 
-    let dao = PgPersonDao::new(url);
     let mut client = Client::connect(&dao.url, NoTls).unwrap();
     let mut ctx = client.transaction().unwrap();
 
@@ -672,9 +671,7 @@ fn main() {
         dao: Box::new(dao.clone()),
     };
 
-    let person = Person::new("cutsea", 53, None);
-
-    let tx = usecase.entry(&person);
+    let tx = usecase.entry(Person::new("cutsea", 53, None));
 
     let result = tx.run(&mut ctx);
 
