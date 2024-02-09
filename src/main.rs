@@ -595,19 +595,11 @@ pub enum DaoError {
 }
 trait PersonDao<Ctx> {
     fn insert(&self, person: Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = DaoError>;
+    fn fetch(&self, id: i32) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = DaoError>;
     fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = DaoError>;
 }
 #[derive(Debug, Clone)]
-struct PgPersonDao {
-    url: String,
-}
-impl PgPersonDao {
-    pub fn new(url: &str) -> Self {
-        Self {
-            url: url.to_string(),
-        }
-    }
-}
+struct PgPersonDao;
 impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     fn insert(
         &self,
@@ -620,6 +612,16 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
             )
             .map(|row| row.get::<usize, i32>(0))
             .map_err(|_| DaoError::InsertError)
+        })
+    }
+    fn fetch(
+        &self,
+        id: i32,
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Option<Person>, Err = DaoError> {
+        tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
+            tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
+                .map(|row| row.map(|row| Person::new(row.get(0), row.get(1), row.get(2))))
+                .map_err(|_| DaoError::SelectError)
         })
     }
     fn select(
@@ -652,6 +654,13 @@ trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         let dao = self.get_dao();
         dao.insert(person).map_err(|_| MyError::Dummy)
     }
+    fn find<'a>(&'a mut self, id: i32) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = MyError>
+    where
+        Ctx: 'a,
+    {
+        let dao = self.get_dao();
+        dao.fetch(id).map_err(|_| MyError::Dummy)
+    }
     fn collect<'a>(&'a mut self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = MyError>
     where
         Ctx: 'a,
@@ -682,7 +691,7 @@ struct PersonApi {
 }
 impl PersonApi {
     pub fn new(db_url: &str) -> Self {
-        let dao = PgPersonDao::new(db_url);
+        let dao = PgPersonDao;
         let usecase = PersonUsecaseImpl::new(Rc::new(dao));
         let db_client = Client::connect(db_url, NoTls).unwrap();
 
@@ -691,20 +700,54 @@ impl PersonApi {
             usecase: Rc::new(RefCell::new(usecase)),
         }
     }
+
+    // api is responsible for transaction management
+
+    // api: entry and verify
+    pub fn entry_and_verify(
+        &mut self,
+        name: &str,
+        age: i32,
+        data: &str,
+    ) -> Result<Person, MyError> {
+        let mut usecase = self.usecase.borrow_mut();
+
+        let mut ctx = self.db_client.transaction().unwrap();
+
+        let bs = if data.is_empty() {
+            None
+        } else {
+            Some(data.as_bytes())
+        };
+
+        let id = usecase.entry(Person::new(name, age, bs)).run(&mut ctx)?;
+
+        match usecase.find(id).run(&mut ctx) {
+            Ok(Some(person)) => {
+                ctx.commit().unwrap();
+                Ok(person)
+            }
+            // NOTE: include the case of None
+            _ => {
+                ctx.rollback().unwrap();
+                Err(MyError::Dummy)
+            }
+        }
+    }
 }
 
 fn main() {
-    let mut app = PersonApi::new("postgres://admin:adminpass@localhost:15432/sampledb");
-    let mut usecase = app.usecase.borrow_mut();
+    let mut api = PersonApi::new("postgres://admin:adminpass@localhost:15432/sampledb");
+
+    // call api
+    let person = api.entry_and_verify("cutsea", 53, "rustacean").unwrap();
+    println!("Hello, world! {}", person);
+
+    let mut usecase = api.usecase.borrow_mut();
 
     // transaction
-    let mut ctx = app.db_client.transaction().unwrap();
+    let mut ctx = api.db_client.transaction().unwrap();
     {
-        let tx = usecase.entry(Person::new("cutsea", 53, None));
-
-        let result = tx.run(&mut ctx);
-        println!("Hello, world! {:?}", result);
-
         let persons = vec![
             Person::new("Gauss", 34, Some(b"King of Math".as_ref())),
             Person::new("Galois", 20, Some(b"Group Theory".as_ref())),
