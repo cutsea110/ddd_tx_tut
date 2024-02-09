@@ -1,5 +1,5 @@
 use core::fmt;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use postgres::{Client, NoTls};
 use thiserror::Error;
@@ -677,31 +677,29 @@ impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
 struct PersonApi {
-    usecase: Rc<PersonUsecaseImpl>,
+    db_client: Client,
+    usecase: Rc<RefCell<PersonUsecaseImpl>>,
 }
 impl PersonApi {
     pub fn new(db_url: &str) -> Self {
         let dao = PgPersonDao::new(db_url);
         let usecase = PersonUsecaseImpl::new(Rc::new(dao));
+        let db_client = Client::connect(db_url, NoTls).unwrap();
 
         Self {
-            usecase: Rc::new(usecase),
+            db_client,
+            usecase: Rc::new(RefCell::new(usecase)),
         }
     }
 }
 
 fn main() {
-    let dao = Rc::new(PgPersonDao::new(
-        "postgres://admin:adminpass@localhost:15432/sampledb",
-    ));
-
-    let mut usecase = PersonUsecaseImpl::new(dao.clone());
+    let mut app = PersonApi::new("postgres://admin:adminpass@localhost:15432/sampledb");
+    let mut usecase = app.usecase.borrow_mut();
 
     // transaction
+    let mut ctx = app.db_client.transaction().unwrap();
     {
-        let mut client = Client::connect(&dao.url, NoTls).unwrap();
-        let mut ctx = client.transaction().unwrap();
-
         let tx = usecase.entry(Person::new("cutsea", 53, None));
 
         let result = tx.run(&mut ctx);
@@ -724,7 +722,6 @@ fn main() {
         for (id, person) in result {
             println!("id: {}, person: {}", id, person);
         }
-
-        ctx.commit().unwrap();
     }
+    ctx.commit().unwrap();
 }
