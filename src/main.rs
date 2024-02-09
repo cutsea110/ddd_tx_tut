@@ -1,4 +1,5 @@
 use core::fmt;
+use std::rc::Rc;
 
 use postgres::{Client, NoTls};
 use thiserror::Error;
@@ -661,7 +662,12 @@ trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 }
 #[derive(Debug, Clone)]
 struct PersonUsecaseImpl {
-    dao: Box<PgPersonDao>,
+    dao: Rc<PgPersonDao>,
+}
+impl PersonUsecaseImpl {
+    pub fn new(dao: Rc<PgPersonDao>) -> Self {
+        Self { dao }
+    }
 }
 impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
     fn get_dao<'a>(&'a self) -> Box<&PgPersonDao> {
@@ -670,15 +676,29 @@ impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
 }
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
+struct App {
+    usecase: Rc<PersonUsecaseImpl>,
+}
+impl App {
+    pub fn new(db_url: &str) -> Self {
+        let dao = Rc::new(PgPersonDao::new(db_url));
+        let usecase = Rc::new(PersonUsecaseImpl::new(Rc::clone(&dao)));
+
+        Self { usecase }
+    }
+}
+
 fn main() {
-    let dao = PgPersonDao::new("postgres://admin:adminpass@localhost:15432/sampledb");
+    let dao = Rc::new(PgPersonDao::new(
+        "postgres://admin:adminpass@localhost:15432/sampledb",
+    ));
+
+    let mut usecase = PersonUsecaseImpl {
+        dao: Rc::clone(&dao),
+    };
 
     let mut client = Client::connect(&dao.url, NoTls).unwrap();
     let mut ctx = client.transaction().unwrap();
-
-    let mut usecase = PersonUsecaseImpl {
-        dao: Box::new(dao.clone()),
-    };
 
     let tx = usecase.entry(Person::new("cutsea", 53, None));
 
