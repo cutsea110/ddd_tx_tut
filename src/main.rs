@@ -676,15 +676,17 @@ impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
 }
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
-struct App {
+struct PersonApi {
     usecase: Rc<PersonUsecaseImpl>,
 }
-impl App {
+impl PersonApi {
     pub fn new(db_url: &str) -> Self {
-        let dao = Rc::new(PgPersonDao::new(db_url));
-        let usecase = Rc::new(PersonUsecaseImpl::new(Rc::clone(&dao)));
+        let dao = PgPersonDao::new(db_url);
+        let usecase = PersonUsecaseImpl::new(Rc::new(dao));
 
-        Self { usecase }
+        Self {
+            usecase: Rc::new(usecase),
+        }
     }
 }
 
@@ -693,35 +695,36 @@ fn main() {
         "postgres://admin:adminpass@localhost:15432/sampledb",
     ));
 
-    let mut usecase = PersonUsecaseImpl {
-        dao: Rc::clone(&dao),
-    };
+    let mut usecase = PersonUsecaseImpl::new(dao.clone());
 
-    let mut client = Client::connect(&dao.url, NoTls).unwrap();
-    let mut ctx = client.transaction().unwrap();
+    // transaction
+    {
+        let mut client = Client::connect(&dao.url, NoTls).unwrap();
+        let mut ctx = client.transaction().unwrap();
 
-    let tx = usecase.entry(Person::new("cutsea", 53, None));
+        let tx = usecase.entry(Person::new("cutsea", 53, None));
 
-    let result = tx.run(&mut ctx);
-    println!("Hello, world! {:?}", result);
+        let result = tx.run(&mut ctx);
+        println!("Hello, world! {:?}", result);
 
-    let persons = vec![
-        Person::new("Gauss", 34, Some(b"King of Math".as_ref())),
-        Person::new("Galois", 20, Some(b"Group Theory".as_ref())),
-        Person::new("Riemann", 39, Some(b"Riemann Hypothesis".as_ref())),
-        Person::new("Ramanujan", 32, Some(b"Ramanujan Conjecture".as_ref())),
-        Person::new("Euler", 76, Some(b"Euler's identity".as_ref())),
-        Person::new("Abel", 26, Some(b"Abel's theorem".as_ref())),
-    ];
-    for person in persons {
-        let result = usecase.entry(person).run(&mut ctx);
-        println!("insert person: {:?}", result);
+        let persons = vec![
+            Person::new("Gauss", 34, Some(b"King of Math".as_ref())),
+            Person::new("Galois", 20, Some(b"Group Theory".as_ref())),
+            Person::new("Riemann", 39, Some(b"Riemann Hypothesis".as_ref())),
+            Person::new("Ramanujan", 32, Some(b"Ramanujan Conjecture".as_ref())),
+            Person::new("Euler", 76, Some(b"Euler's identity".as_ref())),
+            Person::new("Abel", 26, Some(b"Abel's theorem".as_ref())),
+        ];
+        for person in persons {
+            let result = usecase.entry(person).run(&mut ctx);
+            println!("insert person: {:?}", result);
+        }
+
+        let result = usecase.collect().run(&mut ctx).unwrap();
+        for (id, person) in result {
+            println!("id: {}, person: {}", id, person);
+        }
+
+        ctx.commit().unwrap();
     }
-
-    let result = usecase.collect().run(&mut ctx).unwrap();
-    for (id, person) in result {
-        println!("id: {}, person: {}", id, person);
-    }
-
-    ctx.commit().unwrap();
 }
