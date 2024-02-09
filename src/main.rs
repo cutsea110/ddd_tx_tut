@@ -1,5 +1,8 @@
 use core::fmt;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
 
 use postgres::{Client, NoTls};
 use thiserror::Error;
@@ -702,6 +705,29 @@ impl PersonApi {
     }
 
     // api is responsible for transaction management
+    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
+    where
+        F: FnOnce(
+            &mut RefMut<'_, PersonUsecaseImpl>,
+            &mut postgres::Transaction<'_>,
+        ) -> Result<T, MyError>,
+    {
+        let mut usecase: RefMut<'_, PersonUsecaseImpl> = self.usecase.borrow_mut();
+        let mut ctx = self.db_client.transaction().unwrap();
+
+        let res = f(&mut usecase, &mut ctx);
+
+        match res {
+            Ok(v) => {
+                ctx.commit().unwrap();
+                Ok(v)
+            }
+            Err(_) => {
+                ctx.rollback().unwrap();
+                Err(MyError::Dummy)
+            }
+        }
+    }
 
     // api: entry and verify
     pub fn entry_and_verify(
@@ -710,29 +736,16 @@ impl PersonApi {
         age: i32,
         data: &str,
     ) -> Result<Person, MyError> {
-        let mut usecase = self.usecase.borrow_mut();
+        self.run_tx(|usecase, ctx| {
+            let id = usecase
+                .entry(Person::new(name, age, Some(data.as_bytes())))
+                .run(ctx)?;
 
-        let mut ctx = self.db_client.transaction().unwrap();
-
-        let bs = if data.is_empty() {
-            None
-        } else {
-            Some(data.as_bytes())
-        };
-
-        let id = usecase.entry(Person::new(name, age, bs)).run(&mut ctx)?;
-
-        match usecase.find(id).run(&mut ctx) {
-            Ok(Some(person)) => {
-                ctx.commit().unwrap();
-                Ok(person)
+            match usecase.find(id).run(ctx) {
+                Ok(Some(person)) => Ok(person),
+                _ => Err(MyError::Dummy),
             }
-            // NOTE: include the case of None
-            _ => {
-                ctx.rollback().unwrap();
-                Err(MyError::Dummy)
-            }
-        }
+        })
     }
 }
 
