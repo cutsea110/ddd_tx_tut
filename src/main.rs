@@ -778,6 +778,24 @@ impl PersonApi {
                 .run(ctx)
         })
     }
+
+    // api: batch import
+    pub fn batch_import(&mut self, persons: Vec<Person>) -> Result<(), MyError> {
+        self.run_tx(|usecase, ctx| {
+            for person in persons {
+                let res = usecase.entry(person).run(ctx);
+                if res.is_err() {
+                    return Err(MyError::Dummy);
+                }
+            }
+            Ok(())
+        })
+    }
+
+    // api: list all persons
+    pub fn list_all(&mut self) -> Result<Vec<(PersonId, Person)>, MyError> {
+        self.run_tx(|usecase, ctx| usecase.collect().run(ctx))
+    }
 }
 
 fn main() {
@@ -787,26 +805,16 @@ fn main() {
     let (id, person) = api.register("cutsea", 53, "rustacean").unwrap();
     println!("id:{} {}", id, person);
 
-    let mut usecase = api.usecase.borrow_mut();
+    let persons = vec![
+        Person::new("Gauss", 34, Some("King of Math")),
+        Person::new("Galois", 20, Some("Group Theory")),
+        Person::new("Euler", 76, Some("Euler's identity")),
+        Person::new("Abel", 26, Some("Abel's theorem")),
+    ];
+    api.batch_import(persons).unwrap();
 
-    // transaction
-    let mut ctx = api.db_client.transaction().unwrap();
-    {
-        let persons = vec![
-            Person::new("Gauss", 34, Some("King of Math")),
-            Person::new("Galois", 20, Some("Group Theory")),
-            Person::new("Euler", 76, Some("Euler's identity")),
-            Person::new("Abel", 26, Some("Abel's theorem")),
-        ];
-        for person in persons {
-            let result = usecase.entry(person).run(&mut ctx);
-            println!("insert person: {:?}", result);
-        }
-
-        let result = usecase.collect().run(&mut ctx).unwrap();
-        for (id, person) in result {
-            println!("id: {}, person: {}", id, person);
-        }
+    let persons = api.list_all().expect("list all");
+    for (id, person) in persons {
+        println!("id:{} {}", id, person);
     }
-    ctx.commit().unwrap();
 }
