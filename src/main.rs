@@ -566,14 +566,14 @@ pub enum MyError {
 struct Person {
     name: String,
     age: i32,
-    data: Option<Vec<u8>>,
+    data: Option<String>,
 }
 impl Person {
-    pub fn new(name: &str, age: i32, data: Option<&[u8]>) -> Self {
+    pub fn new(name: &str, age: i32, data: Option<&str>) -> Self {
         Self {
             name: name.to_string(),
             age,
-            data: data.map(|d| d.to_vec()),
+            data: data.map(|d| d.to_string()),
         }
     }
 }
@@ -581,10 +581,8 @@ impl fmt::Display for Person {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Person {{ name: {}, age: {}, data: {} }}",
-            self.name,
-            self.age,
-            std::str::from_utf8(&self.data.as_ref().unwrap_or(&vec![])).unwrap_or("")
+            "Person {{ name: {}, age: {}, data: {:?} }}",
+            self.name, self.age, self.data,
         )
     }
 }
@@ -611,7 +609,11 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
-                &[&person.name, &person.age, &person.data],
+                &[
+                    &person.name,
+                    &person.age,
+                    &person.data.map(|d| d.as_str().as_bytes().to_vec()),
+                ],
             )
             .map(|row| row.get::<usize, i32>(0))
             .map_err(|_| DaoError::InsertError)
@@ -623,7 +625,13 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Option<Person>, Err = DaoError> {
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
-                .map(|row| row.map(|row| Person::new(row.get(0), row.get(1), row.get(2))))
+                .map(|row| {
+                    row.map(|row| {
+                        let data = std::str::from_utf8(row.get::<usize, &[u8]>(2)).ok();
+
+                        Person::new(row.get(0), row.get(1), data)
+                    })
+                })
                 .map_err(|_| DaoError::SelectError)
         })
     }
@@ -636,7 +644,8 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                     rows.iter()
                         .map(|row| {
                             let id = row.get::<usize, i32>(0);
-                            let person = Person::new(row.get(1), row.get(2), row.get(3));
+                            let data = std::str::from_utf8(row.get::<usize, &[u8]>(3)).ok();
+                            let person = Person::new(row.get(1), row.get(2), data);
                             (id, person)
                         })
                         .collect()
@@ -745,7 +754,7 @@ impl PersonApi {
     pub fn register(&mut self, name: &str, age: i32, data: &str) -> Result<(i32, Person), MyError> {
         self.run_tx(|usecase, ctx| {
             usecase
-                .entry_and_verify(Person::new(name, age, Some(data.as_bytes())))
+                .entry_and_verify(Person::new(name, age, Some(data)))
                 .run(ctx)
         })
     }
@@ -764,10 +773,10 @@ fn main() {
     let mut ctx = api.db_client.transaction().unwrap();
     {
         let persons = vec![
-            Person::new("Gauss", 34, Some(b"King of Math".as_ref())),
-            Person::new("Galois", 20, Some(b"Group Theory".as_ref())),
-            Person::new("Euler", 76, Some(b"Euler's identity".as_ref())),
-            Person::new("Abel", 26, Some(b"Abel's theorem".as_ref())),
+            Person::new("Gauss", 34, Some("King of Math")),
+            Person::new("Galois", 20, Some("Group Theory")),
+            Person::new("Euler", 76, Some("Euler's identity")),
+            Person::new("Abel", 26, Some("Abel's theorem")),
         ];
         for person in persons {
             let result = usecase.entry(person).run(&mut ctx);
