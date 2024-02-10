@@ -557,9 +557,15 @@ pub mod tx_rs {
 use tx_rs::Tx;
 
 #[derive(Error, Debug)]
-pub enum MyError {
-    #[error("dummy error")]
-    Dummy,
+pub enum ServiceError {
+    #[error("entry person failed: {0}")]
+    EntryPersonFailed(DaoError),
+    #[error("find person failed: {0}")]
+    FindPersonFailed(DaoError),
+    #[error("entry and verify failed: {0}")]
+    EntryAndVerifyPersonFailed(DaoError),
+    #[error("collect person failed: {0}")]
+    CollectPersonFailed(DaoError),
 }
 
 type PersonId = i32;
@@ -590,10 +596,10 @@ impl fmt::Display for Person {
 
 #[derive(Error, Debug)]
 pub enum DaoError {
-    #[error("insert error")]
-    InsertError,
-    #[error("select error")]
-    SelectError,
+    #[error("insert error: {0}")]
+    InsertError(String),
+    #[error("select error: {0}")]
+    SelectError(String),
 }
 trait PersonDao<Ctx> {
     fn insert(&self, person: Person) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = DaoError>;
@@ -617,7 +623,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                 ],
             )
             .map(|row| row.get::<usize, PersonId>(0))
-            .map_err(|_| DaoError::InsertError)
+            .map_err(|e| DaoError::InsertError(e.to_string()))
         })
     }
     fn fetch(
@@ -635,7 +641,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                         Person::new(name, age, data)
                     })
                 })
-                .map_err(|_| DaoError::SelectError)
+                .map_err(|e| DaoError::SelectError(e.to_string()))
         })
     }
     fn select(
@@ -657,7 +663,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                         })
                         .collect()
                 })
-                .map_err(|_| DaoError::SelectError)
+                .map_err(|e| DaoError::SelectError(e.to_string()))
         })
     }
 }
@@ -669,43 +675,45 @@ trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn entry<'a>(
         &'a mut self,
         person: Person,
-    ) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = MyError>
+    ) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = ServiceError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
-        dao.insert(person).map_err(|_| MyError::Dummy)
+        dao.insert(person)
+            .map_err(|e| ServiceError::EntryPersonFailed(e))
     }
     fn find<'a>(
         &'a mut self,
         id: PersonId,
-    ) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = MyError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = ServiceError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
-        dao.fetch(id).map_err(|_| MyError::Dummy)
+        dao.fetch(id).map_err(|e| ServiceError::FindPersonFailed(e))
     }
     fn entry_and_verify<'a>(
         &'a mut self,
         person: Person,
-    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, Person), Err = MyError>
+    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, Person), Err = ServiceError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         dao.insert(person)
             .and_then(move |id| dao.fetch(id).map(move |p| (id, p.unwrap())))
-            .map_err(|_| MyError::Dummy)
+            .map_err(|e| ServiceError::EntryAndVerifyPersonFailed(e))
     }
     fn collect<'a>(
         &'a mut self,
-    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = MyError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = ServiceError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
-        dao.select().map_err(|_| MyError::Dummy)
+        dao.select()
+            .map_err(|e| ServiceError::CollectPersonFailed(e))
     }
 }
 #[derive(Debug, Clone)]
@@ -724,6 +732,14 @@ impl HavePersonDao<postgres::Transaction<'_>> for PersonUsecaseImpl {
 }
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
+#[derive(Debug, Error)]
+pub enum ApiError {
+    #[error("transaction failed: {0}")]
+    TransactionFailed(ServiceError),
+    #[error("service unavailable: {0}")]
+    ServiceUnavailable(ServiceError),
+}
+
 struct PersonApi {
     db_client: Client,
     usecase: Rc<RefCell<PersonUsecaseImpl>>,
@@ -741,12 +757,12 @@ impl PersonApi {
     }
 
     // api is responsible for transaction management
-    fn run_tx<T, F>(&mut self, f: F) -> Result<T, MyError>
+    fn run_tx<T, F>(&mut self, f: F) -> Result<T, ApiError>
     where
         F: FnOnce(
             &mut RefMut<'_, PersonUsecaseImpl>,
             &mut postgres::Transaction<'_>,
-        ) -> Result<T, MyError>,
+        ) -> Result<T, ServiceError>,
     {
         let mut usecase = self.usecase.borrow_mut();
         let mut ctx = self.db_client.transaction().unwrap();
@@ -758,9 +774,9 @@ impl PersonApi {
                 ctx.commit().unwrap();
                 Ok(v)
             }
-            Err(_) => {
+            Err(e) => {
                 ctx.rollback().unwrap();
-                Err(MyError::Dummy)
+                Err(ApiError::TransactionFailed(e))
             }
         }
     }
@@ -771,7 +787,7 @@ impl PersonApi {
         name: &str,
         age: i32,
         data: &str,
-    ) -> Result<(PersonId, Person), MyError> {
+    ) -> Result<(PersonId, Person), ApiError> {
         self.run_tx(|usecase, ctx| {
             usecase
                 .entry_and_verify(Person::new(name, age, Some(data)))
@@ -780,12 +796,12 @@ impl PersonApi {
     }
 
     // api: batch import
-    pub fn batch_import(&mut self, persons: Vec<Person>) -> Result<(), MyError> {
+    pub fn batch_import(&mut self, persons: Vec<Person>) -> Result<(), ApiError> {
         self.run_tx(|usecase, ctx| {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
-                if res.is_err() {
-                    return Err(MyError::Dummy);
+                if let Err(e) = res {
+                    return Err(e);
                 }
             }
             Ok(())
@@ -793,7 +809,7 @@ impl PersonApi {
     }
 
     // api: list all persons
-    pub fn list_all(&mut self) -> Result<Vec<(PersonId, Person)>, MyError> {
+    pub fn list_all(&mut self) -> Result<Vec<(PersonId, Person)>, ApiError> {
         self.run_tx(|usecase, ctx| usecase.collect().run(ctx))
     }
 }
