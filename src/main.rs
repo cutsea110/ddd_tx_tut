@@ -712,7 +712,7 @@ impl PersonApi {
             &mut postgres::Transaction<'_>,
         ) -> Result<T, MyError>,
     {
-        let mut usecase: RefMut<'_, PersonUsecaseImpl> = self.usecase.borrow_mut();
+        let mut usecase = self.usecase.borrow_mut();
         let mut ctx = self.db_client.transaction().unwrap();
 
         let res = f(&mut usecase, &mut ctx);
