@@ -664,6 +664,18 @@ trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         let dao = self.get_dao();
         dao.fetch(id).map_err(|_| MyError::Dummy)
     }
+    fn entry_and_verify<'a>(
+        &'a mut self,
+        person: Person,
+    ) -> impl tx_rs::Tx<Ctx, Item = (i32, Person), Err = MyError>
+    where
+        Ctx: 'a,
+    {
+        let dao = self.get_dao();
+        dao.insert(person)
+            .and_then(move |id| dao.fetch(id).map(move |p| (id, p.unwrap())))
+            .map_err(|_| MyError::Dummy)
+    }
     fn collect<'a>(&'a mut self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = MyError>
     where
         Ctx: 'a,
@@ -729,22 +741,12 @@ impl PersonApi {
         }
     }
 
-    // api: entry and verify
-    pub fn entry_and_verify(
-        &mut self,
-        name: &str,
-        age: i32,
-        data: &str,
-    ) -> Result<Person, MyError> {
+    // api: register person
+    pub fn register(&mut self, name: &str, age: i32, data: &str) -> Result<(i32, Person), MyError> {
         self.run_tx(|usecase, ctx| {
-            let id = usecase
-                .entry(Person::new(name, age, Some(data.as_bytes())))
-                .run(ctx)?;
-
-            match usecase.find(id).run(ctx) {
-                Ok(Some(person)) => Ok(person),
-                _ => Err(MyError::Dummy),
-            }
+            usecase
+                .entry_and_verify(Person::new(name, age, Some(data.as_bytes())))
+                .run(ctx)
         })
     }
 }
@@ -753,8 +755,8 @@ fn main() {
     let mut api = PersonApi::new("postgres://admin:adminpass@localhost:15432/sampledb");
 
     // call api
-    let person = api.entry_and_verify("cutsea", 53, "rustacean").unwrap();
-    println!("Hello, world! {}", person);
+    let (id, person) = api.register("cutsea", 53, "rustacean").unwrap();
+    println!("id:{} {}", id, person);
 
     let mut usecase = api.usecase.borrow_mut();
 
@@ -764,8 +766,6 @@ fn main() {
         let persons = vec![
             Person::new("Gauss", 34, Some(b"King of Math".as_ref())),
             Person::new("Galois", 20, Some(b"Group Theory".as_ref())),
-            Person::new("Riemann", 39, Some(b"Riemann Hypothesis".as_ref())),
-            Person::new("Ramanujan", 32, Some(b"Ramanujan Conjecture".as_ref())),
             Person::new("Euler", 76, Some(b"Euler's identity".as_ref())),
             Person::new("Abel", 26, Some(b"Abel's theorem".as_ref())),
         ];
