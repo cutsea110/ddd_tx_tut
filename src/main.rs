@@ -562,6 +562,7 @@ pub enum MyError {
     Dummy,
 }
 
+type PersonId = i32;
 #[derive(Debug)]
 struct Person {
     name: String,
@@ -595,9 +596,9 @@ pub enum DaoError {
     SelectError,
 }
 trait PersonDao<Ctx> {
-    fn insert(&self, person: Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = DaoError>;
-    fn fetch(&self, id: i32) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = DaoError>;
-    fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = DaoError>;
+    fn insert(&self, person: Person) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = DaoError>;
+    fn fetch(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = DaoError>;
+    fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = DaoError>;
 }
 #[derive(Debug, Clone)]
 struct PgPersonDao;
@@ -605,7 +606,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     fn insert(
         &self,
         person: Person,
-    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = i32, Err = DaoError> {
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = PersonId, Err = DaoError> {
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_one(
                 "INSERT INTO person (name, age, data) VALUES ($1, $2, $3) RETURNING id",
@@ -615,13 +616,13 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                     &person.data.map(|d| d.as_str().as_bytes().to_vec()),
                 ],
             )
-            .map(|row| row.get::<usize, i32>(0))
+            .map(|row| row.get::<usize, PersonId>(0))
             .map_err(|_| DaoError::InsertError)
         })
     }
     fn fetch(
         &self,
-        id: i32,
+        id: PersonId,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Option<Person>, Err = DaoError> {
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
@@ -639,13 +640,14 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     }
     fn select(
         &self,
-    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Vec<(i32, Person)>, Err = DaoError> {
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Vec<(PersonId, Person)>, Err = DaoError>
+    {
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
             tx.query("SELECT id, name, age, data FROM person", &[])
                 .map(|rows| {
                     rows.iter()
                         .map(|row| {
-                            let id = row.get::<usize, i32>(0);
+                            let id = row.get::<usize, PersonId>(0);
                             let name = row.get::<usize, &str>(1);
                             let age = row.get::<usize, i32>(2);
                             let data = std::str::from_utf8(row.get::<usize, &[u8]>(3)).ok();
@@ -664,14 +666,20 @@ trait HavePersonDao<Ctx> {
     fn get_dao(&self) -> Box<&impl PersonDao<Ctx>>;
 }
 trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
-    fn entry<'a>(&'a mut self, person: Person) -> impl tx_rs::Tx<Ctx, Item = i32, Err = MyError>
+    fn entry<'a>(
+        &'a mut self,
+        person: Person,
+    ) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = MyError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         dao.insert(person).map_err(|_| MyError::Dummy)
     }
-    fn find<'a>(&'a mut self, id: i32) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = MyError>
+    fn find<'a>(
+        &'a mut self,
+        id: PersonId,
+    ) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = MyError>
     where
         Ctx: 'a,
     {
@@ -681,7 +689,7 @@ trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn entry_and_verify<'a>(
         &'a mut self,
         person: Person,
-    ) -> impl tx_rs::Tx<Ctx, Item = (i32, Person), Err = MyError>
+    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, Person), Err = MyError>
     where
         Ctx: 'a,
     {
@@ -690,7 +698,9 @@ trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
             .and_then(move |id| dao.fetch(id).map(move |p| (id, p.unwrap())))
             .map_err(|_| MyError::Dummy)
     }
-    fn collect<'a>(&'a mut self) -> impl tx_rs::Tx<Ctx, Item = Vec<(i32, Person)>, Err = MyError>
+    fn collect<'a>(
+        &'a mut self,
+    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = MyError>
     where
         Ctx: 'a,
     {
@@ -756,7 +766,12 @@ impl PersonApi {
     }
 
     // api: register person
-    pub fn register(&mut self, name: &str, age: i32, data: &str) -> Result<(i32, Person), MyError> {
+    pub fn register(
+        &mut self,
+        name: &str,
+        age: i32,
+        data: &str,
+    ) -> Result<(PersonId, Person), MyError> {
         self.run_tx(|usecase, ctx| {
             usecase
                 .entry_and_verify(Person::new(name, age, Some(data)))
