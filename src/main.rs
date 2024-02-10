@@ -627,9 +627,11 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
             tx.query_opt("SELECT name, age, data FROM person WHERE id = $1", &[&id])
                 .map(|row| {
                     row.map(|row| {
+                        let name = row.get::<usize, &str>(0);
+                        let age = row.get::<usize, i32>(1);
                         let data = std::str::from_utf8(row.get::<usize, &[u8]>(2)).ok();
 
-                        Person::new(row.get(0), row.get(1), data)
+                        Person::new(name, age, data)
                     })
                 })
                 .map_err(|_| DaoError::SelectError)
@@ -644,8 +646,11 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                     rows.iter()
                         .map(|row| {
                             let id = row.get::<usize, i32>(0);
+                            let name = row.get::<usize, &str>(1);
+                            let age = row.get::<usize, i32>(2);
                             let data = std::str::from_utf8(row.get::<usize, &[u8]>(3)).ok();
-                            let person = Person::new(row.get(1), row.get(2), data);
+                            let person = Person::new(name, age, data);
+
                             (id, person)
                         })
                         .collect()
