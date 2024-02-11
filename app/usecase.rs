@@ -71,7 +71,149 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     }
 }
 
-// # 追跡型のテスト
+// # モックテスト
+//
+// * 目的
+//
+//   Usecase の正常系のテストを行う
+//   Usecase の各メソッドが DAO から通常期待される結果を受け取ったときに適切にふるまうことを保障する
+//
+// * 方針
+//
+//   DAO のモックに対して Usecase を実行し、その結果を確認する
+//   モックはテスト時の比較チェックのしやすさを考慮して HashMap ではなく Vec で登録データを保持する
+//   データ数は多くないので、Vec でリニアサーチすることで十分な速度が出ると考える
+//
+// * 実装
+//
+//   1. DAO のモックを用意する
+//   2. Usecase にそのモックをプラグインする
+//   3. Usecase のメソッドを呼び出す
+//   4. Usecase からの戻り値を検証する
+//
+// * 注意
+//
+//   1. このテストは Usecase の実装を保障するものであって、DAO の実装を保障するものではない
+//
+#[cfg(test)]
+mod mock {
+    use std::cell::RefCell;
+
+    use super::*;
+
+    struct MockPersonDao {
+        last_id: RefCell<PersonId>,
+        data: RefCell<Vec<(PersonId, Person)>>,
+    }
+    // Ctx 不要なので () にしている
+    impl PersonDao<()> for MockPersonDao {
+        fn insert(&self, person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+            *self.last_id.borrow_mut() += 1;
+            let id = *self.last_id.borrow();
+            self.data.borrow_mut().push((id, person));
+
+            tx_rs::with_tx(move |()| Ok(id))
+        }
+        fn fetch(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+            let data = self.data.borrow();
+            let result = data.iter().find(|(i, _)| *i == id).map(|(_, p)| p.clone());
+
+            tx_rs::with_tx(move |()| Ok(result))
+        }
+        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+            let result = self.data.borrow().clone();
+
+            tx_rs::with_tx(move |()| Ok(result))
+        }
+    }
+
+    struct MockPersonUsecase {
+        dao: MockPersonDao,
+    }
+    impl HavePersonDao<()> for MockPersonUsecase {
+        fn get_dao(&self) -> Box<&impl PersonDao<()>> {
+            Box::new(&self.dao)
+        }
+    }
+    impl PersonUsecase<()> for MockPersonUsecase {}
+
+    #[test]
+    fn test_entry() {
+        let dao = MockPersonDao {
+            last_id: RefCell::new(0),
+            data: RefCell::new(vec![]),
+        };
+        let mut usecase = MockPersonUsecase { dao };
+
+        let person = Person::new("Alice", 20, Some("Alice wonderland"));
+        let expected = person.clone();
+        let expected_id = 1;
+
+        let result = usecase.entry(person).run(&mut ());
+        assert_eq!(result, Ok(expected_id));
+        assert_eq!(usecase.dao.data.borrow().len(), expected_id as usize);
+        assert_eq!(*usecase.dao.data.borrow(), vec![(expected_id, expected)]);
+    }
+    #[test]
+    fn test_find() {
+        let dao = MockPersonDao {
+            last_id: RefCell::new(0), // 使わない
+            data: RefCell::new(vec![
+                (13, Person::new("Alice", 20, Some("Alice is sender"))),
+                (24, Person::new("Bob", 30, Some("Bob is receiver"))),
+                (99, Person::new("Eve", 10, Some("Eve is interceptor"))),
+            ]),
+        };
+        let mut usecase = MockPersonUsecase { dao };
+
+        let result = usecase.find(13).run(&mut ());
+        assert_eq!(
+            result,
+            Ok(Some(Person::new("Alice", 20, Some("Alice is sender"))))
+        );
+    }
+    #[test]
+    fn test_entry_and_verify() {
+        let dao = MockPersonDao {
+            last_id: RefCell::new(13),
+            data: RefCell::new(vec![]),
+        };
+        let mut usecase = MockPersonUsecase { dao };
+
+        let person = Person::new("Alice", 20, Some("Alice wonderland"));
+        let expected = person.clone();
+        let expected_id = 14;
+
+        let result = usecase.entry_and_verify(person).run(&mut ());
+        assert_eq!(result, Ok((expected_id, expected)));
+    }
+    #[test]
+    fn test_collect() {
+        let data = vec![
+            (13, Person::new("Alice", 20, Some("Alice is sender"))),
+            (24, Person::new("Bob", 30, Some("Bob is receiver"))),
+            (99, Person::new("Eve", 10, Some("Eve is interceptor"))),
+        ];
+        let expected = data.clone();
+
+        let dao = MockPersonDao {
+            last_id: RefCell::new(0), // 使わない
+            data: RefCell::new(data),
+        };
+        let mut usecase = MockPersonUsecase { dao };
+
+        let result = usecase.collect().run(&mut ());
+        assert_eq!(
+            result.map(|mut v: Vec<(PersonId, Person)>| {
+                v.sort_by_key(|(id, _)| *id);
+                v
+            }),
+            Ok(expected)
+        );
+    }
+}
+
+// # スパイテスト
 //
 // * 目的
 //
@@ -100,19 +242,19 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 //      DAO のメソッドが不適切なデータベースの操作をしていないことを保障するものではない
 //
 #[cfg(test)]
-mod trace {
+mod spy_tests {
     use std::cell::RefCell;
 
     use super::*;
 
-    struct TracePersonDao {
+    struct SpyPersonDao {
         insert: RefCell<Vec<Person>>,
         inserted_id: PersonId,
         fetch: RefCell<Vec<PersonId>>,
         select: RefCell<i32>,
     }
     // Ctx 不要なので () にしている
-    impl PersonDao<()> for TracePersonDao {
+    impl PersonDao<()> for SpyPersonDao {
         fn insert(&self, person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             self.insert.borrow_mut().push(person);
 
@@ -133,25 +275,25 @@ mod trace {
         }
     }
 
-    struct TracePersonUsecase {
-        dao: TracePersonDao,
+    struct SpyPersonUsecase {
+        dao: SpyPersonDao,
     }
-    impl HavePersonDao<()> for TracePersonUsecase {
+    impl HavePersonDao<()> for SpyPersonUsecase {
         fn get_dao(&self) -> Box<&impl PersonDao<()>> {
             Box::new(&self.dao)
         }
     }
-    impl PersonUsecase<()> for TracePersonUsecase {}
+    impl PersonUsecase<()> for SpyPersonUsecase {}
 
     #[test]
     fn test_entry() {
-        let dao = TracePersonDao {
+        let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
             inserted_id: 0, // 使わない
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = TracePersonUsecase { dao };
+        let mut usecase = SpyPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let expected = person.clone();
@@ -169,13 +311,13 @@ mod trace {
 
     #[test]
     fn test_find() {
-        let dao = TracePersonDao {
+        let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
             inserted_id: 0, // 使わない
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = TracePersonUsecase { dao };
+        let mut usecase = SpyPersonUsecase { dao };
 
         let id: PersonId = 42;
         let expected = id;
@@ -192,13 +334,13 @@ mod trace {
 
     #[test]
     fn test_entry_and_verify() {
-        let dao = TracePersonDao {
+        let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
             inserted_id: 42,
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = TracePersonUsecase { dao };
+        let mut usecase = SpyPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let expected = person.clone();
@@ -218,13 +360,13 @@ mod trace {
 
     #[test]
     fn test_collect() {
-        let dao = TracePersonDao {
+        let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
             inserted_id: 0, // 使わない
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = TracePersonUsecase { dao };
+        let mut usecase = SpyPersonUsecase { dao };
 
         let _ = usecase.collect().run(&mut ());
 
@@ -235,7 +377,7 @@ mod trace {
     }
 }
 
-// # エラー系のテスト
+// # エラー系スタブテスト
 //
 // * 目的
 //
@@ -255,16 +397,16 @@ mod trace {
 // * 注意
 //
 #[cfg(test)]
-mod error {
+mod error_stub_tests {
     use super::*;
 
-    struct ErrorPersonDao {
+    struct StubPersonDao {
         insert_result: Result<PersonId, DaoError>,
         fetch_result: Result<Option<Person>, DaoError>,
         select_result: Result<Vec<(PersonId, Person)>, DaoError>,
     }
     // Ctx 不要なので () にしている
-    impl PersonDao<()> for ErrorPersonDao {
+    impl PersonDao<()> for StubPersonDao {
         fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(|()| self.insert_result.clone())
         }
@@ -279,26 +421,26 @@ mod error {
         }
     }
 
-    struct ErrorPersonUsecase {
-        dao: ErrorPersonDao,
+    struct StubPersonUsecase {
+        dao: StubPersonDao,
     }
-    impl HavePersonDao<()> for ErrorPersonUsecase {
+    impl HavePersonDao<()> for StubPersonUsecase {
         fn get_dao(&self) -> Box<&impl PersonDao<()>> {
             Box::new(&self.dao)
         }
     }
-    impl PersonUsecase<()> for ErrorPersonUsecase {}
+    impl PersonUsecase<()> for StubPersonUsecase {}
 
     #[test]
     fn test_entry() {
-        let dao = ErrorPersonDao {
+        let dao = StubPersonDao {
             insert_result: Err(DaoError::InsertError("valid dao".to_string())),
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
         };
         let expected = ServiceError::EntryPersonFailed(dao.insert_result.clone().unwrap_err());
 
-        let mut usecase = ErrorPersonUsecase { dao };
+        let mut usecase = StubPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let result = usecase.entry(person).run(&mut ());
@@ -309,14 +451,14 @@ mod error {
 
     #[test]
     fn test_find() {
-        let dao = ErrorPersonDao {
+        let dao = StubPersonDao {
             insert_result: Ok(42), // 使わない
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
         };
         let expected = ServiceError::FindPersonFailed(dao.fetch_result.clone().unwrap_err());
 
-        let mut usecase = ErrorPersonUsecase { dao };
+        let mut usecase = StubPersonUsecase { dao };
 
         let id: PersonId = 42;
         let result = usecase.find(id).run(&mut ());
@@ -327,7 +469,7 @@ mod error {
 
     #[test]
     fn test_entry_and_verify_insert_error() {
-        let dao = ErrorPersonDao {
+        let dao = StubPersonDao {
             insert_result: Err(DaoError::InsertError("valid dao".to_string())),
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
@@ -335,7 +477,7 @@ mod error {
         let expected =
             ServiceError::EntryAndVerifyPersonFailed(dao.insert_result.clone().unwrap_err());
 
-        let mut usecase = ErrorPersonUsecase { dao };
+        let mut usecase = StubPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
@@ -346,7 +488,7 @@ mod error {
 
     #[test]
     fn test_entry_and_verify_fetch_error() {
-        let dao = ErrorPersonDao {
+        let dao = StubPersonDao {
             insert_result: Ok(42),
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
@@ -354,7 +496,7 @@ mod error {
         let expected =
             ServiceError::EntryAndVerifyPersonFailed(dao.fetch_result.clone().unwrap_err());
 
-        let mut usecase = ErrorPersonUsecase { dao };
+        let mut usecase = StubPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
@@ -365,14 +507,14 @@ mod error {
 
     #[test]
     fn test_collect() {
-        let dao = ErrorPersonDao {
+        let dao = StubPersonDao {
             insert_result: Ok(42),  // 使わない
             fetch_result: Ok(None), // 使わない
             select_result: Err(DaoError::SelectError("valid dao".to_string())),
         };
         let expected = ServiceError::CollectPersonFailed(dao.select_result.clone().unwrap_err());
 
-        let mut usecase = ErrorPersonUsecase { dao };
+        let mut usecase = StubPersonUsecase { dao };
 
         let result = usecase.collect().run(&mut ());
 
