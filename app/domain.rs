@@ -1,7 +1,7 @@
 use core::fmt;
 
 pub type PersonId = i32;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Person {
     pub name: String,
     pub age: i32,

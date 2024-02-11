@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::domain::{Person, PersonId};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DaoError {
     #[error("insert error: {0}")]
     InsertError(String),
