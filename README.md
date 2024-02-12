@@ -19,6 +19,14 @@ psql postgres://admin:adminpass@localhost:15432/sampledb
 cargo run
 ```
 
+## Test
+
+run unit test without rdb.
+
+```
+cargo test
+```
+
 ## More Information
 
 You should export `DATABASE_URL` environment variable on the terminal which you run your editor.
