@@ -97,7 +97,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 //   1. このテストは Usecase の実装を保障するものであって、DAO の実装を保障するものではない
 //
 #[cfg(test)]
-mod mock {
+mod mock_tests {
     use std::cell::RefCell;
 
     use super::*;

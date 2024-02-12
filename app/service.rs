@@ -79,7 +79,7 @@ pub trait PersonService<'a, Ctx> {
 //   2. 同様にこのテストは DAO の実装を保障するものではない
 //
 #[cfg(test)]
-mod mock {
+mod mock_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
