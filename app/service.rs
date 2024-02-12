@@ -35,6 +35,43 @@ pub enum ApiError {
     #[error("service unavailable: {0}")]
     ServiceUnavailable(ServiceError),
 }
+pub trait Api<Ctx> {
+    type U: PersonUsecase<Ctx>;
+
+    fn run_tx<T, F>(&mut self, f: F) -> Result<T, ApiError>
+    where
+        F: FnOnce(&mut RefMut<'_, Self::U>, &mut Ctx) -> Result<T, ServiceError>;
+
+    fn register(
+        &mut self,
+        name: &str,
+        age: i32,
+        data: &str,
+    ) -> Result<(PersonId, Person), ApiError> {
+        self.run_tx(|usecase, ctx| {
+            usecase
+                .entry_and_verify(Person::new(name, age, Some(data)))
+                .run(ctx)
+        })
+    }
+
+    fn batch_import(&mut self, persons: Vec<Person>) -> Result<(), ApiError> {
+        self.run_tx(|usecase, ctx| {
+            for person in persons {
+                let res = usecase.entry(person).run(ctx);
+                if let Err(e) = res {
+                    return Err(e);
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn list_all(&mut self) -> Result<Vec<(PersonId, Person)>, ApiError> {
+        self.run_tx(|usecase, ctx| usecase.collect().run(ctx))
+    }
+}
+
 pub struct PersonApi {
     db_client: Client,
     usecase: Rc<RefCell<PersonUsecaseImpl>>,
