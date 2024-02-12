@@ -5,7 +5,7 @@ use crate::domain::{Person, PersonId};
 use tx_rs::Tx;
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub enum ServiceError {
+pub enum UsecaseError {
     #[error("entry person failed: {0}")]
     EntryPersonFailed(DaoError),
     #[error("find person failed: {0}")]
@@ -19,28 +19,28 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn entry<'a>(
         &'a mut self,
         person: Person,
-    ) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = ServiceError>
+    ) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = UsecaseError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         dao.insert(person)
-            .map_err(|e| ServiceError::EntryPersonFailed(e))
+            .map_err(|e| UsecaseError::EntryPersonFailed(e))
     }
     fn find<'a>(
         &'a mut self,
         id: PersonId,
-    ) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = ServiceError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = UsecaseError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
-        dao.fetch(id).map_err(|e| ServiceError::FindPersonFailed(e))
+        dao.fetch(id).map_err(|e| UsecaseError::FindPersonFailed(e))
     }
     fn entry_and_verify<'a>(
         &'a mut self,
         person: Person,
-    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, Person), Err = ServiceError>
+    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, Person), Err = UsecaseError>
     where
         Ctx: 'a,
     {
@@ -57,17 +57,17 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                     ))
                 })
             })
-            .map_err(|e| ServiceError::EntryAndVerifyPersonFailed(e))
+            .map_err(|e| UsecaseError::EntryAndVerifyPersonFailed(e))
     }
     fn collect<'a>(
         &'a mut self,
-    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = ServiceError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = UsecaseError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         dao.select()
-            .map_err(|e| ServiceError::CollectPersonFailed(e))
+            .map_err(|e| UsecaseError::CollectPersonFailed(e))
     }
 }
 
@@ -446,7 +446,7 @@ mod error_stub_tests {
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
         };
-        let expected = ServiceError::EntryPersonFailed(dao.insert_result.clone().unwrap_err());
+        let expected = UsecaseError::EntryPersonFailed(dao.insert_result.clone().unwrap_err());
 
         let mut usecase = StubPersonUsecase { dao };
 
@@ -464,7 +464,7 @@ mod error_stub_tests {
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
         };
-        let expected = ServiceError::FindPersonFailed(dao.fetch_result.clone().unwrap_err());
+        let expected = UsecaseError::FindPersonFailed(dao.fetch_result.clone().unwrap_err());
 
         let mut usecase = StubPersonUsecase { dao };
 
@@ -483,7 +483,7 @@ mod error_stub_tests {
             select_result: Ok(vec![]), // 使わない
         };
         let expected =
-            ServiceError::EntryAndVerifyPersonFailed(dao.insert_result.clone().unwrap_err());
+            UsecaseError::EntryAndVerifyPersonFailed(dao.insert_result.clone().unwrap_err());
 
         let mut usecase = StubPersonUsecase { dao };
 
@@ -502,7 +502,7 @@ mod error_stub_tests {
             select_result: Ok(vec![]), // 使わない
         };
         let expected =
-            ServiceError::EntryAndVerifyPersonFailed(dao.fetch_result.clone().unwrap_err());
+            UsecaseError::EntryAndVerifyPersonFailed(dao.fetch_result.clone().unwrap_err());
 
         let mut usecase = StubPersonUsecase { dao };
 
@@ -520,7 +520,7 @@ mod error_stub_tests {
             fetch_result: Ok(None), // 使わない
             select_result: Err(DaoError::SelectError("valid dao".to_string())),
         };
-        let expected = ServiceError::CollectPersonFailed(dao.select_result.clone().unwrap_err());
+        let expected = UsecaseError::CollectPersonFailed(dao.select_result.clone().unwrap_err());
 
         let mut usecase = StubPersonUsecase { dao };
 
