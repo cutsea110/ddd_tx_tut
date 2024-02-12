@@ -471,6 +471,26 @@ mod spy_tests {
     }
 }
 
+// # エラー系スタブテスト
+//
+// * 目的
+//
+//   Usecase がエラーを返した場合の Service の挙動を保障する
+//
+// * 方針
+//
+//   Usecase の各メソッドで任意の結果を返せるようにして Service のメソッドを呼び出して Service の結果を検証する
+//
+// * 実装
+//
+//   1. Usecase のメソッドが任意の結果を返せる種類の Usecase 構造体を用意する
+//      この Usecase 構造体はスタブであり、Service への間接的な入力のみ制御する
+//   2. その構造体を Service にプラグインする
+//   3. Service のメソッドを呼び出す
+//   4. Service のメソッドからの戻り値を確認する
+//
+// * 注意
+//
 #[cfg(test)]
 mod error_stub_tests {
     use std::cell::RefCell;
