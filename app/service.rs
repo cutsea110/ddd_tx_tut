@@ -35,7 +35,7 @@ pub enum ApiError {
     #[error("service unavailable: {0}")]
     ServiceUnavailable(ServiceError),
 }
-pub trait Api<'a, Ctx> {
+pub trait PersonService<'a, Ctx> {
     type U: PersonUsecase<Ctx>;
 
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ApiError>
@@ -72,11 +72,11 @@ pub trait Api<'a, Ctx> {
     }
 }
 
-pub struct PersonApi {
+pub struct PersonServiceImpl {
     db_client: Client,
     usecase: Rc<RefCell<PersonUsecaseImpl>>,
 }
-impl PersonApi {
+impl PersonServiceImpl {
     pub fn new(db_url: &str) -> Self {
         let dao = PgPersonDao;
         let usecase = PersonUsecaseImpl::new(Rc::new(dao));
@@ -88,7 +88,7 @@ impl PersonApi {
         }
     }
 }
-impl<'a> Api<'a, postgres::Transaction<'a>> for PersonApi {
+impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     type U = PersonUsecaseImpl;
 
     // api is responsible for transaction management

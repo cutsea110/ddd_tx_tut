@@ -7,11 +7,11 @@ mod usecase;
 pub use dao::{DaoError, HavePersonDao, PersonDao};
 pub use domain::{Person, PersonId};
 pub use pg_db::PgPersonDao;
-pub use service::{Api, PersonApi};
+pub use service::{PersonService, PersonServiceImpl};
 pub use usecase::{PersonUsecase, ServiceError};
 
 fn main() {
-    let mut api = PersonApi::new("postgres://admin:adminpass@localhost:15432/sampledb");
+    let mut api = PersonServiceImpl::new("postgres://admin:adminpass@localhost:15432/sampledb");
 
     // call api
     let (id, person) = api.register("cutsea", 53, "rustacean").unwrap();
