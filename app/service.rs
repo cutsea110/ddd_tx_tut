@@ -5,7 +5,7 @@ use crate::domain::{Person, PersonId};
 use crate::usecase::{PersonUsecase, UsecaseError};
 use tx_rs::Tx;
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ServiceError {
     #[error("transaction failed: {0}")]
     TransactionFailed(UsecaseError),
@@ -436,5 +436,169 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
         assert_eq!(*usecase.borrow().collect.borrow(), 1);
+    }
+}
+
+#[cfg(test)]
+mod error_stub_tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::{
+        dao::{DaoError, PersonDao},
+        HavePersonDao,
+    };
+
+    use super::*;
+
+    struct DummyPersonDao;
+    impl PersonDao<()> for DummyPersonDao {
+        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(1))
+        }
+        fn fetch(
+            &self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(None))
+        }
+        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+    }
+
+    struct StubPersonUsecase {
+        dao: DummyPersonDao,
+        entry_result: Result<PersonId, UsecaseError>,
+        find_result: Result<Option<Person>, UsecaseError>,
+        entry_and_verify_result: Result<(PersonId, Person), UsecaseError>,
+        collect_result: Result<Vec<(PersonId, Person)>, UsecaseError>,
+    }
+    impl HavePersonDao<()> for StubPersonUsecase {
+        fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
+            Box::new(&self.dao)
+        }
+    }
+    impl PersonUsecase<()> for StubPersonUsecase {
+        fn entry<'a>(
+            &'a mut self,
+            _person: Person,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(|&mut ()| self.entry_result.clone())
+        }
+        fn find<'a>(
+            &'a mut self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(|&mut ()| self.find_result.clone())
+        }
+        fn entry_and_verify<'a>(
+            &'a mut self,
+            _person: Person,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| self.entry_and_verify_result.clone())
+        }
+        fn collect<'a>(
+            &'a mut self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(|&mut ()| self.collect_result.clone())
+        }
+    }
+
+    struct StubPersonService {
+        usecase: Rc<RefCell<StubPersonUsecase>>,
+    }
+    impl PersonService<'_, ()> for StubPersonService {
+        type U = StubPersonUsecase;
+
+        fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
+        where
+            F: FnOnce(&mut RefMut<'_, Self::U>, &mut ()) -> Result<T, UsecaseError>,
+        {
+            let mut usecase = self.usecase.borrow_mut();
+            f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+    }
+
+    #[test]
+    fn test_register_entry_and_verify_error() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Err(UsecaseError::EntryAndVerifyPersonFailed(
+                DaoError::InsertError("valid dao".to_string()),
+            )),
+            collect_result: Ok(vec![]), // 使わない
+        }));
+        let mut service = StubPersonService {
+            usecase: usecase.clone(),
+        };
+
+        let result = service.register("Alice", 20, "Alice is sender");
+        let expected = usecase
+            .borrow()
+            .entry_and_verify_result
+            .clone()
+            .unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
+    fn test_batch_import() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Err(UsecaseError::EntryPersonFailed(DaoError::InsertError(
+                "valid dao".to_string(),
+            ))),
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", 20, None))), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+        }));
+        let mut service = StubPersonService {
+            usecase: usecase.clone(),
+        };
+
+        let result = service.batch_import(vec![
+            Person::new("Alice", 20, Some("Alice is sender")),
+            Person::new("Bob", 25, Some("Bob is receiver")),
+        ]);
+        let expected = usecase.borrow().entry_result.clone().unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
+    fn test_list_all() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", 20, None))), // 使わない
+            collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
+                "valid dao".to_string(),
+            ))),
+        }));
+        let mut service = StubPersonService {
+            usecase: usecase.clone(),
+        };
+
+        let result = service.list_all();
+        let expected = usecase.borrow().collect_result.clone().unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
     }
 }

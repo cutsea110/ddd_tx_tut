@@ -4,7 +4,7 @@ use crate::dao::{DaoError, HavePersonDao, PersonDao};
 use crate::domain::{Person, PersonId};
 use tx_rs::Tx;
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum UsecaseError {
     #[error("entry person failed: {0}")]
     EntryPersonFailed(DaoError),
