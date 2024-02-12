@@ -77,6 +77,8 @@ pub trait PersonService<'a, Ctx> {
 //
 //   1. このテストは Service の実装を保障するものであって、Usecase の実装を保障するものではない
 //   2. 同様にこのテストは DAO の実装を保障するものではない
+//   3. Service が返すエラー値は tx_run の実装に依存している
+//      したがってテストとして意味があるのは UsecaseError までである
 //
 #[cfg(test)]
 mod mock_tests {
