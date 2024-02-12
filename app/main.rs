@@ -7,7 +7,7 @@ mod usecase;
 pub use dao::{DaoError, HavePersonDao, PersonDao};
 pub use domain::{Person, PersonId};
 pub use pg_db::PgPersonDao;
-pub use service::PersonApi;
+pub use service::{Api, PersonApi};
 pub use usecase::{PersonUsecase, ServiceError};
 
 fn main() {

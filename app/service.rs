@@ -35,28 +35,28 @@ pub enum ApiError {
     #[error("service unavailable: {0}")]
     ServiceUnavailable(ServiceError),
 }
-pub trait Api<Ctx> {
+pub trait Api<'a, Ctx> {
     type U: PersonUsecase<Ctx>;
 
-    fn run_tx<T, F>(&mut self, f: F) -> Result<T, ApiError>
+    fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ApiError>
     where
         F: FnOnce(&mut RefMut<'_, Self::U>, &mut Ctx) -> Result<T, ServiceError>;
 
     fn register(
-        &mut self,
+        &'a mut self,
         name: &str,
         age: i32,
         data: &str,
     ) -> Result<(PersonId, Person), ApiError> {
-        self.run_tx(|usecase, ctx| {
+        self.run_tx(move |usecase, ctx| {
             usecase
                 .entry_and_verify(Person::new(name, age, Some(data)))
                 .run(ctx)
         })
     }
 
-    fn batch_import(&mut self, persons: Vec<Person>) -> Result<(), ApiError> {
-        self.run_tx(|usecase, ctx| {
+    fn batch_import(&'a mut self, persons: Vec<Person>) -> Result<(), ApiError> {
+        self.run_tx(move |usecase, ctx| {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
                 if let Err(e) = res {
@@ -67,8 +67,8 @@ pub trait Api<Ctx> {
         })
     }
 
-    fn list_all(&mut self) -> Result<Vec<(PersonId, Person)>, ApiError> {
-        self.run_tx(|usecase, ctx| usecase.collect().run(ctx))
+    fn list_all(&'a mut self) -> Result<Vec<(PersonId, Person)>, ApiError> {
+        self.run_tx(move |usecase, ctx| usecase.collect().run(ctx))
     }
 }
 
@@ -87,13 +87,16 @@ impl PersonApi {
             usecase: Rc::new(RefCell::new(usecase)),
         }
     }
+}
+impl<'a> Api<'a, postgres::Transaction<'a>> for PersonApi {
+    type U = PersonUsecaseImpl;
 
     // api is responsible for transaction management
-    fn run_tx<T, F>(&mut self, f: F) -> Result<T, ApiError>
+    fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ApiError>
     where
         F: FnOnce(
             &mut RefMut<'_, PersonUsecaseImpl>,
-            &mut postgres::Transaction<'_>,
+            &mut postgres::Transaction<'a>,
         ) -> Result<T, ServiceError>,
     {
         let mut usecase = self.usecase.borrow_mut();
@@ -111,37 +114,5 @@ impl PersonApi {
                 Err(ApiError::TransactionFailed(e))
             }
         }
-    }
-
-    // api: register person
-    pub fn register(
-        &mut self,
-        name: &str,
-        age: i32,
-        data: &str,
-    ) -> Result<(PersonId, Person), ApiError> {
-        self.run_tx(|usecase, ctx| {
-            usecase
-                .entry_and_verify(Person::new(name, age, Some(data)))
-                .run(ctx)
-        })
-    }
-
-    // api: batch import
-    pub fn batch_import(&mut self, persons: Vec<Person>) -> Result<(), ApiError> {
-        self.run_tx(|usecase, ctx| {
-            for person in persons {
-                let res = usecase.entry(person).run(ctx);
-                if let Err(e) = res {
-                    return Err(e);
-                }
-            }
-            Ok(())
-        })
-    }
-
-    // api: list all persons
-    pub fn list_all(&mut self) -> Result<Vec<(PersonId, Person)>, ApiError> {
-        self.run_tx(|usecase, ctx| usecase.collect().run(ctx))
     }
 }
