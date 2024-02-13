@@ -77,22 +77,22 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
 fn main() {
-    let mut api = PersonServiceImpl::new("postgres://admin:adminpass@localhost:15432/sampledb");
+    let mut service = PersonServiceImpl::new("postgres://admin:adminpass@localhost:15432/sampledb");
 
-    // call api
-    let (id, person) = api.register("cutsea", 53, "rustacean").unwrap();
+    let (id, person) = service.register("cutsea", 53, "rustacean").unwrap();
     println!("id:{} {}", id, person);
 
-    api.batch_import(vec![
-        Person::new("Abel", 26, Some("Abel's theorem")),
-        Person::new("Euler", 76, Some("Euler's identity")),
-        Person::new("Galois", 20, Some("Group Theory")),
-        Person::new("Gauss", 34, Some("King of Math")),
-    ])
-    .unwrap();
+    service
+        .batch_import(vec![
+            Person::new("Abel", 26, Some("Abel's theorem")),
+            Person::new("Euler", 76, Some("Euler's identity")),
+            Person::new("Galois", 20, Some("Group Theory")),
+            Person::new("Gauss", 34, Some("King of Math")),
+        ])
+        .unwrap();
     println!("batch import done");
 
-    let persons = api.list_all().expect("list all");
+    let persons = service.list_all().expect("list all");
     for (id, person) in persons {
         println!("id:{} {}", id, person);
     }
