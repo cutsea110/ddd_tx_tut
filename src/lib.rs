@@ -534,3 +534,28 @@ where
         (self.f)(ctx)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    struct Transaction(i32);
+
+    impl<Ctx> Tx<Ctx> for Transaction {
+        type Item = i32;
+        type Err = ();
+
+        fn run(self, _: &mut Ctx) -> Result<Self::Item, Self::Err> {
+            Ok(self.0)
+        }
+    }
+
+    #[test]
+    fn test_map() {
+        let tx = with_tx(|_| Ok::<i32, ()>(21));
+        assert_eq!(tx.map(|v| v * 2).run(&mut ()), Ok(42));
+
+        let tx = with_tx(|_| Err::<i32, ()>(()));
+        assert_eq!(tx.map(|v| v * 2).run(&mut ()), Err(()));
+    }
+}
