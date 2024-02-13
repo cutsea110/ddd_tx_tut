@@ -71,7 +71,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     }
 }
 
-// # モックテスト
+// # フェイクテスト
 //
 // * 目的
 //
@@ -80,15 +80,15 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 //
 // * 方針
 //
-//   DAO のモックに対して Usecase を実行し、その結果を確認する
-//   モックはテスト時の比較チェックのしやすさを考慮して HashMap ではなく Vec で登録データを保持する
+//   DAO のフェイクに対して Usecase を実行し、その結果を確認する
+//   フェイクはテスト時の比較チェックのしやすさを考慮して HashMap ではなく Vec で登録データを保持する
 //   データ数は多くないので、Vec でリニアサーチしても十分な速度が出ると考える
 //
 // * 実装
 //
 //   1. DAO のメソッド呼び出しに対して、期待される結果を返す DAO 構造体を用意する
-//      この DAO 構造体はモックなので、間接的な入力と間接的な出力が整合するようにする
-//   2. Usecase にそのモックをプラグインする
+//      この DAO 構造体はフェイクなので、間接的な入力と間接的な出力が整合するようにする
+//   2. Usecase にそのフェイクをプラグインする
 //   3. Usecase のメソッドを呼び出す
 //   4. Usecase からの戻り値を検証する
 //
@@ -97,17 +97,17 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 //   1. このテストは Usecase の実装を保障するものであって、DAO の実装を保障するものではない
 //
 #[cfg(test)]
-mod mock_tests {
+mod fake_tests {
     use std::cell::RefCell;
 
     use super::*;
 
-    struct MockPersonDao {
+    struct FakePersonDao {
         last_id: RefCell<PersonId>,
         data: RefCell<Vec<(PersonId, Person)>>,
     }
     // Ctx 不要なので () にしている
-    impl PersonDao<()> for MockPersonDao {
+    impl PersonDao<()> for FakePersonDao {
         fn insert(&self, person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             *self.last_id.borrow_mut() += 1;
             let id = *self.last_id.borrow();
@@ -128,23 +128,23 @@ mod mock_tests {
         }
     }
 
-    struct MockPersonUsecase {
-        dao: MockPersonDao,
+    struct FakePersonUsecase {
+        dao: FakePersonDao,
     }
-    impl HavePersonDao<()> for MockPersonUsecase {
+    impl HavePersonDao<()> for FakePersonUsecase {
         fn get_dao(&self) -> Box<&impl PersonDao<()>> {
             Box::new(&self.dao)
         }
     }
-    impl PersonUsecase<()> for MockPersonUsecase {}
+    impl PersonUsecase<()> for FakePersonUsecase {}
 
     #[test]
     fn test_entry() {
-        let dao = MockPersonDao {
+        let dao = FakePersonDao {
             last_id: RefCell::new(0),
             data: RefCell::new(vec![]),
         };
-        let mut usecase = MockPersonUsecase { dao };
+        let mut usecase = FakePersonUsecase { dao };
 
         let person = Person::new("Alice", 20, Some("Alice wonderland"));
         let expected = person.clone();
@@ -157,7 +157,7 @@ mod mock_tests {
     }
     #[test]
     fn test_find() {
-        let dao = MockPersonDao {
+        let dao = FakePersonDao {
             last_id: RefCell::new(0), // 使わない
             data: RefCell::new(vec![
                 (13, Person::new("Alice", 20, Some("Alice is sender"))),
@@ -165,7 +165,7 @@ mod mock_tests {
                 (99, Person::new("Eve", 10, Some("Eve is interceptor"))),
             ]),
         };
-        let mut usecase = MockPersonUsecase { dao };
+        let mut usecase = FakePersonUsecase { dao };
 
         let result = usecase.find(13).run(&mut ());
         assert_eq!(
@@ -175,11 +175,11 @@ mod mock_tests {
     }
     #[test]
     fn test_entry_and_verify() {
-        let dao = MockPersonDao {
+        let dao = FakePersonDao {
             last_id: RefCell::new(13),
             data: RefCell::new(vec![]),
         };
-        let mut usecase = MockPersonUsecase { dao };
+        let mut usecase = FakePersonUsecase { dao };
 
         let person = Person::new("Alice", 20, Some("Alice wonderland"));
         let expected = person.clone();
@@ -197,11 +197,11 @@ mod mock_tests {
         ];
         let expected = data.clone();
 
-        let dao = MockPersonDao {
+        let dao = FakePersonDao {
             last_id: RefCell::new(0), // 使わない
             data: RefCell::new(data),
         };
-        let mut usecase = MockPersonUsecase { dao };
+        let mut usecase = FakePersonUsecase { dao };
 
         let result = usecase.collect().run(&mut ());
         assert_eq!(

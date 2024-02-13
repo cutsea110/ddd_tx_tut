@@ -49,7 +49,7 @@ pub trait PersonService<'a, Ctx> {
     }
 }
 
-// # モックテスト
+// # フェイクテスト
 //
 // * 目的
 //
@@ -58,8 +58,8 @@ pub trait PersonService<'a, Ctx> {
 //
 // * 方針
 //
-//   Usecase のモックに対して Service を実行し、その結果を確認する
-//   モックはテスト時の比較チェックのしやすさを考慮して HashMap ではなく Vec で登録データを保持する
+//   Usecase のフェイクに対して Service を実行し、その結果を確認する
+//   フェイクはテスト時の比較チェックのしやすさを考慮して HashMap ではなく Vec で登録データを保持する
 //   データ数は多くないので、Vec でリニアサーチしても十分な速度が出ると考える
 //
 // * 実装
@@ -67,9 +67,9 @@ pub trait PersonService<'a, Ctx> {
 //   1. ダミーの DAO 構造体を用意する
 //      この構造体は実質使われないが、 Usecase の構成で必要になるため用意する
 //   2. Usecase のメソッド呼び出しに対して、期待される結果を返す Usecase 構造体を用意する
-//      この Usecase 構造体はモックなので、間接的な入力と間接的な出力が整合するようにする
+//      この Usecase 構造体はフェイクなので、間接的な入力と間接的な出力が整合するようにする
 //   3. Usecase にダミーの DAO 構造体をプラグインする
-//   4. Service にこのモック Usecase をプラグインする
+//   4. Service にこのフェイク Usecase をプラグインする
 //   3. Service のメソッドを呼び出す
 //   4. Service からの戻り値を検証する
 //
@@ -81,7 +81,7 @@ pub trait PersonService<'a, Ctx> {
 //      したがってテストとして意味があるのは UsecaseError までである
 //
 #[cfg(test)]
-mod mock_tests {
+mod fake_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -108,16 +108,16 @@ mod mock_tests {
         }
     }
 
-    struct MockPersonUsecase {
+    struct FakePersonUsecase {
         db: Vec<(PersonId, Person)>,
         dao: DummyPersonDao,
     }
-    impl HavePersonDao<()> for MockPersonUsecase {
+    impl HavePersonDao<()> for FakePersonUsecase {
         fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
             Box::new(&self.dao)
         }
     }
-    impl PersonUsecase<()> for MockPersonUsecase {
+    impl PersonUsecase<()> for FakePersonUsecase {
         fn entry<'a>(
             &'a mut self,
             person: Person,
@@ -169,11 +169,11 @@ mod mock_tests {
         }
     }
 
-    struct MockPersonService {
-        usecase: Rc<RefCell<MockPersonUsecase>>,
+    struct FakePersonService {
+        usecase: Rc<RefCell<FakePersonUsecase>>,
     }
-    impl PersonService<'_, ()> for MockPersonService {
-        type U = MockPersonUsecase;
+    impl PersonService<'_, ()> for FakePersonService {
+        type U = FakePersonUsecase;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -186,11 +186,11 @@ mod mock_tests {
 
     #[test]
     fn test_register() {
-        let usecase = Rc::new(RefCell::new(MockPersonUsecase {
+        let usecase = Rc::new(RefCell::new(FakePersonUsecase {
             db: vec![],
             dao: DummyPersonDao,
         }));
-        let mut service = MockPersonService {
+        let mut service = FakePersonService {
             usecase: usecase.clone(),
         };
         let expected_id = 1;
@@ -202,11 +202,11 @@ mod mock_tests {
 
     #[test]
     fn test_batch_import() {
-        let usecase = Rc::new(RefCell::new(MockPersonUsecase {
+        let usecase = Rc::new(RefCell::new(FakePersonUsecase {
             db: vec![],
             dao: DummyPersonDao,
         }));
-        let mut service = MockPersonService {
+        let mut service = FakePersonService {
             usecase: usecase.clone(),
         };
         let persons = vec![
@@ -230,7 +230,7 @@ mod mock_tests {
 
     #[test]
     fn test_list_all() {
-        let usecase = Rc::new(RefCell::new(MockPersonUsecase {
+        let usecase = Rc::new(RefCell::new(FakePersonUsecase {
             db: vec![
                 (1, Person::new("Alice", 20, Some("Alice is sender"))),
                 (2, Person::new("Bob", 24, Some("Bob is receiver"))),
@@ -238,7 +238,7 @@ mod mock_tests {
             ],
             dao: DummyPersonDao,
         }));
-        let mut service = MockPersonService {
+        let mut service = FakePersonService {
             usecase: usecase.clone(),
         };
 
