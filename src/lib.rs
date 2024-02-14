@@ -601,4 +601,19 @@ mod test {
         let f = |_: ()| with_tx(|_| Ok::<i32, ()>(42));
         assert_eq!(tx1.or_else(f).run(&mut ()), Ok(42));
     }
+
+    #[test]
+    fn test_join() {
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ok"));
+        assert_eq!(tx1.join(tx2).run(&mut ()), Ok((42, "ok")));
+
+        let tx1 = with_tx(|_| Err::<i32, ()>(()));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ng"));
+        assert_eq!(tx1.join(tx2).run(&mut ()), Err(()));
+
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Err::<&str, ()>(()));
+        assert_eq!(tx1.join(tx2).run(&mut ()), Err(()));
+    }
 }
