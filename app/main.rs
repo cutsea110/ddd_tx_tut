@@ -24,6 +24,7 @@ impl PersonUsecaseImpl {
         Self { dao }
     }
 }
+impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
     fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<postgres::Transaction<'a>>> {
         Box::new(&*self.dao)
@@ -74,8 +75,6 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
         }
     }
 }
-
-impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
 fn main() {
     let db_url = env::var("DATABASE_URL")
