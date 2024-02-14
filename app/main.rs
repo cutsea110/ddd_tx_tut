@@ -1,5 +1,6 @@
 use postgres::{Client, NoTls};
 use std::cell::{RefCell, RefMut};
+use std::env;
 use std::rc::Rc;
 
 mod dao;
@@ -77,7 +78,9 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 
 fn main() {
-    let mut service = PersonServiceImpl::new("postgres://admin:adminpass@localhost:15432/sampledb");
+    let db_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://admin:adminpass@localhost:15432/sampledb".to_string());
+    let mut service = PersonServiceImpl::new(&db_url);
 
     let (id, person) = service.register("cutsea", 53, "rustacean").unwrap();
     println!("id:{} {}", id, person);
