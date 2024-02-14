@@ -639,4 +639,40 @@ mod test {
         let tx3 = with_tx(|_| Err::<bool, ()>(()));
         assert_eq!(tx1.join3(tx2, tx3).run(&mut ()), Err(()));
     }
+
+    #[test]
+    fn test_join4() {
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ok"));
+        let tx3 = with_tx(|_| Ok::<bool, ()>(true));
+        let tx4 = with_tx(|_| Ok::<f32, ()>(3.14));
+        assert_eq!(
+            tx1.join4(tx2, tx3, tx4).run(&mut ()),
+            Ok((42, "ok", true, 3.14))
+        );
+
+        let tx1 = with_tx(|_| Err::<i32, ()>(()));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ng"));
+        let tx3 = with_tx(|_| Ok::<bool, ()>(false));
+        let tx4 = with_tx(|_| Ok::<f32, ()>(3.14));
+        assert_eq!(tx1.join4(tx2, tx3, tx4).run(&mut ()), Err(()));
+
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Err::<&str, ()>(()));
+        let tx3 = with_tx(|_| Ok::<bool, ()>(false));
+        let tx4 = with_tx(|_| Ok::<f32, ()>(3.14));
+        assert_eq!(tx1.join4(tx2, tx3, tx4).run(&mut ()), Err(()));
+
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ok"));
+        let tx3 = with_tx(|_| Err::<bool, ()>(()));
+        let tx4 = with_tx(|_| Ok::<f32, ()>(3.14));
+        assert_eq!(tx1.join4(tx2, tx3, tx4).run(&mut ()), Err(()));
+
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ok"));
+        let tx3 = with_tx(|_| Ok::<bool, ()>(true));
+        let tx4 = with_tx(|_| Err::<i32, ()>(()));
+        assert_eq!(tx1.join4(tx2, tx3, tx4).run(&mut ()), Err(()));
+    }
 }
