@@ -96,9 +96,9 @@ pub trait Tx<Ctx> {
     {
         TryRecover { tx1: self, f }
     }
-    fn abort<F, T>(self, f: F) -> Abort<Self, F>
+    fn abort<F>(self, f: F) -> Abort<Self, F>
     where
-        F: FnOnce(Self::Err) -> T,
+        F: FnOnce(Self::Item) -> Self::Err,
         Self: Sized,
     {
         Abort { tx1: self, f }
