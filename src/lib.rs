@@ -89,9 +89,9 @@ pub trait Tx<Ctx> {
     {
         Recover { tx1: self, f }
     }
-    fn try_recover<F, E>(self, f: F) -> TryRecover<Self, F>
+    fn try_recover<F>(self, f: F) -> TryRecover<Self, F>
     where
-        F: FnOnce(Self::Err) -> Result<Self::Item, E>,
+        F: FnOnce(Self::Err) -> Result<Self::Item, Self::Err>,
         Self: Sized,
     {
         TryRecover { tx1: self, f }
@@ -103,9 +103,9 @@ pub trait Tx<Ctx> {
     {
         Abort { tx1: self, f }
     }
-    fn try_abort<F, T>(self, f: F) -> TryAbort<Self, F>
+    fn try_abort<F>(self, f: F) -> TryAbort<Self, F>
     where
-        F: FnOnce(Self::Item) -> Result<T, Self::Err>,
+        F: FnOnce(Self::Item) -> Result<Self::Item, Self::Err>,
         Self: Sized,
     {
         TryAbort { tx1: self, f }
