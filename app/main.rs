@@ -37,9 +37,8 @@ pub struct PersonServiceImpl {
 }
 impl PersonServiceImpl {
     pub fn new(db_url: &str) -> Self {
-        let dao = PgPersonDao;
-        let usecase = PersonUsecaseImpl::new(Rc::new(dao));
         let db_client = Client::connect(db_url, NoTls).unwrap();
+        let usecase = PersonUsecaseImpl::new(Rc::new(PgPersonDao));
 
         Self {
             db_client,
