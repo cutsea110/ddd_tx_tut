@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 postgres = "0.19.7"
-thiserror = "1.0.56"
+thiserror = "1.0.57"
 
 [lib]
 name = "tx_rs"
