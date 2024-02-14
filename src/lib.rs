@@ -590,4 +590,15 @@ mod test {
         };
         assert_eq!(tx1.then(f).run(&mut ()), Err(()));
     }
+
+    #[test]
+    fn test_or_else() {
+        let tx1 = with_tx(|_| Ok::<i32, ()>(21));
+        let f = |_: ()| with_tx(|_| Ok::<i32, ()>(42));
+        assert_eq!(tx1.or_else(f).run(&mut ()), Ok(21));
+
+        let tx1 = with_tx(|_| Err::<i32, ()>(()));
+        let f = |_: ()| with_tx(|_| Ok::<i32, ()>(42));
+        assert_eq!(tx1.or_else(f).run(&mut ()), Ok(42));
+    }
 }
