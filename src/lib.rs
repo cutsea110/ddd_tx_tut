@@ -89,9 +89,9 @@ pub trait Tx<Ctx> {
     {
         Recover { tx1: self, f }
     }
-    fn try_recover<F, T, E>(self, f: F) -> TryRecover<Self, F>
+    fn try_recover<F, E>(self, f: F) -> TryRecover<Self, F>
     where
-        F: FnOnce(Self::Err) -> Result<T, E>,
+        F: FnOnce(Self::Err) -> Result<Self::Item, E>,
         Self: Sized,
     {
         TryRecover { tx1: self, f }
