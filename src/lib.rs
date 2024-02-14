@@ -686,4 +686,15 @@ mod test {
         let f = |_: ()| "ng";
         assert_eq!(tx1.map_err(f).run(&mut ()), Ok(42));
     }
+
+    #[test]
+    fn test_try_map() {
+        let tx1 = with_tx(|_| Ok::<i32, &str>(10));
+        let f = |_| Err::<i32, &str>("too small");
+        assert_eq!(tx1.try_map(f).run(&mut ()), Err("too small"));
+
+        let tx1 = with_tx(|_| Ok::<i32, &str>(21));
+        let f = |v| Ok::<i32, &str>(v * 2);
+        assert_eq!(tx1.try_map(f).run(&mut ()), Ok(42));
+    }
 }
