@@ -82,9 +82,9 @@ pub trait Tx<Ctx> {
     {
         TryMap { tx1: self, f }
     }
-    fn recover<F, T, E>(self, f: F) -> Recover<Self, F>
+    fn recover<F>(self, f: F) -> Recover<Self, F>
     where
-        F: FnOnce(Self::Err) -> Result<T, E>,
+        F: FnOnce(Self::Err) -> Self::Item,
         Self: Sized,
     {
         Recover { tx1: self, f }
