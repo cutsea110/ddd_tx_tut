@@ -708,4 +708,23 @@ mod test {
         let f = |_: &str| 42;
         assert_eq!(tx1.recover(f).run(&mut ()), Ok(21));
     }
+
+    #[test]
+    fn test_try_recover() {
+        let tx1 = with_tx(|_| Err::<i32, &str>("error"));
+        let f = |_: &str| Ok::<i32, &str>(42);
+        assert_eq!(tx1.try_recover(f).run(&mut ()), Ok(42));
+
+        let tx1 = with_tx(|_| Ok::<i32, &str>(21));
+        let f = |_: &str| Ok::<i32, &str>(42);
+        assert_eq!(tx1.try_recover(f).run(&mut ()), Ok(21));
+
+        let tx1 = with_tx(|_| Ok::<i32, &str>(21));
+        let f = |_: &str| Err::<i32, &str>("error again");
+        assert_eq!(tx1.try_recover(f).run(&mut ()), Ok(21));
+
+        let tx1 = with_tx(|_| Err::<i32, &str>("error"));
+        let f = |_: &str| Err::<i32, &str>("error again");
+        assert_eq!(tx1.try_recover(f).run(&mut ()), Err("error again"));
+    }
 }
