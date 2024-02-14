@@ -37,7 +37,7 @@ pub struct PersonServiceImpl {
 }
 impl PersonServiceImpl {
     pub fn new(db_url: &str) -> Self {
-        let db_client = Client::connect(db_url, NoTls).unwrap();
+        let db_client = Client::connect(db_url, NoTls).expect("connect db");
         let usecase = PersonUsecaseImpl::new(Rc::new(PgPersonDao));
 
         Self {
@@ -58,17 +58,17 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
         ) -> Result<T, UsecaseError>,
     {
         let mut usecase = self.usecase.borrow_mut();
-        let mut ctx = self.db_client.transaction().unwrap();
+        let mut ctx = self.db_client.transaction().expect("begin transaction");
 
         let res = f(&mut usecase, &mut ctx);
 
         match res {
             Ok(v) => {
-                ctx.commit().unwrap();
+                ctx.commit().expect("commit");
                 Ok(v)
             }
             Err(e) => {
-                ctx.rollback().unwrap();
+                ctx.rollback().expect("rollback");
                 Err(ServiceError::TransactionFailed(e))
             }
         }
@@ -76,11 +76,14 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
 }
 
 fn main() {
-    let db_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://admin:adminpass@localhost:15432/sampledb".to_string());
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
+    });
     let mut service = PersonServiceImpl::new(&db_url);
 
-    let (id, person) = service.register("cutsea", 53, "rustacean").unwrap();
+    let (id, person) = service
+        .register("cutsea", 53, "rustacean")
+        .expect("register one person");
     println!("id:{} {}", id, person);
 
     service
@@ -90,7 +93,7 @@ fn main() {
             Person::new("Galois", 20, Some("Group Theory")),
             Person::new("Gauss", 34, Some("King of Math")),
         ])
-        .unwrap();
+        .expect("batch import");
     println!("batch import done");
 
     let persons = service.list_all().expect("list all");
