@@ -569,4 +569,25 @@ mod test {
         let f = |v| with_tx(move |_| Ok::<i32, ()>(v * 2));
         assert_eq!(tx1.and_then(f).run(&mut ()), Err(()));
     }
+
+    #[test]
+    fn test_then() {
+        let tx1 = with_tx(|_| Ok::<i32, ()>(21));
+        let f = |v| {
+            with_tx(move |_| match v {
+                Ok(v) => Ok::<i32, ()>(v * 2),
+                Err(e) => Err::<i32, ()>(e),
+            })
+        };
+        assert_eq!(tx1.then(f).run(&mut ()), Ok(42));
+
+        let tx1 = with_tx(|_| Err::<i32, ()>(()));
+        let f = |v| {
+            with_tx(move |_| match v {
+                Ok(v) => Ok::<i32, ()>(v * 2),
+                Err(e) => Err::<i32, ()>(e),
+            })
+        };
+        assert_eq!(tx1.then(f).run(&mut ()), Err(()));
+    }
 }
