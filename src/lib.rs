@@ -738,4 +738,15 @@ mod test {
         let f = |_| "abort";
         assert_eq!(tx1.abort(f).run(&mut ()), Err("error"));
     }
+
+    #[test]
+    fn test_try_abort() {
+        let tx1 = with_tx(|_| Ok::<i32, &str>(42));
+        let f = |_| Err::<i32, &str>("try abort");
+        assert_eq!(tx1.try_abort(f).run(&mut ()), Err("try abort"));
+
+        let tx1 = with_tx(|_| Err::<i32, &str>("error"));
+        let f = |_| Err::<i32, &str>("try abort");
+        assert_eq!(tx1.try_abort(f).run(&mut ()), Err("error"));
+    }
 }
