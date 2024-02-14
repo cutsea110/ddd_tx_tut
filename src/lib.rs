@@ -675,4 +675,15 @@ mod test {
         let tx4 = with_tx(|_| Err::<i32, ()>(()));
         assert_eq!(tx1.join4(tx2, tx3, tx4).run(&mut ()), Err(()));
     }
+
+    #[test]
+    fn test_map_err() {
+        let tx1 = with_tx(|_| Err::<i32, ()>(()));
+        let f = |_: ()| "ng";
+        assert_eq!(tx1.map_err(f).run(&mut ()), Err("ng"));
+
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let f = |_: ()| "ng";
+        assert_eq!(tx1.map_err(f).run(&mut ()), Ok(42));
+    }
 }
