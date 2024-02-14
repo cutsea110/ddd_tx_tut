@@ -44,8 +44,8 @@ pub trait Tx<Ctx> {
     }
     fn join3<Tx2, Tx3>(self, tx2: Tx2, tx3: Tx3) -> Join3<Self, Tx2, Tx3>
     where
-        Tx2: Tx<Ctx, Item = Self::Item, Err = Self::Err>,
-        Tx3: Tx<Ctx, Item = Self::Item, Err = Self::Err>,
+        Tx2: Tx<Ctx, Err = Self::Err>,
+        Tx3: Tx<Ctx, Err = Self::Err>,
         Self: Sized,
     {
         Join3 {
