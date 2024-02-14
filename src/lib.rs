@@ -616,4 +616,27 @@ mod test {
         let tx2 = with_tx(|_| Err::<&str, ()>(()));
         assert_eq!(tx1.join(tx2).run(&mut ()), Err(()));
     }
+
+    #[test]
+    fn test_join3() {
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ok"));
+        let tx3 = with_tx(|_| Ok::<bool, ()>(true));
+        assert_eq!(tx1.join3(tx2, tx3).run(&mut ()), Ok((42, "ok", true)));
+
+        let tx1 = with_tx(|_| Err::<i32, ()>(()));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ng"));
+        let tx3 = with_tx(|_| Ok::<bool, ()>(false));
+        assert_eq!(tx1.join3(tx2, tx3).run(&mut ()), Err(()));
+
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Err::<&str, ()>(()));
+        let tx3 = with_tx(|_| Ok::<bool, ()>(false));
+        assert_eq!(tx1.join3(tx2, tx3).run(&mut ()), Err(()));
+
+        let tx1 = with_tx(|_| Ok::<i32, ()>(42));
+        let tx2 = with_tx(|_| Ok::<&str, ()>("ok"));
+        let tx3 = with_tx(|_| Err::<bool, ()>(()));
+        assert_eq!(tx1.join3(tx2, tx3).run(&mut ()), Err(()));
+    }
 }
