@@ -24,6 +24,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         Ctx: 'a,
     {
         let dao = self.get_dao();
+        log::trace!("insert person: {:?}", person);
         dao.insert(person)
             .map_err(|e| UsecaseError::EntryPersonFailed(e))
     }
@@ -35,6 +36,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         Ctx: 'a,
     {
         let dao = self.get_dao();
+        log::trace!("find person_id: {:?}", id);
         dao.fetch(id).map_err(|e| UsecaseError::FindPersonFailed(e))
     }
     fn entry_and_verify<'a>(
@@ -45,6 +47,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         Ctx: 'a,
     {
         let dao = self.get_dao();
+        log::trace!("entry and verify person: {:?}", person);
         dao.insert(person)
             .and_then(move |id| {
                 dao.fetch(id).try_map(move |person| {
@@ -52,6 +55,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                         return Ok((id, p));
                     }
 
+                    log::warn!("can't find the person just entried: {}", id);
                     Err(DaoError::SelectError(
                         format!("not found: {id}").to_string(),
                     ))
@@ -66,6 +70,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         Ctx: 'a,
     {
         let dao = self.get_dao();
+        log::trace!("collect all persons");
         dao.select()
             .map_err(|e| UsecaseError::CollectPersonFailed(e))
     }
