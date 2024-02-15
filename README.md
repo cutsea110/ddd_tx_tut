@@ -19,6 +19,12 @@ psql postgres://admin:adminpass@localhost:15432/sampledb
 cargo run
 ```
 
+if you want to see log message
+
+```
+RUST_LOG=app=debug cargo run
+```
+
 ## Test
 
 run unit test without rdb.
