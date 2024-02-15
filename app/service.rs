@@ -169,10 +169,10 @@ mod fake_tests {
         }
     }
 
-    struct FakePersonService {
+    struct TargetPersonService {
         usecase: Rc<RefCell<FakePersonUsecase>>,
     }
-    impl PersonService<'_, ()> for FakePersonService {
+    impl PersonService<'_, ()> for TargetPersonService {
         type U = FakePersonUsecase;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
@@ -190,7 +190,7 @@ mod fake_tests {
             db: vec![],
             dao: DummyPersonDao,
         }));
-        let mut service = FakePersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
         let expected_id = 1;
@@ -206,7 +206,7 @@ mod fake_tests {
             db: vec![],
             dao: DummyPersonDao,
         }));
-        let mut service = FakePersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
         let persons = vec![
@@ -238,7 +238,7 @@ mod fake_tests {
             ],
             dao: DummyPersonDao,
         }));
-        let mut service = FakePersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
 
@@ -378,10 +378,10 @@ mod spy_tests {
         }
     }
 
-    struct SpyPersonService {
+    struct TargetPersonService {
         usecase: Rc<RefCell<SpyPersonUsecase>>,
     }
-    impl PersonService<'_, ()> for SpyPersonService {
+    impl PersonService<'_, ()> for TargetPersonService {
         type U = SpyPersonUsecase;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
@@ -402,7 +402,7 @@ mod spy_tests {
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
         }));
-        let mut service = SpyPersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
 
@@ -429,7 +429,7 @@ mod spy_tests {
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
         }));
-        let mut service = SpyPersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
 
@@ -461,7 +461,7 @@ mod spy_tests {
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
         }));
-        let mut service = SpyPersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
 
@@ -576,10 +576,10 @@ mod error_stub_tests {
         }
     }
 
-    struct StubPersonService {
+    struct TargetPersonService {
         usecase: Rc<RefCell<StubPersonUsecase>>,
     }
-    impl PersonService<'_, ()> for StubPersonService {
+    impl PersonService<'_, ()> for TargetPersonService {
         type U = StubPersonUsecase;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
@@ -602,7 +602,7 @@ mod error_stub_tests {
             )),
             collect_result: Ok(vec![]), // 使わない
         }));
-        let mut service = StubPersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
 
@@ -627,7 +627,7 @@ mod error_stub_tests {
             entry_and_verify_result: Ok((42, Person::new("Alice", 20, None))), // 使わない
             collect_result: Ok(vec![]), // 使わない
         }));
-        let mut service = StubPersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
 
@@ -651,7 +651,7 @@ mod error_stub_tests {
                 "valid dao".to_string(),
             ))),
         }));
-        let mut service = StubPersonService {
+        let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
 
