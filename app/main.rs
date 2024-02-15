@@ -38,6 +38,8 @@ pub struct PersonServiceImpl {
 impl PersonServiceImpl {
     pub fn new(db_url: &str) -> Self {
         let db_client = Client::connect(db_url, NoTls).expect("connect db");
+        log::info!("db connected to {}", db_url);
+
         let usecase = PersonUsecaseImpl::new(Rc::new(PgPersonDao));
 
         Self {
@@ -59,16 +61,19 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     {
         let mut usecase = self.usecase.borrow_mut();
         let mut ctx = self.db_client.transaction().expect("begin transaction");
+        log::info!("transaction started");
 
         let res = f(&mut usecase, &mut ctx);
 
         match res {
             Ok(v) => {
                 ctx.commit().expect("commit");
+                log::info!("transaction committed");
                 Ok(v)
             }
             Err(e) => {
                 ctx.rollback().expect("rollback");
+                log::info!("transaction rollbacked");
                 Err(ServiceError::TransactionFailed(e))
             }
         }
