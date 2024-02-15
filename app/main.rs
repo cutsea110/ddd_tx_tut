@@ -37,8 +37,16 @@ pub struct PersonServiceImpl {
 }
 impl PersonServiceImpl {
     pub fn new(db_url: &str) -> Self {
-        let db_client = Client::connect(db_url, NoTls).expect("connect db");
-        log::info!("db connected to {}", db_url);
+        let db_client = match Client::connect(db_url, NoTls) {
+            Ok(client) => {
+                log::info!("db connected to {}", db_url);
+                client
+            }
+            Err(e) => {
+                log::error!("failed to connect db: {}", e);
+                panic!("db connection failed");
+            }
+        };
 
         let usecase = PersonUsecaseImpl::new(Rc::new(PgPersonDao));
 
