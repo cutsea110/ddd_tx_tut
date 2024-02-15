@@ -128,15 +128,15 @@ mod fake_tests {
         }
     }
 
-    struct FakePersonUsecase {
+    struct TargetPersonUsecase {
         dao: FakePersonDao,
     }
-    impl HavePersonDao<()> for FakePersonUsecase {
+    impl HavePersonDao<()> for TargetPersonUsecase {
         fn get_dao(&self) -> Box<&impl PersonDao<()>> {
             Box::new(&self.dao)
         }
     }
-    impl PersonUsecase<()> for FakePersonUsecase {}
+    impl PersonUsecase<()> for TargetPersonUsecase {}
 
     #[test]
     fn test_entry() {
@@ -144,7 +144,7 @@ mod fake_tests {
             last_id: RefCell::new(0),
             data: RefCell::new(vec![]),
         };
-        let mut usecase = FakePersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, Some("Alice wonderland"));
         let expected = person.clone();
@@ -165,7 +165,7 @@ mod fake_tests {
                 (99, Person::new("Eve", 10, Some("Eve is interceptor"))),
             ]),
         };
-        let mut usecase = FakePersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let result = usecase.find(13).run(&mut ());
         assert_eq!(
@@ -179,7 +179,7 @@ mod fake_tests {
             last_id: RefCell::new(13),
             data: RefCell::new(vec![]),
         };
-        let mut usecase = FakePersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, Some("Alice wonderland"));
         let expected = person.clone();
@@ -201,7 +201,7 @@ mod fake_tests {
             last_id: RefCell::new(0), // 使わない
             data: RefCell::new(data),
         };
-        let mut usecase = FakePersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let result = usecase.collect().run(&mut ());
         assert_eq!(
@@ -282,15 +282,15 @@ mod spy_tests {
         }
     }
 
-    struct SpyPersonUsecase {
+    struct TargetPersonUsecase {
         dao: SpyPersonDao,
     }
-    impl HavePersonDao<()> for SpyPersonUsecase {
+    impl HavePersonDao<()> for TargetPersonUsecase {
         fn get_dao(&self) -> Box<&impl PersonDao<()>> {
             Box::new(&self.dao)
         }
     }
-    impl PersonUsecase<()> for SpyPersonUsecase {}
+    impl PersonUsecase<()> for TargetPersonUsecase {}
 
     #[test]
     fn test_entry() {
@@ -300,7 +300,7 @@ mod spy_tests {
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = SpyPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let expected = person.clone();
@@ -324,7 +324,7 @@ mod spy_tests {
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = SpyPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let id: PersonId = 42;
         let expected = id;
@@ -347,7 +347,7 @@ mod spy_tests {
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = SpyPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let expected = person.clone();
@@ -373,7 +373,7 @@ mod spy_tests {
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
         };
-        let mut usecase = SpyPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let _ = usecase.collect().run(&mut ());
 
@@ -429,15 +429,15 @@ mod error_stub_tests {
         }
     }
 
-    struct StubPersonUsecase {
+    struct TargetPersonUsecase {
         dao: StubPersonDao,
     }
-    impl HavePersonDao<()> for StubPersonUsecase {
+    impl HavePersonDao<()> for TargetPersonUsecase {
         fn get_dao(&self) -> Box<&impl PersonDao<()>> {
             Box::new(&self.dao)
         }
     }
-    impl PersonUsecase<()> for StubPersonUsecase {}
+    impl PersonUsecase<()> for TargetPersonUsecase {}
 
     #[test]
     fn test_entry() {
@@ -448,7 +448,7 @@ mod error_stub_tests {
         };
         let expected = UsecaseError::EntryPersonFailed(dao.insert_result.clone().unwrap_err());
 
-        let mut usecase = StubPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let result = usecase.entry(person).run(&mut ());
@@ -466,7 +466,7 @@ mod error_stub_tests {
         };
         let expected = UsecaseError::FindPersonFailed(dao.fetch_result.clone().unwrap_err());
 
-        let mut usecase = StubPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let id: PersonId = 42;
         let result = usecase.find(id).run(&mut ());
@@ -485,7 +485,7 @@ mod error_stub_tests {
         let expected =
             UsecaseError::EntryAndVerifyPersonFailed(dao.insert_result.clone().unwrap_err());
 
-        let mut usecase = StubPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
@@ -504,7 +504,7 @@ mod error_stub_tests {
         let expected =
             UsecaseError::EntryAndVerifyPersonFailed(dao.fetch_result.clone().unwrap_err());
 
-        let mut usecase = StubPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let person = Person::new("Alice", 20, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
@@ -522,7 +522,7 @@ mod error_stub_tests {
         };
         let expected = UsecaseError::CollectPersonFailed(dao.select_result.clone().unwrap_err());
 
-        let mut usecase = StubPersonUsecase { dao };
+        let mut usecase = TargetPersonUsecase { dao };
 
         let result = usecase.collect().run(&mut ());
 
