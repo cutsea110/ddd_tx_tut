@@ -10,7 +10,7 @@ pub enum ServiceError {
     #[error("transaction failed: {0}")]
     TransactionFailed(UsecaseError),
     #[error("service unavailable: {0}")]
-    ServiceUnavailable(UsecaseError),
+    ServiceUnavailable(String),
 }
 pub trait PersonService<'a, Ctx> {
     type U: PersonUsecase<Ctx>;
