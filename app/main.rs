@@ -81,6 +81,8 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
 }
 
 fn main() {
+    env_logger::init();
+
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
     });
