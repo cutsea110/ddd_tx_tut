@@ -49,7 +49,7 @@ impl PersonServiceImpl {
 impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     type U = PersonUsecaseImpl;
 
-    // api is responsible for transaction management
+    // service is responsible for transaction management
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
     where
         F: FnOnce(
