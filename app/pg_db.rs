@@ -1,3 +1,5 @@
+use std::str;
+
 use crate::dao::{DaoError, PersonDao};
 use crate::domain::{Person, PersonId};
 
@@ -31,7 +33,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                     row.map(|row| {
                         let name = row.get::<usize, &str>(0);
                         let age = row.get::<usize, i32>(1);
-                        let data = std::str::from_utf8(row.get::<usize, &[u8]>(2)).ok();
+                        let data = str::from_utf8(row.get::<usize, &[u8]>(2)).ok();
 
                         Person::new(name, age, data)
                     })
@@ -51,7 +53,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                             let id = row.get::<usize, PersonId>(0);
                             let name = row.get::<usize, &str>(1);
                             let age = row.get::<usize, i32>(2);
-                            let data = std::str::from_utf8(row.get::<usize, &[u8]>(3)).ok();
+                            let data = str::from_utf8(row.get::<usize, &[u8]>(3)).ok();
                             let person = Person::new(name, age, data);
 
                             (id, person)

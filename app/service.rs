@@ -1,3 +1,4 @@
+use log::trace;
 use std::cell::RefMut;
 use thiserror::Error;
 
@@ -25,7 +26,7 @@ pub trait PersonService<'a, Ctx> {
         age: i32,
         data: &str,
     ) -> Result<(PersonId, Person), ServiceError> {
-        log::trace!("register person: name={}, age={}, data={}", name, age, data);
+        trace!("register person: name={}, age={}, data={}", name, age, data);
         self.run_tx(move |usecase, ctx| {
             usecase
                 .entry_and_verify(Person::new(name, age, Some(data)))
@@ -34,7 +35,7 @@ pub trait PersonService<'a, Ctx> {
     }
 
     fn batch_import(&'a mut self, persons: Vec<Person>) -> Result<(), ServiceError> {
-        log::trace!("batch import persons: {:?}", persons);
+        trace!("batch import persons: {:?}", persons);
         self.run_tx(move |usecase, ctx| {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
@@ -47,7 +48,7 @@ pub trait PersonService<'a, Ctx> {
     }
 
     fn list_all(&'a mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
-        log::trace!("list all persons");
+        trace!("list all persons");
         self.run_tx(move |usecase, ctx| usecase.collect().run(ctx))
     }
 }

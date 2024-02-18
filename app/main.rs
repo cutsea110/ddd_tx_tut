@@ -1,3 +1,4 @@
+use log::{error, trace};
 use postgres::{Client, NoTls};
 use std::cell::{RefCell, RefMut};
 use std::env;
@@ -39,11 +40,11 @@ impl PersonServiceImpl {
     pub fn new(db_url: &str) -> Self {
         let db_client = match Client::connect(db_url, NoTls) {
             Ok(client) => {
-                log::trace!("db connected to {}", db_url);
+                trace!("db connected to {}", db_url);
                 client
             }
             Err(e) => {
-                log::error!("failed to connect db: {}", e);
+                error!("failed to connect db: {}", e);
                 panic!("db connection failed");
             }
         };
@@ -70,11 +71,11 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
         let mut usecase = self.usecase.borrow_mut();
         let mut ctx = match self.db_client.transaction() {
             Ok(ctx) => {
-                log::trace!("transaction started");
+                trace!("transaction started");
                 ctx
             }
             Err(e) => {
-                log::error!("failed to start transaction: {}", e);
+                error!("failed to start transaction: {}", e);
                 return Err(ServiceError::ServiceUnavailable(format!("{}", e)));
             }
         };
@@ -84,12 +85,12 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
         match res {
             Ok(v) => {
                 ctx.commit().expect("commit");
-                log::trace!("transaction committed");
+                trace!("transaction committed");
                 Ok(v)
             }
             Err(e) => {
                 ctx.rollback().expect("rollback");
-                log::error!("transaction rollbacked");
+                error!("transaction rollbacked");
                 Err(ServiceError::TransactionFailed(e))
             }
         }
