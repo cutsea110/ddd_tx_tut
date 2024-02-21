@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use log::trace;
 use std::cell::RefMut;
 use thiserror::Error;
@@ -23,13 +24,18 @@ pub trait PersonService<'a, Ctx> {
     fn register(
         &'a mut self,
         name: &str,
-        age: i32,
+        birth_date: NaiveDate,
         data: &str,
     ) -> Result<(PersonId, Person), ServiceError> {
-        trace!("register person: name={}, age={}, data={}", name, age, data);
+        trace!(
+            "register person: name={}, birth_date={}, data={}",
+            name,
+            birth_date,
+            data
+        );
         self.run_tx(move |usecase, ctx| {
             usecase
-                .entry_and_verify(Person::new(name, age, Some(data)))
+                .entry_and_verify(Person::new(name, birth_date, Some(data)))
                 .run(ctx)
         })
     }
@@ -198,9 +204,17 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
         let expected_id = 1;
-        let expected = Person::new("Alice", 20, Some("Alice is sender"));
+        let expected = Person::new(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            Some("Alice is sender"),
+        );
 
-        let res = service.register("Alice", 20, "Alice is sender");
+        let res = service.register(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            "Alice is sender",
+        );
         assert_eq!(res, Ok((expected_id, expected)));
     }
 
@@ -214,9 +228,21 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
         let persons = vec![
-            Person::new("Alice", 20, Some("Alice is sender")),
-            Person::new("Bob", 24, Some("Bob is receiver")),
-            Person::new("Eve", 10, Some("Eve is interceptor")),
+            Person::new(
+                "Alice",
+                NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                Some("Alice is sender"),
+            ),
+            Person::new(
+                "Bob",
+                NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                Some("Bob is receiver"),
+            ),
+            Person::new(
+                "Eve",
+                NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                Some("Eve is interceptor"),
+            ),
         ];
         let expected = persons.clone();
 
@@ -236,9 +262,30 @@ mod fake_tests {
     fn test_list_all() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
             db: vec![
-                (1, Person::new("Alice", 20, Some("Alice is sender"))),
-                (2, Person::new("Bob", 24, Some("Bob is receiver"))),
-                (3, Person::new("Eve", 10, Some("Eve is interceptor"))),
+                (
+                    1,
+                    Person::new(
+                        "Alice",
+                        NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                        Some("Alice is sender"),
+                    ),
+                ),
+                (
+                    2,
+                    Person::new(
+                        "Bob",
+                        NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                        Some("Bob is receiver"),
+                    ),
+                ),
+                (
+                    3,
+                    Person::new(
+                        "Eve",
+                        NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                        Some("Eve is interceptor"),
+                    ),
+                ),
             ],
             dao: DummyPersonDao,
         }));
@@ -410,9 +457,17 @@ mod spy_tests {
             usecase: usecase.clone(),
         };
 
-        let expected = Person::new("Alice", 20, Some("Alice is sender"));
+        let expected = Person::new(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            Some("Alice is sender"),
+        );
 
-        let _ = service.register("Alice", 20, "Alice is sender");
+        let _ = service.register(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            "Alice is sender",
+        );
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 0);
@@ -438,9 +493,21 @@ mod spy_tests {
         };
 
         let persons = vec![
-            Person::new("Alice", 20, Some("Alice is sender")),
-            Person::new("Bob", 25, Some("Bob is receiver")),
-            Person::new("Eve", 10, Some("Eve is interseptor")),
+            Person::new(
+                "Alice",
+                NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                Some("Alice is sender"),
+            ),
+            Person::new(
+                "Bob",
+                NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                Some("Bob is receiver"),
+            ),
+            Person::new(
+                "Eve",
+                NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                Some("Eve is interseptor"),
+            ),
         ];
         let expected = persons.clone();
 
@@ -610,7 +677,11 @@ mod error_stub_tests {
             usecase: usecase.clone(),
         };
 
-        let result = service.register("Alice", 20, "Alice is sender");
+        let result = service.register(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            "Alice is sender",
+        );
         let expected = usecase
             .borrow()
             .entry_and_verify_result
@@ -628,7 +699,10 @@ mod error_stub_tests {
                 "valid dao".to_string(),
             ))),
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", 20, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None),
+            )), // 使わない
             collect_result: Ok(vec![]), // 使わない
         }));
         let mut service = TargetPersonService {
@@ -636,8 +710,16 @@ mod error_stub_tests {
         };
 
         let result = service.batch_import(vec![
-            Person::new("Alice", 20, Some("Alice is sender")),
-            Person::new("Bob", 25, Some("Bob is receiver")),
+            Person::new(
+                "Alice",
+                NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                Some("Alice is sender"),
+            ),
+            Person::new(
+                "Bob",
+                NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                Some("Bob is receiver"),
+            ),
         ]);
         let expected = usecase.borrow().entry_result.clone().unwrap_err();
 
@@ -650,7 +732,10 @@ mod error_stub_tests {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", 20, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None),
+            )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
             ))),

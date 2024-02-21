@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chrono = "0.4.34"
 env_logger = "0.11.2"
 log = "0.4.20"
-postgres = "0.19.7"
+postgres = { version = "0.19.7", features = ["with-chrono-0_4"] }
 thiserror = "1.0.57"
 
 [lib]
