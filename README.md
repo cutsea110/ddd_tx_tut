@@ -1,5 +1,7 @@
 # tx-rs
 
+[![Rust](https://github.com/cutsea110/tx-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/cutsea110/tx-rs/actions/workflows/rust.yml)
+
 ## Usage
 
 ```bash
