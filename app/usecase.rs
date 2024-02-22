@@ -106,7 +106,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 mod fake_tests {
     use std::cell::RefCell;
 
-    use chrono::NaiveDate;
+    use crate::domain::date;
 
     use super::*;
 
@@ -154,12 +154,7 @@ mod fake_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new(
-            "Alice",
-            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-            None,
-            Some("Alice wonderland"),
-        );
+        let person = Person::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone();
         let expected_id = 1;
 
@@ -175,30 +170,15 @@ mod fake_tests {
             data: RefCell::new(vec![
                 (
                     13,
-                    Person::new(
-                        "Alice",
-                        NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-                        None,
-                        Some("Alice is sender"),
-                    ),
+                    Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
                 ),
                 (
                     24,
-                    Person::new(
-                        "Bob",
-                        NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
-                        None,
-                        Some("Bob is receiver"),
-                    ),
+                    Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
                 ),
                 (
                     99,
-                    Person::new(
-                        "Eve",
-                        NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
-                        None,
-                        Some("Eve is interceptor"),
-                    ),
+                    Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
                 ),
             ]),
         };
@@ -209,7 +189,7 @@ mod fake_tests {
             result,
             Ok(Some(Person::new(
                 "Alice",
-                NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                date(2012, 11, 2),
                 None,
                 Some("Alice is sender")
             )))
@@ -223,12 +203,7 @@ mod fake_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new(
-            "Alice",
-            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-            None,
-            Some("Alice wonderland"),
-        );
+        let person = Person::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone();
         let expected_id = 14;
 
@@ -240,30 +215,15 @@ mod fake_tests {
         let data = vec![
             (
                 13,
-                Person::new(
-                    "Alice",
-                    NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-                    None,
-                    Some("Alice is sender"),
-                ),
+                Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             ),
             (
                 24,
-                Person::new(
-                    "Bob",
-                    NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
-                    None,
-                    Some("Bob is receiver"),
-                ),
+                Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
             ),
             (
                 99,
-                Person::new(
-                    "Eve",
-                    NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
-                    None,
-                    Some("Eve is interceptor"),
-                ),
+                Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
             ),
         ];
         let expected = data.clone();
@@ -323,7 +283,7 @@ mod fake_tests {
 mod spy_tests {
     use std::cell::RefCell;
 
-    use chrono::NaiveDate;
+    use crate::domain::date;
 
     use super::*;
 
@@ -375,12 +335,7 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new(
-            "Alice",
-            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-            None,
-            None,
-        );
+        let person = Person::new("Alice", date(2012, 11, 2), None, None);
         let expected = person.clone();
 
         let _ = usecase.entry(person).run(&mut ()).unwrap();
@@ -427,12 +382,7 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new(
-            "Alice",
-            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-            None,
-            None,
-        );
+        let person = Person::new("Alice", date(2012, 11, 2), None, None);
         let expected = person.clone();
 
         let _ = usecase.entry_and_verify(person).run(&mut ());
@@ -489,7 +439,7 @@ mod spy_tests {
 //
 #[cfg(test)]
 mod error_stub_tests {
-    use chrono::NaiveDate;
+    use crate::domain::date;
 
     use super::*;
 
@@ -535,12 +485,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new(
-            "Alice",
-            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-            None,
-            None,
-        );
+        let person = Person::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry(person).run(&mut ());
 
         assert!(result.is_err());
@@ -577,12 +522,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new(
-            "Alice",
-            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-            None,
-            None,
-        );
+        let person = Person::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());
@@ -601,12 +541,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new(
-            "Alice",
-            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
-            None,
-            None,
-        );
+        let person = Person::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());

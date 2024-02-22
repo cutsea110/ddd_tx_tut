@@ -1,4 +1,3 @@
-use chrono::NaiveDate;
 use log::{error, trace};
 use postgres::{Client, NoTls};
 use std::cell::{RefCell, RefMut};
@@ -16,6 +15,8 @@ pub use domain::{Person, PersonId};
 pub use pg_db::PgPersonDao;
 pub use service::{PersonService, ServiceError};
 pub use usecase::{PersonUsecase, UsecaseError};
+
+use crate::domain::{date, date_opt};
 
 #[derive(Debug, Clone)]
 pub struct PersonUsecaseImpl {
@@ -107,12 +108,7 @@ fn main() {
     let mut service = PersonServiceImpl::new(&db_url);
 
     let (id, person) = service
-        .register(
-            "cutsea",
-            NaiveDate::from_ymd_opt(1970, 11, 6).unwrap(),
-            None,
-            "rustacean",
-        )
+        .register("cutsea", date(1970, 11, 6), None, "rustacean")
         .expect("register one person");
     println!("id:{} {}", id, person);
 
@@ -120,26 +116,26 @@ fn main() {
         .batch_import(vec![
             Person::new(
                 "Abel",
-                NaiveDate::from_ymd_opt(1802, 8, 5).unwrap(),
-                NaiveDate::from_ymd_opt(1829, 4, 6),
+                date(1802, 8, 5),
+                date_opt(1829, 4, 6),
                 Some("Abel's theorem"),
             ),
             Person::new(
                 "Euler",
-                NaiveDate::from_ymd_opt(1707, 4, 15).unwrap(),
-                NaiveDate::from_ymd_opt(1783, 9, 18),
+                date(1707, 4, 15),
+                date_opt(1783, 9, 18),
                 Some("Euler's identity"),
             ),
             Person::new(
                 "Galois",
-                NaiveDate::from_ymd_opt(1811, 10, 25).unwrap(),
-                NaiveDate::from_ymd_opt(1832, 5, 31),
+                date(1811, 10, 25),
+                date_opt(1832, 5, 31),
                 Some("Group Theory"),
             ),
             Person::new(
                 "Gauss",
-                NaiveDate::from_ymd_opt(1777, 4, 30).unwrap(),
-                NaiveDate::from_ymd_opt(1855, 2, 23),
+                date(1777, 4, 30),
+                date_opt(1855, 2, 23),
                 Some("King of Math"),
             ),
         ])

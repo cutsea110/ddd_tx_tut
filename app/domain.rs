@@ -1,6 +1,13 @@
 use chrono::NaiveDate;
 use core::fmt;
 
+pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
+    date_opt(year, month, day).expect("create date")
+}
+pub fn date_opt(year: i32, month: u32, day: u32) -> Option<NaiveDate> {
+    NaiveDate::from_ymd_opt(year, month, day)
+}
+
 pub type PersonId = i32;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Person {
