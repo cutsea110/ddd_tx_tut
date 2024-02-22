@@ -59,6 +59,11 @@ pub trait PersonService<'a, Ctx> {
         trace!("list all persons");
         self.run_tx(move |usecase, ctx| usecase.collect().run(ctx))
     }
+
+    fn unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
+        trace!("unregister person: id={}", id);
+        self.run_tx(move |usecase, ctx| usecase.remove(id).run(ctx))
+    }
 }
 
 // # フェイクテスト
@@ -118,6 +123,9 @@ mod fake_tests {
         }
         fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
         }
     }
 
@@ -179,6 +187,17 @@ mod fake_tests {
             let result = self.db.clone();
 
             tx_rs::with_tx(move |&mut ()| Ok(result))
+        }
+        fn remove<'a>(
+            &'a mut self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            self.db.retain(|(i, _)| *i != id);
+
+            tx_rs::with_tx(move |&mut ()| Ok(()))
         }
     }
 
@@ -274,6 +293,43 @@ mod fake_tests {
 
         assert_eq!(result, Ok(expected))
     }
+    #[test]
+    fn test_unregister() {
+        let usecase = Rc::new(RefCell::new(FakePersonUsecase {
+            db: vec![
+                (
+                    1,
+                    Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                ),
+                (
+                    2,
+                    Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                ),
+                (
+                    3,
+                    Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                ),
+            ],
+            dao: DummyPersonDao,
+        }));
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+        };
+
+        let _ = service.unregister(2);
+        let expected = vec![
+            (
+                1,
+                Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            ),
+            (
+                3,
+                Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+            ),
+        ];
+
+        assert_eq!(usecase.borrow().db, expected);
+    }
 }
 
 // # スパイテスト
@@ -337,6 +393,9 @@ mod spy_tests {
         fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
+        fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
     }
 
     struct SpyPersonUsecase {
@@ -345,6 +404,7 @@ mod spy_tests {
         find: RefCell<Vec<PersonId>>,
         entry_and_verify: RefCell<Vec<Person>>,
         collect: RefCell<i32>,
+        remove: RefCell<Vec<PersonId>>,
     }
     impl HavePersonDao<()> for SpyPersonUsecase {
         fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
@@ -399,6 +459,18 @@ mod spy_tests {
             // 返り値に意味はない
             tx_rs::with_tx(|&mut ()| Ok(vec![]))
         }
+        fn remove<'a>(
+            &'a mut self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            self.remove.borrow_mut().push(id);
+
+            // 返り値に意味はない
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
     }
 
     struct TargetPersonService {
@@ -424,6 +496,7 @@ mod spy_tests {
             find: RefCell::new(vec![]),
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
+            remove: RefCell::new(vec![]),
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -438,6 +511,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 1);
         assert_eq!(*usecase.borrow().collect.borrow(), 0);
+        assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().entry_and_verify.borrow()[0], expected);
@@ -451,6 +525,7 @@ mod spy_tests {
             find: RefCell::new(vec![]),
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
+            remove: RefCell::new(vec![]),
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -470,6 +545,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
         assert_eq!(*usecase.borrow().collect.borrow(), 0);
+        assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().entry.borrow().clone(), expected);
@@ -483,6 +559,7 @@ mod spy_tests {
             find: RefCell::new(vec![]),
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
+            remove: RefCell::new(vec![]),
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -495,6 +572,33 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
         assert_eq!(*usecase.borrow().collect.borrow(), 1);
+        assert_eq!(usecase.borrow().remove.borrow().len(), 0);
+    }
+    #[test]
+    fn test_unregister() {
+        let usecase = Rc::new(RefCell::new(SpyPersonUsecase {
+            dao: DummyPersonDao,
+            entry: RefCell::new(vec![]),
+            find: RefCell::new(vec![]),
+            entry_and_verify: RefCell::new(vec![]),
+            collect: RefCell::new(0),
+            remove: RefCell::new(vec![]),
+        }));
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+        };
+
+        let _ = service.unregister(42);
+
+        // Usecase のメソッドの呼び出し記録の検証
+        assert_eq!(usecase.borrow().entry.borrow().len(), 0);
+        assert_eq!(usecase.borrow().find.borrow().len(), 0);
+        assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
+        assert_eq!(*usecase.borrow().collect.borrow(), 0);
+        assert_eq!(usecase.borrow().remove.borrow().len(), 1);
+
+        // Service の引数が Usecase にそのまま渡されていることを検証
+        assert_eq!(usecase.borrow().remove.borrow()[0], 42);
     }
 }
 
@@ -548,6 +652,9 @@ mod error_stub_tests {
         fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
+        fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
     }
 
     struct StubPersonUsecase {
@@ -556,6 +663,7 @@ mod error_stub_tests {
         find_result: Result<Option<Person>, UsecaseError>,
         entry_and_verify_result: Result<(PersonId, Person), UsecaseError>,
         collect_result: Result<Vec<(PersonId, Person)>, UsecaseError>,
+        remove_result: Result<(), UsecaseError>,
     }
     impl HavePersonDao<()> for StubPersonUsecase {
         fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
@@ -598,6 +706,15 @@ mod error_stub_tests {
         {
             tx_rs::with_tx(|&mut ()| self.collect_result.clone())
         }
+        fn remove<'a>(
+            &'a mut self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(|&mut ()| self.remove_result.clone())
+        }
     }
 
     struct TargetPersonService {
@@ -625,6 +742,7 @@ mod error_stub_tests {
                 DaoError::InsertError("valid dao".to_string()),
             )),
             collect_result: Ok(vec![]), // 使わない
+            remove_result: Ok(()),      // 使わない
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -650,6 +768,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
             collect_result: Ok(vec![]), // 使わない
+            remove_result: Ok(()),      // 使わない
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -674,6 +793,7 @@ mod error_stub_tests {
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
             ))),
+            remove_result: Ok(()), // 使わない
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -681,6 +801,28 @@ mod error_stub_tests {
 
         let result = service.list_all();
         let expected = usecase.borrow().collect_result.clone().unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
+    fn test_unregister() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+            remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
+                "valid dao".to_string(),
+            ))),
+        }));
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+        };
+
+        let result = service.unregister(42);
+        let expected = usecase.borrow().remove_result.clone().unwrap_err();
 
         assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
     }

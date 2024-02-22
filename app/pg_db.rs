@@ -74,4 +74,14 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
             .map_err(|e| DaoError::SelectError(e.to_string()))
         })
     }
+    fn delete(
+        &self,
+        id: PersonId,
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = (), Err = DaoError> {
+        tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
+            tx.execute("DELETE FROM person WHERE id = $1", &[&id])
+                .map(|_| ())
+                .map_err(|e| DaoError::DeleteError(e.to_string()))
+        })
+    }
 }

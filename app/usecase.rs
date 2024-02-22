@@ -15,6 +15,8 @@ pub enum UsecaseError {
     EntryAndVerifyPersonFailed(DaoError),
     #[error("collect person failed: {0}")]
     CollectPersonFailed(DaoError),
+    #[error("remove person failed: {0}")]
+    RemovePersonFailed(DaoError),
 }
 pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn entry<'a>(
@@ -75,6 +77,15 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         dao.select()
             .map_err(|e| UsecaseError::CollectPersonFailed(e))
     }
+    fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
+    where
+        Ctx: 'a,
+    {
+        let dao = self.get_dao();
+        trace!("remove person_id: {:?}", id);
+        dao.delete(id)
+            .map_err(|e| UsecaseError::RemovePersonFailed(e))
+    }
 }
 
 // # フェイクテスト
@@ -131,6 +142,11 @@ mod fake_tests {
         }
         fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
             let result = self.data.borrow().clone();
+
+            tx_rs::with_tx(move |()| Ok(result))
+        }
+        fn delete(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            let result = self.data.borrow_mut().retain(|(i, _)| *i != id);
 
             tx_rs::with_tx(move |()| Ok(result))
         }
@@ -243,6 +259,43 @@ mod fake_tests {
             Ok(expected)
         );
     }
+    #[test]
+    fn test_remove() {
+        let data = vec![
+            (
+                13,
+                Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            ),
+            (
+                24,
+                Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            ),
+            (
+                99,
+                Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+            ),
+        ];
+        let expected = vec![
+            (
+                13,
+                Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            ),
+            (
+                99,
+                Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+            ),
+        ];
+
+        let dao = FakePersonDao {
+            last_id: RefCell::new(0), // 使わない
+            data: RefCell::new(data),
+        };
+        let mut usecase = TargetPersonUsecase { dao };
+
+        let result = usecase.remove(24).run(&mut ());
+        assert_eq!(result, Ok(()));
+        assert_eq!(*usecase.dao.data.borrow(), expected);
+    }
 }
 
 // # スパイテスト
@@ -292,6 +345,7 @@ mod spy_tests {
         inserted_id: PersonId,
         fetch: RefCell<Vec<PersonId>>,
         select: RefCell<i32>,
+        delete: RefCell<Vec<PersonId>>,
     }
     // Ctx 不要なので () にしている
     impl PersonDao<()> for SpyPersonDao {
@@ -313,6 +367,12 @@ mod spy_tests {
             // 返り値には意味なし
             tx_rs::with_tx(|()| Ok(vec![]))
         }
+        fn delete(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            self.delete.borrow_mut().push(id);
+
+            // 返り値には意味なし
+            tx_rs::with_tx(|()| Ok(()))
+        }
     }
 
     struct TargetPersonUsecase {
@@ -332,6 +392,7 @@ mod spy_tests {
             inserted_id: 0, // 使わない
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
+            delete: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
@@ -344,6 +405,7 @@ mod spy_tests {
         assert_eq!(usecase.dao.insert.borrow().len(), 1);
         assert_eq!(usecase.dao.fetch.borrow().len(), 0);
         assert_eq!(*usecase.dao.select.borrow(), 0);
+        assert_eq!(usecase.dao.delete.borrow().len(), 0);
 
         // Usecase の引数が DAO にそのまま渡されていることを検証
         assert_eq!(usecase.dao.insert.borrow()[0], expected);
@@ -356,6 +418,7 @@ mod spy_tests {
             inserted_id: 0, // 使わない
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
+            delete: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
@@ -367,6 +430,7 @@ mod spy_tests {
         assert_eq!(usecase.dao.insert.borrow().len(), 0);
         assert_eq!(usecase.dao.fetch.borrow().len(), 1);
         assert_eq!(*usecase.dao.select.borrow(), 0);
+        assert_eq!(usecase.dao.delete.borrow().len(), 0);
 
         // Usecase の引数が DAO にそのまま渡されていることを確認
         assert_eq!(usecase.dao.fetch.borrow()[0], expected);
@@ -379,6 +443,7 @@ mod spy_tests {
             inserted_id: 42,
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
+            delete: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
@@ -391,6 +456,7 @@ mod spy_tests {
         assert_eq!(usecase.dao.insert.borrow().len(), 1);
         assert_eq!(usecase.dao.fetch.borrow().len(), 1);
         assert_eq!(*usecase.dao.select.borrow(), 0);
+        assert_eq!(usecase.dao.delete.borrow().len(), 0);
 
         // Usecase の引数が DAO にそのまま渡されていることを検証
         assert_eq!(usecase.dao.insert.borrow()[0], expected);
@@ -405,6 +471,7 @@ mod spy_tests {
             inserted_id: 0, // 使わない
             fetch: RefCell::new(vec![]),
             select: RefCell::new(0),
+            delete: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
@@ -414,6 +481,31 @@ mod spy_tests {
         assert_eq!(usecase.dao.insert.borrow().len(), 0);
         assert_eq!(usecase.dao.fetch.borrow().len(), 0);
         assert_eq!(*usecase.dao.select.borrow(), 1);
+        assert_eq!(usecase.dao.delete.borrow().len(), 0);
+    }
+    #[test]
+    fn test_remove() {
+        let dao = SpyPersonDao {
+            insert: RefCell::new(vec![]),
+            inserted_id: 0, // 使わない
+            fetch: RefCell::new(vec![]),
+            select: RefCell::new(0),
+            delete: RefCell::new(vec![]),
+        };
+        let mut usecase = TargetPersonUsecase { dao };
+
+        let id: PersonId = 42;
+        let expected = id;
+        let _ = usecase.remove(id).run(&mut ());
+
+        // DAO のメソッドの呼び出し記録の検証
+        assert_eq!(usecase.dao.insert.borrow().len(), 0);
+        assert_eq!(usecase.dao.fetch.borrow().len(), 0);
+        assert_eq!(*usecase.dao.select.borrow(), 0);
+        assert_eq!(usecase.dao.delete.borrow().len(), 1);
+
+        // Usecase の引数が DAO にそのまま渡されていることを確認
+        assert_eq!(usecase.dao.delete.borrow()[0], expected);
     }
 }
 
@@ -447,6 +539,7 @@ mod error_stub_tests {
         insert_result: Result<PersonId, DaoError>,
         fetch_result: Result<Option<Person>, DaoError>,
         select_result: Result<Vec<(PersonId, Person)>, DaoError>,
+        delete_result: Result<(), DaoError>,
     }
     // Ctx 不要なので () にしている
     impl PersonDao<()> for StubPersonDao {
@@ -461,6 +554,9 @@ mod error_stub_tests {
         }
         fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
             tx_rs::with_tx(|()| self.select_result.clone())
+        }
+        fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |()| self.delete_result.clone())
         }
     }
 
@@ -480,6 +576,7 @@ mod error_stub_tests {
             insert_result: Err(DaoError::InsertError("valid dao".to_string())),
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
+            delete_result: Ok(()),     // 使わない
         };
         let expected = UsecaseError::EntryPersonFailed(dao.insert_result.clone().unwrap_err());
 
@@ -498,6 +595,7 @@ mod error_stub_tests {
             insert_result: Ok(42), // 使わない
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
+            delete_result: Ok(()),     // 使わない
         };
         let expected = UsecaseError::FindPersonFailed(dao.fetch_result.clone().unwrap_err());
 
@@ -516,6 +614,7 @@ mod error_stub_tests {
             insert_result: Err(DaoError::InsertError("valid dao".to_string())),
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
+            delete_result: Ok(()),     // 使わない
         };
         let expected =
             UsecaseError::EntryAndVerifyPersonFailed(dao.insert_result.clone().unwrap_err());
@@ -535,6 +634,7 @@ mod error_stub_tests {
             insert_result: Ok(42),
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
+            delete_result: Ok(()),     // 使わない
         };
         let expected =
             UsecaseError::EntryAndVerifyPersonFailed(dao.fetch_result.clone().unwrap_err());
@@ -554,12 +654,31 @@ mod error_stub_tests {
             insert_result: Ok(42),  // 使わない
             fetch_result: Ok(None), // 使わない
             select_result: Err(DaoError::SelectError("valid dao".to_string())),
+            delete_result: Ok(()), // 使わない
         };
         let expected = UsecaseError::CollectPersonFailed(dao.select_result.clone().unwrap_err());
 
         let mut usecase = TargetPersonUsecase { dao };
 
         let result = usecase.collect().run(&mut ());
+
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), expected);
+    }
+    #[test]
+    fn test_remove() {
+        let dao = StubPersonDao {
+            insert_result: Ok(42),     // 使わない
+            fetch_result: Ok(None),    // 使わない
+            select_result: Ok(vec![]), // 使わない
+            delete_result: Err(DaoError::DeleteError("valid dao".to_string())),
+        };
+        let expected = UsecaseError::RemovePersonFailed(dao.delete_result.clone().unwrap_err());
+
+        let mut usecase = TargetPersonUsecase { dao };
+
+        let id: PersonId = 42;
+        let result = usecase.remove(id).run(&mut ());
 
         assert!(result.is_err());
         assert_eq!(result.err().unwrap(), expected);
