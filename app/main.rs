@@ -143,7 +143,13 @@ fn main() {
     println!("batch import done");
 
     let persons = service.list_all().expect("list all");
-    for (id, person) in persons {
-        println!("id:{} {}", id, person);
+    for (id, person) in &persons {
+        println!("found id:{} {}", id, person);
     }
+    for (id, _) in persons {
+        println!("unregister id:{}", id);
+        service.unregister(id).expect("unregister");
+    }
+
+    println!("done everything!");
 }
