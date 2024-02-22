@@ -110,6 +110,7 @@ fn main() {
         .register(
             "cutsea",
             NaiveDate::from_ymd_opt(1970, 11, 6).unwrap(),
+            None,
             "rustacean",
         )
         .expect("register one person");
@@ -120,21 +121,25 @@ fn main() {
             Person::new(
                 "Abel",
                 NaiveDate::from_ymd_opt(1802, 8, 5).unwrap(),
+                NaiveDate::from_ymd_opt(1829, 4, 6),
                 Some("Abel's theorem"),
             ),
             Person::new(
                 "Euler",
                 NaiveDate::from_ymd_opt(1707, 4, 15).unwrap(),
+                NaiveDate::from_ymd_opt(1783, 9, 18),
                 Some("Euler's identity"),
             ),
             Person::new(
                 "Galois",
                 NaiveDate::from_ymd_opt(1811, 10, 25).unwrap(),
+                NaiveDate::from_ymd_opt(1832, 5, 31),
                 Some("Group Theory"),
             ),
             Person::new(
                 "Gauss",
                 NaiveDate::from_ymd_opt(1777, 4, 30).unwrap(),
+                NaiveDate::from_ymd_opt(1855, 2, 23),
                 Some("King of Math"),
             ),
         ])

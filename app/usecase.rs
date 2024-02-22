@@ -157,6 +157,7 @@ mod fake_tests {
         let person = Person::new(
             "Alice",
             NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
             Some("Alice wonderland"),
         );
         let expected = person.clone();
@@ -177,6 +178,7 @@ mod fake_tests {
                     Person::new(
                         "Alice",
                         NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                        None,
                         Some("Alice is sender"),
                     ),
                 ),
@@ -185,6 +187,7 @@ mod fake_tests {
                     Person::new(
                         "Bob",
                         NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                        None,
                         Some("Bob is receiver"),
                     ),
                 ),
@@ -193,6 +196,7 @@ mod fake_tests {
                     Person::new(
                         "Eve",
                         NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                        None,
                         Some("Eve is interceptor"),
                     ),
                 ),
@@ -206,6 +210,7 @@ mod fake_tests {
             Ok(Some(Person::new(
                 "Alice",
                 NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                None,
                 Some("Alice is sender")
             )))
         );
@@ -221,6 +226,7 @@ mod fake_tests {
         let person = Person::new(
             "Alice",
             NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
             Some("Alice wonderland"),
         );
         let expected = person.clone();
@@ -237,6 +243,7 @@ mod fake_tests {
                 Person::new(
                     "Alice",
                     NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                    None,
                     Some("Alice is sender"),
                 ),
             ),
@@ -245,6 +252,7 @@ mod fake_tests {
                 Person::new(
                     "Bob",
                     NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                    None,
                     Some("Bob is receiver"),
                 ),
             ),
@@ -253,6 +261,7 @@ mod fake_tests {
                 Person::new(
                     "Eve",
                     NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                    None,
                     Some("Eve is interceptor"),
                 ),
             ),
@@ -366,7 +375,12 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None);
+        let person = Person::new(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
+            None,
+        );
         let expected = person.clone();
 
         let _ = usecase.entry(person).run(&mut ()).unwrap();
@@ -413,7 +427,12 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None);
+        let person = Person::new(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
+            None,
+        );
         let expected = person.clone();
 
         let _ = usecase.entry_and_verify(person).run(&mut ());
@@ -516,7 +535,12 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None);
+        let person = Person::new(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
+            None,
+        );
         let result = usecase.entry(person).run(&mut ());
 
         assert!(result.is_err());
@@ -553,7 +577,12 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None);
+        let person = Person::new(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
+            None,
+        );
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());
@@ -572,7 +601,12 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None);
+        let person = Person::new(
+            "Alice",
+            NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
+            None,
+        );
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());

@@ -25,17 +25,19 @@ pub trait PersonService<'a, Ctx> {
         &'a mut self,
         name: &str,
         birth_date: NaiveDate,
+        death_date: Option<NaiveDate>,
         data: &str,
     ) -> Result<(PersonId, Person), ServiceError> {
         trace!(
-            "register person: name={}, birth_date={}, data={}",
+            "register person: name={}, birth_date={}, death_date={:?}, data={}",
             name,
             birth_date,
+            death_date,
             data
         );
         self.run_tx(move |usecase, ctx| {
             usecase
-                .entry_and_verify(Person::new(name, birth_date, Some(data)))
+                .entry_and_verify(Person::new(name, birth_date, death_date, Some(data)))
                 .run(ctx)
         })
     }
@@ -207,12 +209,14 @@ mod fake_tests {
         let expected = Person::new(
             "Alice",
             NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
             Some("Alice is sender"),
         );
 
         let res = service.register(
             "Alice",
             NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
             "Alice is sender",
         );
         assert_eq!(res, Ok((expected_id, expected)));
@@ -231,16 +235,19 @@ mod fake_tests {
             Person::new(
                 "Alice",
                 NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                None,
                 Some("Alice is sender"),
             ),
             Person::new(
                 "Bob",
                 NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                None,
                 Some("Bob is receiver"),
             ),
             Person::new(
                 "Eve",
                 NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                None,
                 Some("Eve is interceptor"),
             ),
         ];
@@ -267,6 +274,7 @@ mod fake_tests {
                     Person::new(
                         "Alice",
                         NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                        None,
                         Some("Alice is sender"),
                     ),
                 ),
@@ -275,6 +283,7 @@ mod fake_tests {
                     Person::new(
                         "Bob",
                         NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                        None,
                         Some("Bob is receiver"),
                     ),
                 ),
@@ -283,6 +292,7 @@ mod fake_tests {
                     Person::new(
                         "Eve",
                         NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                        None,
                         Some("Eve is interceptor"),
                     ),
                 ),
@@ -460,12 +470,14 @@ mod spy_tests {
         let expected = Person::new(
             "Alice",
             NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
             Some("Alice is sender"),
         );
 
         let _ = service.register(
             "Alice",
             NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
             "Alice is sender",
         );
 
@@ -496,16 +508,19 @@ mod spy_tests {
             Person::new(
                 "Alice",
                 NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                None,
                 Some("Alice is sender"),
             ),
             Person::new(
                 "Bob",
                 NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                None,
                 Some("Bob is receiver"),
             ),
             Person::new(
                 "Eve",
                 NaiveDate::from_ymd_opt(1996, 12, 15).unwrap(),
+                None,
                 Some("Eve is interseptor"),
             ),
         ];
@@ -680,6 +695,7 @@ mod error_stub_tests {
         let result = service.register(
             "Alice",
             NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+            None,
             "Alice is sender",
         );
         let expected = usecase
@@ -701,7 +717,12 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None),
+                Person::new(
+                    "Alice",
+                    NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                    None,
+                    None,
+                ),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
         }));
@@ -713,11 +734,13 @@ mod error_stub_tests {
             Person::new(
                 "Alice",
                 NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                None,
                 Some("Alice is sender"),
             ),
             Person::new(
                 "Bob",
                 NaiveDate::from_ymd_opt(1995, 11, 6).unwrap(),
+                None,
                 Some("Bob is receiver"),
             ),
         ]);
@@ -734,7 +757,12 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                Person::new("Alice", NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(), None),
+                Person::new(
+                    "Alice",
+                    NaiveDate::from_ymd_opt(2012, 11, 2).unwrap(),
+                    None,
+                    None,
+                ),
             )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
