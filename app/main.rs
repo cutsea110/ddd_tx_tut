@@ -16,7 +16,7 @@ pub use pg_db::PgPersonDao;
 pub use service::{PersonService, ServiceError};
 pub use usecase::{PersonUsecase, UsecaseError};
 
-use crate::domain::{date, date_opt};
+use crate::domain::date;
 
 #[derive(Debug, Clone)]
 pub struct PersonUsecaseImpl {
@@ -117,25 +117,25 @@ fn main() {
             Person::new(
                 "Abel",
                 date(1802, 8, 5),
-                date_opt(1829, 4, 6),
+                date(1829, 4, 6).into(),
                 Some("Abel's theorem"),
             ),
             Person::new(
                 "Euler",
                 date(1707, 4, 15),
-                date_opt(1783, 9, 18),
+                date(1783, 9, 18).into(),
                 Some("Euler's identity"),
             ),
             Person::new(
                 "Galois",
                 date(1811, 10, 25),
-                date_opt(1832, 5, 31),
+                date(1832, 5, 31).into(),
                 Some("Group Theory"),
             ),
             Person::new(
                 "Gauss",
                 date(1777, 4, 30),
-                date_opt(1855, 2, 23),
+                date(1855, 2, 23).into(),
                 Some("King of Math"),
             ),
         ])
