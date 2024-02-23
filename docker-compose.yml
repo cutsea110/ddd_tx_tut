@@ -1,13 +1,18 @@
 version: '3'
 services:
   db:
-    build: .
+    image: postgres:15.5-alpine
     ports:
       - 15432:5432
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: adminpass
       POSTGRES_DB: sampledb
+      LANG: ja_JP.utf8
     volumes:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
+  cache:
+    image: redis:7.2-alpine
+    ports:
+      - 16379:6379

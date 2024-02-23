@@ -15,6 +15,16 @@ If you check rdb directly, do like this:
 psql postgres://admin:adminpass@localhost:15432/sampledb
 ```
 
+The postgres db's named volumes are empty in `docker-compose.yml`, so you lost permanent data after `docker-compose down -v`.
+
+If you check cache(redis), do like this:
+
+```bash
+redis-cli -p 16379
+```
+
+The redis cache's named volumes are empty in `docker-compose.yml`, so you lost cache data after `docker-compose down -v`.
+
 ## Run
 
 ```
