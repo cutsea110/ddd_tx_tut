@@ -1,5 +1,6 @@
 use log::{error, trace};
 use postgres::{Client, NoTls};
+use redis::Commands;
 use std::cell::{RefCell, RefMut};
 use std::env;
 use std::rc::Rc;
@@ -101,6 +102,20 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
 
 fn main() {
     env_logger::init();
+
+    let cache_url = "redis://localhost:16379";
+    let cache_client = redis::Client::open(cache_url).expect("cache client");
+    let mut con = cache_client.get_connection().expect("get cache connection");
+    let b: bool = con.exists("my_key").expect("exists cache");
+    println!("my_key exists: {}", b);
+    let _: () = con.set("my_key", 42).expect("set cache");
+    let b: bool = con.exists("my_key").expect("exists cache");
+    println!("my_key exists: {}", b);
+    let result: i32 = con.get("my_key").expect("get cache");
+    println!("cache result: {}", result);
+    let _: () = con.del("my_key").expect("del cache");
+    let b: bool = con.exists("my_key").expect("exists cache");
+    println!("my_key exists: {}", b);
 
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
