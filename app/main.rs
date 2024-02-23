@@ -5,6 +5,7 @@ use std::cell::{RefCell, RefMut};
 use std::env;
 use std::rc::Rc;
 
+mod cache;
 mod dao;
 mod domain;
 mod pg_db;
