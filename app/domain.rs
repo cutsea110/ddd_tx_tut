@@ -1,12 +1,14 @@
 use chrono::NaiveDate;
 use core::fmt;
+use serde::{Deserialize, Serialize};
 
 pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month, day).expect("create date")
 }
 
 pub type PersonId = i32;
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// actually, this is a layout. This means that the data is represented in a certain way.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Person {
     pub name: String,
     pub birth_date: NaiveDate,

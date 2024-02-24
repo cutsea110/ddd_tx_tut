@@ -4,8 +4,8 @@ use crate::{Person, PersonId};
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum CaoError {
-    #[error("dummy todo")]
-    Dummy,
+    #[error("Cache unavailable")]
+    Unavailable(String),
 }
 
 // Cao = Cache Access Object
@@ -17,7 +17,7 @@ pub trait PersonCao<Ctx> {
         key: &PersonId,
         value: &Person,
     ) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
-    fn expire(&self, key: &PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
+    fn discard(&self, key: &PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
 }
 
 pub trait HavePersonCao<Ctx> {

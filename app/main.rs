@@ -9,6 +9,7 @@ mod cache;
 mod dao;
 mod domain;
 mod pg_db;
+mod redis_cache;
 mod service;
 mod usecase;
 
@@ -106,7 +107,7 @@ fn main() {
 
     let cache_url = "redis://localhost:16379";
     let cache_client = redis::Client::open(cache_url).expect("cache client");
-    let mut con = cache_client.get_connection().expect("get cache connection");
+    let mut con: redis::Connection = cache_client.get_connection().expect("get cache connection");
     let b: bool = con.exists("my_key").expect("exists cache");
     println!("my_key exists: {}", b);
     let _: () = con.set("my_key", 42).expect("set cache");
