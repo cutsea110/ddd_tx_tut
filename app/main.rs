@@ -1,5 +1,5 @@
 use log::{error, trace};
-use postgres::{Client, NoTls};
+use postgres::NoTls;
 use redis::Commands;
 use std::cell::{RefCell, RefMut};
 use std::env;
@@ -13,9 +13,10 @@ mod redis_cache;
 mod service;
 mod usecase;
 
-pub use dao::{DaoError, HavePersonDao, PersonDao};
+pub use dao::{DaoError, HavePersonDao};
 pub use domain::{Person, PersonId};
 pub use pg_db::PgPersonDao;
+pub use redis_cache::RedisPersonCao;
 pub use service::{PersonService, ServiceError};
 pub use usecase::{PersonUsecase, UsecaseError};
 
@@ -32,27 +33,18 @@ impl PersonUsecaseImpl {
 }
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
-    fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<postgres::Transaction<'a>>> {
+    fn get_dao<'b>(&'b self) -> Box<&impl dao::PersonDao<postgres::Transaction<'a>>> {
         Box::new(&*self.dao)
     }
 }
 
 pub struct PersonServiceImpl {
-    db_client: Client,
+    db_client: postgres::Client,
     usecase: Rc<RefCell<PersonUsecaseImpl>>,
 }
 impl PersonServiceImpl {
     pub fn new(db_url: &str) -> Self {
-        let db_client = match Client::connect(db_url, NoTls) {
-            Ok(client) => {
-                trace!("db connected to {}", db_url);
-                client
-            }
-            Err(e) => {
-                error!("failed to connect db: {}", e);
-                panic!("db connection failed");
-            }
-        };
+        let db_client = postgres::Client::connect(db_url, NoTls).expect("create db client");
 
         let usecase = PersonUsecaseImpl::new(Rc::new(PgPersonDao));
 
@@ -105,24 +97,15 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
 fn main() {
     env_logger::init();
 
-    let cache_url = "redis://localhost:16379";
-    let cache_client = redis::Client::open(cache_url).expect("cache client");
-    let mut con: redis::Connection = cache_client.get_connection().expect("get cache connection");
-    let b: bool = con.exists("my_key").expect("exists cache");
-    println!("my_key exists: {}", b);
-    let _: () = con.set("my_key", 42).expect("set cache");
-    let b: bool = con.exists("my_key").expect("exists cache");
-    println!("my_key exists: {}", b);
-    let result: i32 = con.get("my_key").expect("get cache");
-    println!("cache result: {}", result);
-    let _: () = con.del("my_key").expect("del cache");
-    let b: bool = con.exists("my_key").expect("exists cache");
-    println!("my_key exists: {}", b);
+    let cache_url = env::var("CACHE_URL").unwrap_or_else(|_| "redis://localhost:16379".to_string());
 
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
     });
     let mut service = PersonServiceImpl::new(&db_url);
+
+    let cache_client = redis::Client::open(cache_url.as_str()).expect("create cache client");
+    let mut con = cache_client.get_connection().expect("connect to cache");
 
     let (id, person) = service
         .register("cutsea", date(1970, 11, 6), None, "rustacean")
