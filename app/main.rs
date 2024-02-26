@@ -90,7 +90,7 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
         }
     }
 }
-
+// this suppose Person is serde-ized
 impl ToRedisArgs for Person {
     fn write_redis_args<W: ?Sized>(&self, out: &mut W)
     where
@@ -100,6 +100,7 @@ impl ToRedisArgs for Person {
         out.write_arg(s.as_bytes());
     }
 }
+// this suppose Person is serde-ized
 impl FromRedisValue for Person {
     fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
         let s: String = redis::from_redis_value(v)?;
