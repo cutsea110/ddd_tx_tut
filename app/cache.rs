@@ -9,6 +9,8 @@ pub enum CaoError {
 }
 
 pub trait PersonCao<Ctx> {
+    fn get_conn(&self) -> Result<Ctx, CaoError>;
+
     fn exists(&self, id: PersonId) -> impl FnOnce(&mut Ctx) -> Result<bool, CaoError>;
     fn find(&self, id: PersonId) -> impl FnOnce(&mut Ctx) -> Result<Option<Person>, CaoError>;
     fn save(&self, id: PersonId, person: &Person) -> impl FnOnce(&mut Ctx) -> Result<(), CaoError>;

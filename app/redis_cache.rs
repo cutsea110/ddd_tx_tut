@@ -23,8 +23,23 @@ impl FromRedisValue for Person {
         Ok(p)
     }
 }
-pub struct RedisPersonCao;
+#[derive(Debug, Clone)]
+pub struct RedisPersonCao {
+    client: redis::Client,
+}
+impl RedisPersonCao {
+    pub fn new(client: redis::Client) -> Self {
+        Self { client }
+    }
+}
+
 impl PersonCao<redis::Connection> for RedisPersonCao {
+    fn get_conn(&self) -> Result<redis::Connection, CaoError> {
+        self.client
+            .get_connection()
+            .map_err(|e| CaoError::Unavailable(e.to_string()))
+    }
+
     fn exists(
         &self,
         id: PersonId,
