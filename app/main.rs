@@ -115,11 +115,14 @@ fn main() {
     // save on redis cache
     let _: () = (cao.save(id, &person))(&mut con).expect("save cache");
 
-    if (cao.exists(1))(&mut con).expect("check existence in cache") {
+    if (cao.exists(id))(&mut con).expect("check existence in cache") {
         if let Some(p) = (cao.find(id))(&mut con).expect("find cache") {
             println!("cache hit:{}", p);
         }
     }
+    let _: () = (cao.discard(id))(&mut con).expect("discard cache");
+    service.unregister(id).expect("delete person");
+
     let persons = vec![
         Person::new(
             "Abel",
