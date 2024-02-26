@@ -1,6 +1,5 @@
-use std::str;
-
 use chrono::NaiveDate;
+use std::str;
 
 use crate::dao::{DaoError, PersonDao};
 use crate::domain::{Person, PersonId};

@@ -1,9 +1,7 @@
 use redis::{self, Commands, FromRedisValue, ToRedisArgs};
 
-use crate::{
-    cache::{CaoError, PersonCao},
-    Person, PersonId,
-};
+use crate::cache::{CaoError, PersonCao};
+use crate::domain::{Person, PersonId};
 
 // this suppose Person is serde-ized
 impl ToRedisArgs for Person {

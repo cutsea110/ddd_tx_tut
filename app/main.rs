@@ -16,12 +16,10 @@ mod usecase;
 pub use cache::{CaoError, PersonCao};
 pub use cached_service::PersonCachedService;
 pub use dao::{DaoError, HavePersonDao};
-pub use domain::{Person, PersonId};
+pub use domain::{date, Person, PersonId};
 pub use pg_db::PgPersonDao;
 pub use service::{PersonService, ServiceError};
 pub use usecase::{PersonUsecase, UsecaseError};
-
-use crate::domain::date;
 
 #[derive(Debug, Clone)]
 pub struct PersonUsecaseImpl {

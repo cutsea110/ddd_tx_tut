@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{Person, PersonId};
+use crate::domain::{Person, PersonId};
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum CaoError {
