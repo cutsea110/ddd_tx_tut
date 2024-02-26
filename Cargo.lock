@@ -413,6 +413,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertool"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e6c4a04718e2694530b5cc60e315975fe7e684288b306efd446780b6eedda49"
+
+[[package]]
 name = "itoa"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -969,6 +975,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "env_logger",
+ "itertool",
  "log",
  "postgres",
  "redis",

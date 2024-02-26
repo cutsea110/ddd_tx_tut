@@ -120,55 +120,52 @@ fn main() {
             println!("cache hit:{}", p);
         }
     }
+    let persons = vec![
+        Person::new(
+            "Abel",
+            date(1802, 8, 5),
+            date(1829, 4, 6).into(),
+            Some("Abel's theorem"),
+        ),
+        Person::new(
+            "Euler",
+            date(1707, 4, 15),
+            date(1783, 9, 18).into(),
+            Some("Euler's identity"),
+        ),
+        Person::new(
+            "Galois",
+            date(1811, 10, 25),
+            date(1832, 5, 31).into(),
+            Some("Group Theory"),
+        ),
+        Person::new(
+            "Gauss",
+            date(1777, 4, 30),
+            date(1855, 2, 23).into(),
+            Some("King of Math"),
+        ),
+    ];
 
-    service
-        .batch_import(vec![
-            Person::new(
-                "Abel",
-                date(1802, 8, 5),
-                date(1829, 4, 6).into(),
-                Some("Abel's theorem"),
-            ),
-            Person::new(
-                "Euler",
-                date(1707, 4, 15),
-                date(1783, 9, 18).into(),
-                Some("Euler's identity"),
-            ),
-            Person::new(
-                "Galois",
-                date(1811, 10, 25),
-                date(1832, 5, 31).into(),
-                Some("Group Theory"),
-            ),
-            Person::new(
-                "Gauss",
-                date(1777, 4, 30),
-                date(1855, 2, 23).into(),
-                Some("King of Math"),
-            ),
-        ])
-        .expect("batch import");
+    let ids = service.batch_import(persons.clone()).expect("batch import");
     println!("batch import done");
 
-    let mut ids = vec![];
+    ids.iter().zip(persons.iter()).for_each(|(id, p)| {
+        let _: () = (cao.save(*id, p))(&mut con).expect("save cache");
+        println!("save cache: {} {}", id, p);
+    });
 
     let persons = service.list_all().expect("list all");
     for (id, person) in &persons {
         println!("found id:{} {}", id, person);
-        let _: () = (cao.save(*id, person))(&mut con).expect("save cache");
-        ids.push(*id);
-    }
-
-    for id in ids {
-        if (cao.exists(id))(&mut con).expect("check existence in cache") {
-            if let Some(p) = (cao.find(id))(&mut con).expect("find cache") {
-                println!("cache hit:{}", p);
-            }
+        if let Some(p) = (cao.find(*id))(&mut con).expect("find cache") {
+            println!("cache hit:{}", p);
+        } else {
+            println!("cache miss:{}", id);
         }
     }
 
-    for (id, _) in persons {
+    for id in ids {
         let _: () = (cao.discard(id))(&mut con).expect("delete cache");
         println!("delete cache id:{}", id);
         println!("unregister id:{}", id);

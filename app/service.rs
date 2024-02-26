@@ -42,16 +42,18 @@ pub trait PersonService<'a, Ctx> {
         })
     }
 
-    fn batch_import(&'a mut self, persons: Vec<Person>) -> Result<(), ServiceError> {
+    fn batch_import(&'a mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
         trace!("batch import persons: {:?}", persons);
+        let mut ids = vec![];
         self.run_tx(move |usecase, ctx| {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
-                if let Err(e) = res {
-                    return Err(e);
+                match res {
+                    Ok(id) => ids.push(id),
+                    Err(e) => return Err(e),
                 }
             }
-            Ok(())
+            Ok(ids)
         })
     }
 
