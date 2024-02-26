@@ -162,11 +162,25 @@ fn main() {
         .expect("batch import");
     println!("batch import done");
 
+    let mut ids = vec![];
+
     let persons = service.list_all().expect("list all");
     for (id, person) in &persons {
         println!("found id:{} {}", id, person);
+        let _: () = con.set(id, &person).expect("save cache");
+        ids.push(id);
     }
+
+    for id in ids {
+        if con.exists(id).expect("exists") {
+            let p: Person = con.get(id).expect("get cache");
+            println!("cache hit:{}", p);
+        }
+    }
+
     for (id, _) in persons {
+        let _: () = con.del(id).expect("delete cache");
+        println!("delete cache id:{}", id);
         println!("unregister id:{}", id);
         service.unregister(id).expect("unregister");
     }
