@@ -48,4 +48,4 @@ cargo test
 
 ## More Information
 
-You should export `DATABASE_URL` environment variable on the terminal which you run your editor.
+You should export `DATABASE_URL` and `CACHE_URL` environment variables on the terminal which you run your editor.
