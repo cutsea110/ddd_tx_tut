@@ -1,22 +1,19 @@
 use log::{error, trace};
 use postgres::NoTls;
-use redis::Commands;
+use redis::{Commands, FromRedisValue, ToRedisArgs};
 use std::cell::{RefCell, RefMut};
 use std::env;
 use std::rc::Rc;
 
-mod cache;
 mod dao;
 mod domain;
 mod pg_db;
-mod redis_cache;
 mod service;
 mod usecase;
 
 pub use dao::{DaoError, HavePersonDao};
 pub use domain::{Person, PersonId};
 pub use pg_db::PgPersonDao;
-pub use redis_cache::RedisPersonCao;
 pub use service::{PersonService, ServiceError};
 pub use usecase::{PersonUsecase, UsecaseError};
 
@@ -94,23 +91,46 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     }
 }
 
+impl ToRedisArgs for Person {
+    fn write_redis_args<W: ?Sized>(&self, out: &mut W)
+    where
+        W: redis::RedisWrite,
+    {
+        let s = serde_json::to_string(self).expect("serialize");
+        out.write_arg(s.as_bytes());
+    }
+}
+impl FromRedisValue for Person {
+    fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
+        let s: String = redis::from_redis_value(v)?;
+        let p: Person = serde_json::from_str(&s).expect("deserialize");
+        Ok(p)
+    }
+}
+
 fn main() {
     env_logger::init();
 
     let cache_url = env::var("CACHE_URL").unwrap_or_else(|_| "redis://localhost:16379".to_string());
+    let cache_client = redis::Client::open(cache_url.as_str()).expect("create cache client");
+    let mut con = cache_client.get_connection().expect("connect to cache");
 
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
     });
     let mut service = PersonServiceImpl::new(&db_url);
 
-    let cache_client = redis::Client::open(cache_url.as_str()).expect("create cache client");
-    let mut con = cache_client.get_connection().expect("connect to cache");
-
     let (id, person) = service
         .register("cutsea", date(1970, 11, 6), None, "rustacean")
         .expect("register one person");
     println!("id:{} {}", id, person);
+    // save on redis cache
+    let _: () = con.set(id, &person).expect("set cache");
+
+    if con.exists(id).expect("exists") {
+        let p: Person = con.get(id).expect("get cache");
+        println!("cache hit:{}", p);
+    }
 
     service
         .batch_import(vec![
