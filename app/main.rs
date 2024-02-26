@@ -200,23 +200,16 @@ fn main() {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
     });
     let mut service = PersonServiceImpl::new(&db_url, &cache_url);
-    let cao = service.get_cao();
-    let mut con = cao.get_conn().expect("get cache connection");
 
     let (id, person) = service
-        .register("cutsea", date(1970, 11, 6), None, "rustacean")
+        .cached_register("cutsea", date(1970, 11, 6), None, "rustacean")
         .expect("register one person");
     println!("id:{} {}", id, person);
-    // save on redis cache
-    let _: () = (cao.save(id, &person))(&mut con).expect("save cache");
 
-    if (cao.exists(id))(&mut con).expect("check existence in cache") {
-        if let Some(p) = (cao.find(id))(&mut con).expect("find cache") {
-            println!("cache hit:{}", p);
-        }
+    if let Some(p) = service.cached_find(id).expect("find person") {
+        println!("cache hit:{}", p);
     }
-    let _: () = (cao.discard(id))(&mut con).expect("discard cache");
-    service.unregister(id).expect("delete person");
+    service.cached_unregister(id).expect("delete person");
 
     let persons = vec![
         Person::new(
@@ -244,30 +237,21 @@ fn main() {
             Some("King of Math"),
         ),
     ];
-
-    let ids = service.batch_import(persons.clone()).expect("batch import");
+    let ids = service
+        .cached_batch_import(persons.clone())
+        .expect("batch import");
     println!("batch import done");
 
-    ids.iter().zip(persons.iter()).for_each(|(id, p)| {
-        let _: () = (cao.save(*id, p))(&mut con).expect("save cache");
-        println!("save cache: {} {}", id, p);
-    });
-
-    let persons = service.list_all().expect("list all");
-    for (id, person) in &persons {
-        println!("found id:{} {}", id, person);
-        if let Some(p) = (cao.find(*id))(&mut con).expect("find cache") {
-            println!("cache hit:{}", p);
-        } else {
-            println!("cache miss:{}", id);
+    let persons = service.cached_list_all().expect("list all");
+    for (id, _) in &persons {
+        if let Some(p) = service.cached_find(*id).expect("find person") {
+            println!("cache hit:{} {}", id, p);
         }
     }
 
     for id in ids {
-        let _: () = (cao.discard(id))(&mut con).expect("delete cache");
-        println!("delete cache id:{}", id);
         println!("unregister id:{}", id);
-        service.unregister(id).expect("unregister");
+        service.cached_unregister(id).expect("unregister");
     }
 
     println!("done everything!");
