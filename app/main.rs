@@ -1,16 +1,18 @@
 use log::{error, trace};
 use postgres::NoTls;
-use redis::{Commands, FromRedisValue, ToRedisArgs};
 use std::cell::{RefCell, RefMut};
 use std::env;
 use std::rc::Rc;
 
+mod cache;
 mod dao;
 mod domain;
 mod pg_db;
+mod redis_cache;
 mod service;
 mod usecase;
 
+pub use cache::{CaoError, PersonCao};
 pub use dao::{DaoError, HavePersonDao};
 pub use domain::{Person, PersonId};
 pub use pg_db::PgPersonDao;
@@ -90,24 +92,6 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
         }
     }
 }
-// this suppose Person is serde-ized
-impl ToRedisArgs for Person {
-    fn write_redis_args<W: ?Sized>(&self, out: &mut W)
-    where
-        W: redis::RedisWrite,
-    {
-        let s = serde_json::to_string(self).expect("serialize");
-        out.write_arg(s.as_bytes());
-    }
-}
-// this suppose Person is serde-ized
-impl FromRedisValue for Person {
-    fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
-        let s: String = redis::from_redis_value(v)?;
-        let p: Person = serde_json::from_str(&s).expect("deserialize");
-        Ok(p)
-    }
-}
 
 fn main() {
     env_logger::init();
@@ -122,16 +106,19 @@ fn main() {
     });
     let mut service = PersonServiceImpl::new(&db_url);
 
+    let cao = redis_cache::RedisPersonCao;
+
     let (id, person) = service
         .register("cutsea", date(1970, 11, 6), None, "rustacean")
         .expect("register one person");
     println!("id:{} {}", id, person);
     // save on redis cache
-    let _: () = con.set(id, &person).expect("set cache");
+    let _: () = (cao.save(id, &person))(&mut con).expect("save cache");
 
-    if con.exists(id).expect("exists") {
-        let p: Person = con.get(id).expect("get cache");
-        println!("cache hit:{}", p);
+    if (cao.exists(1))(&mut con).expect("check existence in cache") {
+        if let Some(p) = (cao.find(id))(&mut con).expect("find cache") {
+            println!("cache hit:{}", p);
+        }
     }
 
     service
@@ -169,19 +156,20 @@ fn main() {
     let persons = service.list_all().expect("list all");
     for (id, person) in &persons {
         println!("found id:{} {}", id, person);
-        let _: () = con.set(id, &person).expect("save cache");
-        ids.push(id);
+        let _: () = (cao.save(*id, person))(&mut con).expect("save cache");
+        ids.push(*id);
     }
 
     for id in ids {
-        if con.exists(id).expect("exists") {
-            let p: Person = con.get(id).expect("get cache");
-            println!("cache hit:{}", p);
+        if (cao.exists(id))(&mut con).expect("check existence in cache") {
+            if let Some(p) = (cao.find(id))(&mut con).expect("find cache") {
+                println!("cache hit:{}", p);
+            }
         }
     }
 
     for (id, _) in persons {
-        let _: () = con.del(id).expect("delete cache");
+        let _: () = (cao.discard(id))(&mut con).expect("delete cache");
         println!("delete cache id:{}", id);
         println!("unregister id:{}", id);
         service.unregister(id).expect("unregister");
