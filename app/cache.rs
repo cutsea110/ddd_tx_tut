@@ -11,8 +11,13 @@ pub enum CaoError {
 pub trait PersonCao<Ctx> {
     fn get_conn(&self) -> Result<Ctx, CaoError>;
 
-    fn exists(&self, id: PersonId) -> impl FnOnce(&mut Ctx) -> Result<bool, CaoError>;
-    fn find(&self, id: PersonId) -> impl FnOnce(&mut Ctx) -> Result<Option<Person>, CaoError>;
-    fn save(&self, id: PersonId, person: &Person) -> impl FnOnce(&mut Ctx) -> Result<(), CaoError>;
-    fn discard(&self, id: PersonId) -> impl FnOnce(&mut Ctx) -> Result<(), CaoError>;
+    fn run_tx<T, F>(&self, f: F) -> Result<T, CaoError>
+    where
+        F: tx_rs::Tx<Ctx, Item = T, Err = CaoError>;
+
+    fn exists(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = bool, Err = CaoError>;
+    fn find(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = CaoError>;
+    fn save(&self, id: PersonId, person: &Person)
+        -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
+    fn discard(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
 }

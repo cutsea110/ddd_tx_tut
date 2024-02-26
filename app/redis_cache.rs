@@ -38,52 +38,63 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
             .map_err(|e| CaoError::Unavailable(e.to_string()))
     }
 
+    fn run_tx<T, F>(&self, f: F) -> Result<T, CaoError>
+    where
+        F: tx_rs::Tx<redis::Connection, Item = T, Err = CaoError>,
+    {
+        let mut conn = self.get_conn()?;
+        f.run(&mut conn)
+    }
+
     fn exists(
         &self,
         id: PersonId,
-    ) -> impl FnOnce(&mut redis::Connection) -> Result<bool, CaoError> {
-        move |conn| {
+    ) -> impl tx_rs::Tx<redis::Connection, Item = bool, Err = CaoError> {
+        tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             let exists: bool = conn
                 .exists(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
 
             Ok(exists)
-        }
+        })
     }
     fn find(
         &self,
         id: PersonId,
-    ) -> impl FnOnce(&mut redis::Connection) -> Result<Option<Person>, CaoError> {
-        move |conn| {
+    ) -> impl tx_rs::Tx<redis::Connection, Item = Option<Person>, Err = CaoError> {
+        tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             let p: Option<Person> = conn
                 .get(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
 
             Ok(p)
-        }
+        })
     }
     fn save(
         &self,
         id: PersonId,
         person: &Person,
-    ) -> impl FnOnce(&mut redis::Connection) -> Result<(), CaoError> {
-        move |conn| {
+    ) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
+        tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             conn.set(&key, person)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
 
             Ok(())
-        }
+        })
     }
-    fn discard(&self, id: PersonId) -> impl FnOnce(&mut redis::Connection) -> Result<(), CaoError> {
-        move |conn| {
+    fn discard(
+        &self,
+        id: PersonId,
+    ) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
+        tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             conn.del(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
 
             Ok(())
-        }
+        })
     }
 }
