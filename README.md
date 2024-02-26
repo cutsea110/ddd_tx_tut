@@ -7,7 +7,7 @@
 ```bash
 docker-compose up -d
 export DATABASE_URL="postgres://admin:adminpass@localhost:15432/sampledb"
-export CACHE_URL="redis://localhost:16379"
+export CACHE_URL="redis://:adminpass@localhost:16379"
 ```
 
 If you check rdb directly, do like this:

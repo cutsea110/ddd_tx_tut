@@ -111,7 +111,8 @@ impl FromRedisValue for Person {
 fn main() {
     env_logger::init();
 
-    let cache_url = env::var("CACHE_URL").unwrap_or_else(|_| "redis://localhost:16379".to_string());
+    let cache_url =
+        env::var("CACHE_URL").unwrap_or_else(|_| "redis://:adminpass@localhost:16379".to_string());
     let cache_client = redis::Client::open(cache_url.as_str()).expect("create cache client");
     let mut con = cache_client.get_connection().expect("connect to cache");
 
