@@ -1,3 +1,4 @@
+use log::trace;
 use redis::{self, Commands, FromRedisValue, ToRedisArgs};
 
 use crate::cache::{CaoError, PersonCao};
@@ -43,6 +44,8 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
         F: tx_rs::Tx<redis::Connection, Item = T, Err = CaoError>,
     {
         let mut conn = self.get_conn()?;
+        trace!("redis connection obtained");
+
         f.run(&mut conn)
     }
 

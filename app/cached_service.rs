@@ -18,7 +18,6 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         data: &str,
     ) -> Result<(PersonId, Person), ServiceError> {
         let cao = self.get_cao();
-        trace!("cache connection obtained");
 
         let result = self.register(name, birth_date, death_date, data);
         trace!("register person to db: {:?}", result);
@@ -36,7 +35,6 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
     fn cached_find(&'a mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
         let cao = self.get_cao();
-        trace!("cache connection obtained");
 
         // if the person is found in the cache, return it
         if let Some(p) = cao
@@ -67,7 +65,6 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         persons: Vec<Person>,
     ) -> Result<Vec<PersonId>, ServiceError> {
         let cao = self.get_cao();
-        trace!("cache connection obtained");
 
         let ids = self.batch_import(persons.clone())?;
 
@@ -82,7 +79,6 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
     fn cached_list_all(&'a mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
         let cao = self.get_cao();
-        trace!("cache connection obtained");
 
         let result = self.list_all()?;
 
@@ -97,7 +93,6 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
     fn cached_unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
         let cao = self.get_cao();
-        trace!("cache connection obtained");
 
         // even if delete from db failed below, this cache clear is not a matter.
         let _: () = cao
