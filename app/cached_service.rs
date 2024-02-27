@@ -31,10 +31,10 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         if let Ok((id, person)) = &result {
             let _: () = cao
-                .run_tx(cao.save(*id, person))
+                .run_tx(cao.load(*id, person))
                 .map_err(|e| ServiceError::ServiceUnavailable(e.to_string()))?;
 
-            trace!("save person to cache: {}", person);
+            trace!("load person to cache: {}", person);
         }
 
         result
@@ -57,12 +57,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let result = self.find(id)?;
         trace!("find person in db: {:?}", result);
 
-        // if the person is found in the db, save it to the cache
+        // if the person is found in the db, load it to the cache
         if let Some(person) = &result {
             let _: () = cao
-                .run_tx(cao.save(id, person))
+                .run_tx(cao.load(id, person))
                 .map_err(|e| ServiceError::ServiceUnavailable(e.to_string()))?;
-            trace!("save person to cache: {}", person);
+            trace!("load person to cache: {}", person);
         }
 
         Ok(result)
@@ -77,11 +77,11 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         let ids = self.batch_import(persons.clone())?;
 
-        // save all persons to the cache
+        // load all persons to the cache
         ids.iter().zip(persons.iter()).for_each(|(id, person)| {
-            let _: () = cao.run_tx(cao.save(*id, person)).expect("save cache");
+            let _: () = cao.run_tx(cao.load(*id, person)).expect("load cache");
         });
-        trace!("save persons to cache: {:?}", ids);
+        trace!("load persons to cache: {:?}", ids);
 
         Ok(ids)
     }
@@ -92,11 +92,11 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         let result = self.list_all()?;
 
-        // save all persons to the cache
+        // load all persons to the cache
         result.iter().for_each(|(id, person)| {
-            let _: () = cao.run_tx(cao.save(*id, person)).expect("save cache");
+            let _: () = cao.run_tx(cao.load(*id, person)).expect("load cache");
         });
-        trace!("save all persons to cache");
+        trace!("load all persons to cache");
 
         Ok(result)
     }
@@ -107,9 +107,9 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // even if delete from db failed below, this cache clear is not a matter.
         let _: () = cao
-            .run_tx(cao.discard(id))
+            .run_tx(cao.unload(id))
             .map_err(|e| ServiceError::ServiceUnavailable(e.to_string()))?;
-        trace!("cache cleared: {}", id);
+        trace!("unload from cache: {}", id);
 
         let result = self.unregister(id);
         trace!("delete from db: {}", id);

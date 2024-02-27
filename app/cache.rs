@@ -17,7 +17,7 @@ pub trait PersonCao<Ctx> {
 
     fn exists(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = bool, Err = CaoError>;
     fn find(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = CaoError>;
-    fn save(&self, id: PersonId, person: &Person)
+    fn load(&self, id: PersonId, person: &Person)
         -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
-    fn discard(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
+    fn unload(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
 }

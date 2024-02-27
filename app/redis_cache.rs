@@ -75,7 +75,7 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
             Ok(p)
         })
     }
-    fn save(
+    fn load(
         &self,
         id: PersonId,
         person: &Person,
@@ -88,10 +88,7 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
             Ok(())
         })
     }
-    fn discard(
-        &self,
-        id: PersonId,
-    ) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
+    fn unload(&self, id: PersonId) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             conn.del(&key)
