@@ -126,7 +126,7 @@ mod fake_tests {
 
     use crate::{
         dao::{DaoError, PersonDao},
-        HavePersonDao, PersonUsecase, UsecaseError,
+        date, HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     use super::*;
@@ -317,5 +317,25 @@ mod fake_tests {
         fn get_cao(&self) -> FakePersonCao {
             self.cao.clone()
         }
+    }
+
+    #[test]
+    fn test_cached_register() {
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(1),
+            db: RefCell::new(HashMap::new()),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(HashMap::new()),
+            },
+        };
+
+        let expected = Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
+        let result = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
+
+        assert!(result.is_ok());
+        assert_eq!(result, Ok((1, expected)));
     }
 }
