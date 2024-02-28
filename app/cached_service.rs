@@ -205,6 +205,9 @@ mod fake_tests {
         }
     }
 
+    /// テスト用のフェイクサービスです。
+    /// Clone できるようにしていないので基本は Rc でラップしていません。
+    /// FakePersonCao のみ get_cao() で clone されるため内部データを Rc でラップしています。
     struct TargetPersonService {
         next_id: RefCell<PersonId>,
         db: RefCell<HashMap<PersonId, Person>>,
@@ -271,7 +274,7 @@ mod fake_tests {
     }
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FakePersonCao {
-        cache: RefCell<HashMap<PersonId, Person>>,
+        cache: Rc<RefCell<HashMap<PersonId, Person>>>,
     }
     impl PersonCao<()> for FakePersonCao {
         fn get_conn(&self) -> Result<(), crate::CaoError> {
@@ -312,8 +315,6 @@ mod fake_tests {
     impl PersonCachedService<'_, (), ()> for TargetPersonService {
         type C = FakePersonCao;
 
-        // FIXME: 呼び出しの都度初期化される
-        // サービスメソッド毎に一度しか呼ばれないのでテストではあまり問題にはならない
         fn get_cao(&self) -> FakePersonCao {
             self.cao.clone()
         }
@@ -328,7 +329,7 @@ mod fake_tests {
                 dao: DummyPersonDao,
             })),
             cao: FakePersonCao {
-                cache: RefCell::new(HashMap::new()),
+                cache: RefCell::new(HashMap::new()).into(),
             },
         };
 
@@ -348,7 +349,7 @@ mod fake_tests {
                 dao: DummyPersonDao,
             })),
             cao: FakePersonCao {
-                cache: RefCell::new(HashMap::new()),
+                cache: RefCell::new(HashMap::new()).into(),
             },
         };
 
@@ -371,7 +372,8 @@ mod fake_tests {
                     )]
                     .into_iter()
                     .collect(),
-                ),
+                )
+                .into(),
             },
         };
 
@@ -395,7 +397,7 @@ mod fake_tests {
                 dao: DummyPersonDao,
             })),
             cao: FakePersonCao {
-                cache: RefCell::new(HashMap::new()),
+                cache: RefCell::new(HashMap::new()).into(),
             },
         };
 
@@ -415,7 +417,7 @@ mod fake_tests {
                 dao: DummyPersonDao,
             })),
             cao: FakePersonCao {
-                cache: RefCell::new(HashMap::new()),
+                cache: RefCell::new(HashMap::new()).into(),
             },
         };
 
@@ -450,7 +452,7 @@ mod fake_tests {
                 dao: DummyPersonDao,
             })),
             cao: FakePersonCao {
-                cache: RefCell::new(HashMap::new()),
+                cache: RefCell::new(HashMap::new()).into(),
             },
         };
 
@@ -482,7 +484,7 @@ mod fake_tests {
                 dao: DummyPersonDao,
             })),
             cao: FakePersonCao {
-                cache: RefCell::new(HashMap::new()),
+                cache: RefCell::new(HashMap::new()).into(),
             },
         };
 
