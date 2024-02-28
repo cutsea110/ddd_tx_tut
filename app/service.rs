@@ -93,8 +93,8 @@ pub trait PersonService<'a, Ctx> {
 //      この Usecase 構造体はフェイクなので、間接的な入力と間接的な出力が整合するようにする
 //   3. Usecase にダミーの DAO 構造体をプラグインする
 //   4. Service にこのフェイク Usecase をプラグインする
-//   3. Service のメソッドを呼び出す
-//   4. Service からの戻り値を検証する
+//   5. Service のメソッドを呼び出す
+//   6. Service からの戻り値を検証する
 //
 // * 注意
 //
