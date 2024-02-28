@@ -338,4 +338,157 @@ mod fake_tests {
         assert!(result.is_ok());
         assert_eq!(result, Ok((1, expected)));
     }
+
+    #[test]
+    fn test_cached_find() {
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(1),
+            db: RefCell::new(HashMap::new()),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(HashMap::new()),
+            },
+        };
+
+        let result = service.cached_find(1);
+
+        assert!(result.is_ok());
+        assert_eq!(result, Ok(None), "not found");
+
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(2),
+            db: RefCell::new(HashMap::new()),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(
+                    vec![(
+                        1,
+                        Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    )]
+                    .into_iter()
+                    .collect(),
+                ),
+            },
+        };
+
+        let expected = Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
+        let result = service.cached_find(1);
+
+        assert!(result.is_ok());
+        assert_eq!(result, Ok(Some(expected)), "hit cache");
+
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(2),
+            db: RefCell::new(
+                vec![(
+                    1,
+                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(HashMap::new()),
+            },
+        };
+
+        let expected = Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
+        let result = service.cached_find(1);
+
+        assert!(result.is_ok());
+        assert_eq!(result, Ok(Some(expected)), "found db");
+    }
+
+    #[test]
+    fn test_batch_import() {
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(1),
+            db: RefCell::new(HashMap::new()),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(HashMap::new()),
+            },
+        };
+
+        let result = service.cached_batch_import(vec![
+            Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            Person::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
+        ]);
+
+        assert!(result.is_ok());
+        assert_eq!(result, Ok(vec![1, 2]));
+    }
+
+    #[test]
+    fn test_list_all() {
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(3),
+            db: RefCell::new(
+                vec![
+                    (
+                        1,
+                        Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    ),
+                    (
+                        2,
+                        Person::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(HashMap::new()),
+            },
+        };
+
+        let result = service.cached_list_all();
+
+        assert!(result.is_ok());
+        assert_eq!(result.clone().map(|v| v.len()), Ok(2), "list from db");
+    }
+
+    #[test]
+    fn test_unregister() {
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(3),
+            db: RefCell::new(
+                vec![
+                    (
+                        1,
+                        Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    ),
+                    (
+                        2,
+                        Person::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(HashMap::new()),
+            },
+        };
+
+        let result = service.cached_unregister(1);
+
+        assert!(result.is_ok());
+        assert_eq!(result, Ok(()));
+    }
 }
