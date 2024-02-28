@@ -313,6 +313,7 @@ mod fake_tests {
         type C = FakePersonCao;
 
         // FIXME: 呼び出しの都度初期化される
+        // サービスメソッド毎に一度しか呼ばれないのでテストではあまり問題にはならない
         fn get_cao(&self) -> FakePersonCao {
             self.cao.clone()
         }

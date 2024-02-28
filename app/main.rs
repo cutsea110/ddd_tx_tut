@@ -23,17 +23,17 @@ pub use usecase::{PersonUsecase, UsecaseError};
 
 #[derive(Debug, Clone)]
 pub struct PersonUsecaseImpl {
-    dao: Rc<PgPersonDao>,
+    dao: PgPersonDao,
 }
 impl PersonUsecaseImpl {
-    pub fn new(dao: Rc<PgPersonDao>) -> Self {
+    pub fn new(dao: PgPersonDao) -> Self {
         Self { dao }
     }
 }
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
     fn get_dao<'b>(&'b self) -> Box<&impl dao::PersonDao<postgres::Transaction<'a>>> {
-        Box::new(&*self.dao)
+        Box::new(&self.dao)
     }
 }
 
@@ -47,7 +47,7 @@ impl PersonServiceImpl {
         let db_client = postgres::Client::connect(db_url, NoTls).expect("create db client");
         let cache_client = redis::Client::open(cache_url).expect("create cache client");
 
-        let usecase = PersonUsecaseImpl::new(Rc::new(PgPersonDao));
+        let usecase = PersonUsecaseImpl::new(PgPersonDao);
 
         Self {
             db_client,
