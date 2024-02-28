@@ -1,6 +1,6 @@
 use log::{error, trace};
 use postgres::NoTls;
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::env;
 
 mod cache;
@@ -62,7 +62,7 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
     where
         F: FnOnce(
-            &mut RefMut<'_, PersonUsecaseImpl>,
+            &mut PersonUsecaseImpl,
             &mut postgres::Transaction<'a>,
         ) -> Result<T, UsecaseError>,
     {

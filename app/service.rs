@@ -1,6 +1,5 @@
 use chrono::NaiveDate;
 use log::trace;
-use std::cell::RefMut;
 use thiserror::Error;
 
 use crate::domain::{Person, PersonId};
@@ -19,7 +18,7 @@ pub trait PersonService<'a, Ctx> {
 
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
     where
-        F: FnOnce(&mut RefMut<'_, Self::U>, &mut Ctx) -> Result<T, UsecaseError>;
+        F: FnOnce(&mut Self::U, &mut Ctx) -> Result<T, UsecaseError>;
 
     fn register(
         &'a mut self,
@@ -216,7 +215,7 @@ mod fake_tests {
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
-            F: FnOnce(&mut RefMut<'_, Self::U>, &mut ()) -> Result<T, UsecaseError>,
+            F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
@@ -488,7 +487,7 @@ mod spy_tests {
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
-            F: FnOnce(&mut RefMut<'_, Self::U>, &mut ()) -> Result<T, UsecaseError>,
+            F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
@@ -732,7 +731,7 @@ mod error_stub_tests {
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
-            F: FnOnce(&mut RefMut<'_, Self::U>, &mut ()) -> Result<T, UsecaseError>,
+            F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)

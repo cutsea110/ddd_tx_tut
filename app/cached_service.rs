@@ -120,7 +120,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
 #[cfg(test)]
 mod fake_tests {
-    use std::cell::{RefCell, RefMut};
+    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::rc::Rc;
 
@@ -217,7 +217,7 @@ mod fake_tests {
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
-            F: FnOnce(&mut RefMut<'_, Self::U>, &mut ()) -> Result<T, UsecaseError>,
+            F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
