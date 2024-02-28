@@ -118,6 +118,37 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     }
 }
 
+// # フェイクテスト
+//
+// * 目的
+//
+//   CachedService の正常系のテストを行う
+//   CachedService の各メソッドが、 Cache と Service とから通常期待される結果を受け取ったときに
+//   適切にふるまうことを保障する
+//
+// * 方針
+//
+//   Cache のフェイクと Service のフェイクに対して CachedService を実行し、その結果を確認する
+//   フェイクはテスト時の比較チェックのしやすさを考慮して HashMap ではなく Vec で登録データを保持する
+//   データ数は多くないので、Vec でリニアサーチしても十分な速度が出ると考える
+//
+// * 実装
+//
+//   1. ダミーの DAO 構造体、ユースケース構造体を用意する
+//      この構造体は実質使われないが、 Service に必要なので用意する
+//   2. CachedService のメソッド呼び出しに対して、期待される結果を返す Service の実装を用意する
+//      この Service 実装はフェイクなので、間接的な入力と間接的な出力が整合するようにする
+//   3. CachedService のメソッド呼び出しに対して、期待される結果を返す Cache 構造体を用意する
+//      この Cache 構造体はフェイクなので、間接的な入力と間接的な出力が整合するようにする
+//   4. CachedService をここまでに用意したフェイクとダミーで構築する
+//   5. Service のメソッドを呼び出す
+//   6. Service からの戻り値を検証する
+//
+// * 注意
+//
+//   1. このテストは CachedService の実装を保障するものであって、Service や Cache の実装を保障するものではない
+//   2. 同様にこのテストは ユースケースや DAO の実装を保障するものではない
+//
 #[cfg(test)]
 mod fake_tests {
     use std::cell::RefCell;
