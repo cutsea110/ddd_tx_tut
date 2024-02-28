@@ -525,3 +525,372 @@ mod fake_tests {
         assert_eq!(result, Ok(()));
     }
 }
+
+#[cfg(test)]
+mod mock_tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::{
+        dao::{DaoError, PersonDao},
+        date, HavePersonDao, PersonUsecase, UsecaseError,
+    };
+
+    use super::*;
+
+    struct DummyPersonDao;
+    impl PersonDao<()> for DummyPersonDao {
+        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(1))
+        }
+        fn fetch(
+            &self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(None))
+        }
+        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
+    }
+
+    struct DummyPersonUsecase {
+        dao: DummyPersonDao,
+    }
+    impl HavePersonDao<()> for DummyPersonUsecase {
+        fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
+            Box::new(&self.dao)
+        }
+    }
+    impl PersonUsecase<()> for DummyPersonUsecase {
+        fn entry<'a>(
+            &'a mut self,
+            _person: Person,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(1))
+        }
+        fn find<'a>(
+            &'a mut self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(None))
+        }
+        fn entry_and_verify<'a>(
+            &'a mut self,
+            person: Person,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok((1, person)))
+        }
+        fn collect<'a>(
+            &'a mut self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn remove<'a>(
+            &'a mut self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
+    }
+
+    /// テスト用のモックサービスです。
+    struct TargetPersonService {
+        register: RefCell<Vec<(String, NaiveDate, Option<NaiveDate>, Option<String>)>>,
+        register_return: Result<(PersonId, Person), ServiceError>,
+        find: RefCell<Vec<PersonId>>,
+        find_return: Result<Option<Person>, ServiceError>,
+        batch_import: RefCell<Vec<Vec<Person>>>,
+        batch_import_return: Result<Vec<PersonId>, ServiceError>,
+        list_all: RefCell<i32>,
+        list_all_return: Result<Vec<(PersonId, Person)>, ServiceError>,
+        unregister: RefCell<Vec<PersonId>>,
+        unregister_return: Result<(), ServiceError>,
+
+        usecase: RefCell<DummyPersonUsecase>,
+        cao: MockPersonCao,
+    }
+    // モックサービス実装です。ユースケースより先はダミーです。
+    impl PersonService<'_, ()> for TargetPersonService {
+        type U = DummyPersonUsecase;
+
+        fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
+        where
+            F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
+        {
+            let mut usecase = self.usecase.borrow_mut();
+            f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn register(
+            &'_ mut self,
+            name: &str,
+            birth_date: NaiveDate,
+            death_date: Option<NaiveDate>,
+            data: &str,
+        ) -> Result<(PersonId, Person), ServiceError> {
+            self.register.borrow_mut().push((
+                name.to_string(),
+                birth_date,
+                death_date,
+                Some(data.to_string()),
+            ));
+            self.register_return.clone()
+        }
+
+        fn find(&'_ mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
+            self.find.borrow_mut().push(id);
+            self.find_return.clone()
+        }
+
+        fn batch_import(&'_ mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
+            self.batch_import.borrow_mut().push(persons);
+            self.batch_import_return.clone()
+        }
+
+        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
+            *self.list_all.borrow_mut() += 1;
+            self.list_all_return.clone()
+        }
+
+        fn unregister(&'_ mut self, id: PersonId) -> Result<(), ServiceError> {
+            self.unregister.borrow_mut().push(id);
+            self.unregister_return.clone()
+        }
+    }
+    // モックキャッシュ実装です
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct MockPersonCao {
+        exists: Rc<RefCell<Vec<PersonId>>>,
+        return_exists: Result<bool, crate::CaoError>,
+        find: Rc<RefCell<Vec<PersonId>>>,
+        return_find: Result<Option<Person>, crate::CaoError>,
+        load: Rc<RefCell<Vec<(PersonId, Person)>>>,
+        return_load: Result<(), crate::CaoError>,
+        unload: Rc<RefCell<Vec<PersonId>>>,
+        return_unload: Result<(), crate::CaoError>,
+    }
+    impl PersonCao<()> for MockPersonCao {
+        fn get_conn(&self) -> Result<(), crate::CaoError> {
+            Ok(())
+        }
+        fn run_tx<T, F>(&self, f: F) -> Result<T, crate::CaoError>
+        where
+            F: tx_rs::Tx<(), Item = T, Err = crate::CaoError>,
+        {
+            f.run(&mut ())
+        }
+        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| {
+                self.exists.borrow_mut().push(id);
+                self.return_exists.clone()
+            })
+        }
+        fn find(
+            &self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| {
+                self.find.borrow_mut().push(id);
+                self.return_find.clone()
+            })
+        }
+        fn load(
+            &self,
+            id: PersonId,
+            person: &Person,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| {
+                self.load.borrow_mut().push((id, person.clone()));
+                self.return_load.clone()
+            })
+        }
+        fn unload(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| {
+                self.unload.borrow_mut().push(id);
+                self.return_unload.clone()
+            })
+        }
+    }
+    impl PersonCachedService<'_, (), ()> for TargetPersonService {
+        type C = MockPersonCao;
+
+        fn get_cao(&self) -> MockPersonCao {
+            self.cao.clone()
+        }
+    }
+
+    #[test]
+    fn test_cached_register() {
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_return: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find: RefCell::new(vec![]),
+            find_return: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_return: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_return: Ok(vec![]), // 使われない
+            unregister: RefCell::new(vec![]),
+            unregister_return: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                return_exists: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                return_find: Ok(None), // 使われない
+                load: Rc::new(RefCell::new(vec![])),
+                return_load: Ok(()), // 使われない
+                unload: Rc::new(RefCell::new(vec![])),
+                return_unload: Ok(()), // 使われない
+            },
+        };
+
+        let _ = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
+        assert_eq!(
+            *service.register.borrow(),
+            vec![(
+                "Alice".to_string(),
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here".to_string())
+            )]
+        );
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![(
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+            )]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+    }
+
+    #[test]
+    fn test_cached_find() {
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_return: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_return: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_return: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_return: Ok(vec![]), // 使われない
+            unregister: RefCell::new(vec![]),
+            unregister_return: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                return_exists: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                return_find: Ok(Some(Person::new(
+                    "Alice",
+                    date(2000, 1, 1),
+                    None,
+                    Some("Alice is here"),
+                ))),
+                load: Rc::new(RefCell::new(vec![])),
+                return_load: Ok(()), // 使われない
+                unload: Rc::new(RefCell::new(vec![])),
+                return_unload: Ok(()), // 使われない
+            },
+        };
+
+        let _ = service.cached_find(1);
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![] as Vec<(PersonId, Person)>
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_return: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_return: Ok(Some(Person::new(
+                "Alice",
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here"),
+            ))),
+            batch_import: RefCell::new(vec![]),
+            batch_import_return: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_return: Ok(vec![]), // 使われない
+            unregister: RefCell::new(vec![]),
+            unregister_return: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                return_exists: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                return_find: Ok(None),
+                load: Rc::new(RefCell::new(vec![])),
+                return_load: Ok(()), // 使われない
+                unload: Rc::new(RefCell::new(vec![])),
+                return_unload: Ok(()), // 使われない
+            },
+        };
+
+        let _ = service.cached_find(1);
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![1]);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![(
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+            )]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+    }
+}
