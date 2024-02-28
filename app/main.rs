@@ -2,7 +2,6 @@ use log::{error, trace};
 use postgres::NoTls;
 use std::cell::{RefCell, RefMut};
 use std::env;
-use std::rc::Rc;
 
 mod cache;
 mod cached_service;
@@ -40,7 +39,7 @@ impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
 pub struct PersonServiceImpl {
     db_client: postgres::Client,
     cache_client: redis::Client,
-    usecase: Rc<RefCell<PersonUsecaseImpl>>,
+    usecase: RefCell<PersonUsecaseImpl>,
 }
 impl PersonServiceImpl {
     pub fn new(db_url: &str, cache_url: &str) -> Self {
@@ -52,7 +51,7 @@ impl PersonServiceImpl {
         Self {
             db_client,
             cache_client,
-            usecase: Rc::new(RefCell::new(usecase)),
+            usecase: RefCell::new(usecase),
         }
     }
 }
