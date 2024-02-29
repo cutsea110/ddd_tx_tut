@@ -995,3 +995,209 @@ mod spy_tests {
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
     }
 }
+
+// # エラー系スタブテスト
+//
+// * 目的
+//
+//   Cache や Service がエラーを返した場合の CachedService の挙動を保障する
+//
+// * 方針
+//
+//   スタブ Cache や Service はメソッドが呼び出されると、事前に設定された任意のエラー値を返す
+//   CachedService のメソッドを呼び出して Cache あるいは Service からエラーを受け取ったときの CachedService の返り値を確認する
+//
+// * 実装
+//
+//   1. ダミーの DAO 構造体とユースケース構造体を用意する
+//      この構造体は実質使われないが、 Service の構成で必要になるため用意する
+//   2. Service のメソッドが任意の結果を返せる種類の Service 構造体を用意する
+//      この Service 構造体はスタブであり、CachedService への間接的な入力のみ制御する
+//   3. Cache のメソッドが任意の結果を返せる種類の Cache 構造体を用意する
+//      この Cache 構造体はスタブであり、CachedService への間接的な入力のみ制御する
+//   4. その構造体を CachedService にプラグインする
+//   5. CachedService のメソッドを呼び出す
+//   6. CachedService のメソッドからの戻り値を確認する
+//
+// * 注意
+//
+#[cfg(test)]
+mod error_stub_tests {
+    use std::cell::RefCell;
+
+    use crate::{
+        dao::{DaoError, PersonDao},
+        date, HavePersonDao, PersonUsecase, UsecaseError,
+    };
+
+    use super::*;
+
+    struct DummyPersonDao;
+    impl PersonDao<()> for DummyPersonDao {
+        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(1))
+        }
+        fn fetch(
+            &self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(None))
+        }
+        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
+    }
+
+    struct DummyPersonUsecase {
+        dao: DummyPersonDao,
+    }
+    impl HavePersonDao<()> for DummyPersonUsecase {
+        fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
+            Box::new(&self.dao)
+        }
+    }
+    impl PersonUsecase<()> for DummyPersonUsecase {
+        fn entry<'a>(
+            &'a mut self,
+            _person: Person,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(1))
+        }
+        fn find<'a>(
+            &'a mut self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(None))
+        }
+        fn entry_and_verify<'a>(
+            &'a mut self,
+            person: Person,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok((1, person)))
+        }
+        fn collect<'a>(
+            &'a mut self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn remove<'a>(
+            &'a mut self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
+    }
+
+    /// テスト用のスタブサービスです。
+    struct TargetPersonService {
+        register_result: Result<(PersonId, Person), ServiceError>,
+        find_result: Result<Option<Person>, ServiceError>,
+        batch_import_result: Result<Vec<PersonId>, ServiceError>,
+        list_all_result: Result<Vec<(PersonId, Person)>, ServiceError>,
+        unregister_result: Result<(), ServiceError>,
+
+        usecase: RefCell<DummyPersonUsecase>,
+        cao: StubPersonCao,
+    }
+    // スタブサービス実装です。ユースケースより先はダミーです。
+    impl PersonService<'_, ()> for TargetPersonService {
+        type U = DummyPersonUsecase;
+
+        fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
+        where
+            F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
+        {
+            let mut usecase = self.usecase.borrow_mut();
+            f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn register(
+            &'_ mut self,
+            name: &str,
+            birth_date: NaiveDate,
+            death_date: Option<NaiveDate>,
+            data: &str,
+        ) -> Result<(PersonId, Person), ServiceError> {
+            self.register_result.clone()
+        }
+
+        fn find(&'_ mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
+            self.find_result.clone()
+        }
+
+        fn batch_import(&'_ mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
+            self.batch_import_result.clone()
+        }
+
+        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
+            self.list_all_result.clone()
+        }
+
+        fn unregister(&'_ mut self, id: PersonId) -> Result<(), ServiceError> {
+            self.unregister_result.clone()
+        }
+    }
+    // スタブキャッシュ実装です
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct StubPersonCao {
+        exists_result: Result<bool, crate::CaoError>,
+        find_result: Result<Option<Person>, crate::CaoError>,
+        load_result: Result<(), crate::CaoError>,
+        unload_result: Result<(), crate::CaoError>,
+    }
+    impl PersonCao<()> for StubPersonCao {
+        fn get_conn(&self) -> Result<(), crate::CaoError> {
+            Ok(())
+        }
+        fn run_tx<T, F>(&self, f: F) -> Result<T, crate::CaoError>
+        where
+            F: tx_rs::Tx<(), Item = T, Err = crate::CaoError>,
+        {
+            f.run(&mut ())
+        }
+        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| self.exists_result.clone())
+        }
+        fn find(
+            &self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| self.find_result.clone())
+        }
+        fn load(
+            &self,
+            id: PersonId,
+            person: &Person,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| self.load_result.clone())
+        }
+        fn unload(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+            tx_rs::with_tx(move |&mut ()| self.unload_result.clone())
+        }
+    }
+    impl PersonCachedService<'_, (), ()> for TargetPersonService {
+        type C = StubPersonCao;
+
+        fn get_cao(&self) -> StubPersonCao {
+            self.cao.clone()
+        }
+    }
+}
