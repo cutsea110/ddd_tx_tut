@@ -560,7 +560,7 @@ mod fake_tests {
 //   2. このテストは CachedService のメソッドが不適切な Cache メソッドや Service メソッド呼び出しをしていないことを保障するものであって Cache や Service の不適切な処理をしていないことを保障するものではない
 //   3. このテストでは Cache と Service のメソッド呼び出し順序については検証しない (将来的に検証することを拒否しない)
 #[cfg(test)]
-mod mock_tests {
+mod spy_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
