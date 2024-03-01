@@ -440,7 +440,7 @@ mod fake_tests {
     }
 
     #[test]
-    fn test_batch_import() {
+    fn test_cached_batch_import() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(1),
             db: RefCell::new(HashMap::new()),
@@ -462,7 +462,7 @@ mod fake_tests {
     }
 
     #[test]
-    fn test_list_all() {
+    fn test_cached_list_all() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(3),
             db: RefCell::new(
@@ -494,7 +494,7 @@ mod fake_tests {
     }
 
     #[test]
-    fn test_unregister() {
+    fn test_cached_unregister() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(3),
             db: RefCell::new(
@@ -928,7 +928,7 @@ mod spy_tests {
     }
 
     #[test]
-    fn test_batch_import() {
+    fn test_cached_batch_import() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
