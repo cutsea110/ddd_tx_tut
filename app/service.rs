@@ -2,6 +2,7 @@ use chrono::NaiveDate;
 use log::trace;
 use thiserror::Error;
 
+use crate::cache::CaoError;
 use crate::domain::{Person, PersonId};
 use crate::usecase::{PersonUsecase, UsecaseError};
 use tx_rs::Tx;
@@ -12,6 +13,8 @@ pub enum ServiceError {
     TransactionFailed(UsecaseError),
     #[error("service unavailable: {0}")]
     ServiceUnavailable(String),
+    #[error("service unavailable: {0}")]
+    ServiceCacheUnavailable(CaoError),
 }
 pub trait PersonService<'a, Ctx> {
     type U: PersonUsecase<Ctx>;

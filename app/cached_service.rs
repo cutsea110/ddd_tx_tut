@@ -32,7 +32,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         if let Ok((id, person)) = &result {
             let _: () = cao
                 .run_tx(cao.load(*id, person))
-                .map_err(|e| ServiceError::ServiceUnavailable(e.to_string()))?;
+                .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
 
             trace!("load person to cache: {}", person);
         }
@@ -47,7 +47,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // if the person is found in the cache, return it
         if let Some(p) = cao
             .run_tx(cao.find(id))
-            .map_err(|e| ServiceError::ServiceUnavailable(e.to_string()))?
+            .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?
         {
             trace!("cache hit!: {}", id);
             return Ok(Some(p));
@@ -61,7 +61,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         if let Some(person) = &result {
             let _: () = cao
                 .run_tx(cao.load(id, person))
-                .map_err(|e| ServiceError::ServiceUnavailable(e.to_string()))?;
+                .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
             trace!("load person to cache: {}", person);
         }
 
@@ -78,9 +78,11 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let ids = self.batch_import(persons.clone())?;
 
         // load all persons to the cache
-        ids.iter().zip(persons.iter()).for_each(|(id, person)| {
-            let _: () = cao.run_tx(cao.load(*id, person)).expect("load cache");
-        });
+        for (id, person) in ids.iter().zip(persons.iter()) {
+            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+                return Err(ServiceError::ServiceCacheUnavailable(e));
+            }
+        }
         trace!("load persons to cache: {:?}", ids);
 
         Ok(ids)
@@ -93,9 +95,11 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let result = self.list_all()?;
 
         // load all persons to the cache
-        result.iter().for_each(|(id, person)| {
-            let _: () = cao.run_tx(cao.load(*id, person)).expect("load cache");
-        });
+        for (id, person) in result.iter() {
+            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+                return Err(ServiceError::ServiceCacheUnavailable(e));
+            }
+        }
         trace!("load all persons to cache");
 
         Ok(result)
@@ -108,7 +112,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // even if delete from db failed below, this cache clear is not a matter.
         let _: () = cao
             .run_tx(cao.unload(id))
-            .map_err(|e| ServiceError::ServiceUnavailable(e.to_string()))?;
+            .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
         trace!("unload from cache: {}", id);
 
         let result = self.unregister(id);
@@ -1141,7 +1145,7 @@ mod error_stub_tests {
 
     use crate::{
         dao::{DaoError, PersonDao},
-        date, HavePersonDao, PersonUsecase, UsecaseError,
+        date, CaoError, HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     use super::*;
@@ -1314,4 +1318,77 @@ mod error_stub_tests {
             self.cao.clone()
         }
     }
+
+    #[test]
+    fn test_cached_register() {
+        let mut service = TargetPersonService {
+            register_result: Err(ServiceError::TransactionFailed(
+                UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_register("test", date(2000, 1, 1), None, "test");
+        assert_eq!(
+            result,
+            Err(ServiceError::TransactionFailed(
+                UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string()))
+            ))
+        );
+
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person {
+                    name: "Alice".to_string(),
+                    birth_date: date(2000, 1, 1),
+                    death_date: None,
+                    data: Some("Alice is here".to_string()),
+                },
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_register("test", date(2000, 1, 1), None, "test");
+        assert_eq!(
+            result,
+            Err(ServiceError::ServiceCacheUnavailable(
+                CaoError::Unavailable("valid cao".to_string())
+            ))
+        );
+    }
+
+    #[test]
+    fn test_cached_find() {}
+
+    #[test]
+    fn test_cached_batch_import() {}
+
+    #[test]
+    fn test_cached_list_all() {}
+
+    #[test]
+    fn test_cached_unregister() {}
 }
