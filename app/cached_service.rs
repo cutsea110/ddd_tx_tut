@@ -30,6 +30,9 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         trace!("register person to db: {:?}", result);
 
         if let Ok((id, person)) = &result {
+            // FIXME: ここはエラーを返す必要はない
+            // ユーザにとっては正しく拾えているので問題ない
+            // キャッシュが壊れているかもしれないので運用側には通知したい
             let _: () = cao
                 .run_tx(cao.load(*id, person))
                 .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
@@ -47,6 +50,9 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // if the person is found in the cache, return it
         if let Some(p) = cao
             .run_tx(cao.find(id))
+            // FIXME: ここはエラーを返す必要はない
+            // ここでキャッシュが落ちていてもこの後正しく取れるならユーザには関係ない
+            // キャッシュが壊れているかもしれないので運用側には通知したい
             .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?
         {
             trace!("cache hit!: {}", id);
@@ -59,6 +65,9 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // if the person is found in the db, load it to the cache
         if let Some(person) = &result {
+            // FIXME: ここはエラーを返す必要はない
+            // ユーザにとっては正しく拾えているので問題ない
+            // キャッシュが壊れているかもしれないので運用側には通知したい
             let _: () = cao
                 .run_tx(cao.load(id, person))
                 .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
@@ -79,6 +88,9 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
+            // FIXME: ここはエラーを返す必要はない
+            // ユーザにとっては正しく拾えているので問題ない
+            // キャッシュが壊れているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
                 return Err(ServiceError::ServiceCacheUnavailable(e));
             }
@@ -96,6 +108,9 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // load all persons to the cache
         for (id, person) in result.iter() {
+            // FIXME: ここはエラーを返す必要はない
+            // ユーザにとっては正しく拾えているので問題ない
+            // キャッシュが壊れているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
                 return Err(ServiceError::ServiceCacheUnavailable(e));
             }
@@ -112,6 +127,9 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // even if delete from db failed below, this cache clear is not a matter.
         let _: () = cao
             .run_tx(cao.unload(id))
+            // FIXME: ここはエラーを返す必要はない
+            // ユーザにとっては正しく拾えているので問題ない
+            // キャッシュが壊れているかもしれないので運用側には通知したい
             .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
         trace!("unload from cache: {}", id);
 
