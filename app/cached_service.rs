@@ -1350,12 +1350,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person {
-                    name: "Alice".to_string(),
-                    birth_date: date(2000, 1, 1),
-                    death_date: None,
-                    data: Some("Alice is here".to_string()),
-                },
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
@@ -1381,7 +1376,68 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_cached_find() {}
+    fn test_cached_find() {
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Err(ServiceError::TransactionFailed(
+                UsecaseError::FindPersonFailed(DaoError::SelectError("valid dao".to_string())),
+            )),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_find(1);
+        assert_eq!(
+            result,
+            Err(ServiceError::TransactionFailed(
+                UsecaseError::FindPersonFailed(DaoError::SelectError("valid dao".to_string()))
+            ))
+        );
+
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(Some(Person::new(
+                "Alice",
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here"),
+            ))),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(true),
+                find_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_find(1);
+        assert_eq!(
+            result,
+            Err(ServiceError::ServiceCacheUnavailable(
+                CaoError::Unavailable("valid cao".to_string())
+            ))
+        );
+    }
 
     #[test]
     fn test_cached_batch_import() {}
