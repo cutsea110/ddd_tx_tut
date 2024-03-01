@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use log::trace;
+use log::{trace, warn};
 
 pub use crate::cache::PersonCao;
 pub use crate::domain::{Person, PersonId};
@@ -30,12 +30,11 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         trace!("register person to db: {:?}", result);
 
         if let Ok((id, person)) = &result {
-            // FIXME: ここはエラーを返す必要はない
-            // ユーザにとっては正しく拾えているので問題ない
-            // キャッシュが壊れているかもしれないので運用側には通知したい
-            let _: () = cao
-                .run_tx(cao.load(*id, person))
-                .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
+            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+                // FIXME: ここはエラーを返す必要はない
+                // キャッシュが破損しているかもしれないので運用側には通知したい
+                warn!("failed to load person to cache: {}", e);
+            }
 
             trace!("load person to cache: {}", person);
         }
@@ -48,13 +47,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let cao = self.get_cao();
 
         // if the person is found in the cache, return it
-        if let Some(p) = cao
-            .run_tx(cao.find(id))
-            // FIXME: ここはエラーを返す必要はない
-            // ここでキャッシュが落ちていてもこの後正しく取れるならユーザには関係ない
-            // キャッシュが壊れているかもしれないので運用側には通知したい
-            .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?
-        {
+        if let Ok(Some(p)) = cao.run_tx(cao.find(id)) {
             trace!("cache hit!: {}", id);
             return Ok(Some(p));
         }
@@ -65,13 +58,13 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // if the person is found in the db, load it to the cache
         if let Some(person) = &result {
-            // FIXME: ここはエラーを返す必要はない
-            // ユーザにとっては正しく拾えているので問題ない
-            // キャッシュが壊れているかもしれないので運用側には通知したい
-            let _: () = cao
-                .run_tx(cao.load(id, person))
-                .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
-            trace!("load person to cache: {}", person);
+            if let Err(e) = cao.run_tx(cao.load(id, person)) {
+                // FIXME: ここはエラーを返す必要はない
+                // キャッシュが壊れているかもしれないので運用側には通知したい
+                warn!("failed to load person to cache: {}", e);
+            } else {
+                trace!("load person to cache: {}", person);
+            }
         }
 
         Ok(result)
@@ -95,10 +88,10 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
             // FIXME: ここはエラーを返す必要はない
-            // ユーザにとっては正しく拾えているので問題ない
             // キャッシュが壊れているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
-                return Err(ServiceError::ServiceCacheUnavailable(e));
+                warn!("failed to load person to cache: {}", e);
+                return Ok(ids);
             }
         }
         trace!("load persons to cache: {:?}", ids);
@@ -115,10 +108,10 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // load all persons to the cache
         for (id, person) in result.iter() {
             // FIXME: ここはエラーを返す必要はない
-            // ユーザにとっては正しく拾えているので問題ない
             // キャッシュが壊れているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
-                return Err(ServiceError::ServiceCacheUnavailable(e));
+                warn!("failed to load person to cache: {}", e);
+                return Ok(result);
             }
         }
         trace!("load all persons to cache");
@@ -131,13 +124,13 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let cao = self.get_cao();
 
         // even if delete from db failed below, this cache clear is not a matter.
-        let _: () = cao
-            .run_tx(cao.unload(id))
+        if let Err(e) = cao.run_tx(cao.unload(id)) {
             // FIXME: ここはエラーを返す必要はない
-            // ユーザにとっては正しく拾えているので問題ない
             // キャッシュが壊れているかもしれないので運用側には通知したい
-            .map_err(|e| ServiceError::ServiceCacheUnavailable(e))?;
-        trace!("unload from cache: {}", id);
+            warn!("failed to unload person from cache: {}", e);
+        } else {
+            trace!("unload from cache: {}", id);
+        }
 
         let result = self.unregister(id);
         trace!("delete from db: {}", id);
@@ -1396,8 +1389,9 @@ mod error_stub_tests {
         let result = service.cached_register("test", date(2000, 1, 1), None, "test");
         assert_eq!(
             result,
-            Err(ServiceError::ServiceCacheUnavailable(
-                CaoError::Unavailable("valid cao".to_string())
+            Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             ))
         );
     }
@@ -1460,9 +1454,12 @@ mod error_stub_tests {
         let result = service.cached_find(1);
         assert_eq!(
             result,
-            Err(ServiceError::ServiceCacheUnavailable(
-                CaoError::Unavailable("valid cao".to_string())
-            ))
+            Ok(Some(Person::new(
+                "Alice",
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here")
+            )))
         );
     }
 
@@ -1556,12 +1553,7 @@ mod error_stub_tests {
             None,
             Some("Alice is here"),
         )]);
-        assert_eq!(
-            result,
-            Err(ServiceError::ServiceCacheUnavailable(
-                CaoError::Unavailable("valid cao".to_string())
-            ))
-        );
+        assert_eq!(result, Ok(vec![1]));
     }
 
     #[test]
@@ -1620,9 +1612,10 @@ mod error_stub_tests {
         let result = service.cached_list_all();
         assert_eq!(
             result,
-            Err(ServiceError::ServiceCacheUnavailable(
-                CaoError::Unavailable("valid cao".to_string())
-            ))
+            Ok(vec![(
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )])
         );
     }
 
@@ -1677,11 +1670,6 @@ mod error_stub_tests {
             },
         };
         let result = service.cached_unregister(1);
-        assert_eq!(
-            result,
-            Err(ServiceError::ServiceCacheUnavailable(
-                CaoError::Unavailable("valid cao".to_string())
-            ))
-        );
+        assert_eq!(result, Ok(()));
     }
 }
