@@ -1,5 +1,6 @@
 use chrono::NaiveDate;
 use log::trace;
+use std::fmt;
 use thiserror::Error;
 
 use crate::cache::CaoError;
@@ -15,7 +16,21 @@ pub enum ServiceError {
     ServiceUnavailable(String),
     #[error("service unavailable: {0}")]
     ServiceCacheUnavailable(CaoError),
+    #[error("invalid request: {0}")]
+    InvalidRequest(InvalidErrorKind),
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InvalidErrorKind {
+    EmptyArgument,
+}
+impl fmt::Display for InvalidErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            InvalidErrorKind::EmptyArgument => write!(f, "empty argument"),
+        }
+    }
+}
+
 pub trait PersonService<'a, Ctx> {
     type U: PersonUsecase<Ctx>;
 

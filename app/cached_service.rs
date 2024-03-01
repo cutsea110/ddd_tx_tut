@@ -3,7 +3,7 @@ use log::trace;
 
 pub use crate::cache::PersonCao;
 pub use crate::domain::{Person, PersonId};
-pub use crate::service::{PersonService, ServiceError};
+pub use crate::service::{InvalidErrorKind, PersonService, ServiceError};
 
 pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     type C: PersonCao<Conn>;
@@ -81,6 +81,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         &'a mut self,
         persons: Vec<Person>,
     ) -> Result<Vec<PersonId>, ServiceError> {
+        if persons.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                InvalidErrorKind::EmptyArgument,
+            ));
+        }
+
         trace!("cached batch import: {:?}", persons);
         let cao = self.get_cao();
 
@@ -1267,19 +1273,22 @@ mod error_stub_tests {
 
         fn register(
             &'_ mut self,
-            name: &str,
-            birth_date: NaiveDate,
-            death_date: Option<NaiveDate>,
-            data: &str,
+            _name: &str,
+            _birth_date: NaiveDate,
+            _death_date: Option<NaiveDate>,
+            _data: &str,
         ) -> Result<(PersonId, Person), ServiceError> {
             self.register_result.clone()
         }
 
-        fn find(&'_ mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
+        fn find(&'_ mut self, _id: PersonId) -> Result<Option<Person>, ServiceError> {
             self.find_result.clone()
         }
 
-        fn batch_import(&'_ mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
+        fn batch_import(
+            &'_ mut self,
+            _persons: Vec<Person>,
+        ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import_result.clone()
         }
 
@@ -1287,7 +1296,7 @@ mod error_stub_tests {
             self.list_all_result.clone()
         }
 
-        fn unregister(&'_ mut self, id: PersonId) -> Result<(), ServiceError> {
+        fn unregister(&'_ mut self, _id: PersonId) -> Result<(), ServiceError> {
             self.unregister_result.clone()
         }
     }
@@ -1309,23 +1318,23 @@ mod error_stub_tests {
         {
             f.run(&mut ())
         }
-        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = crate::CaoError> {
+        fn exists(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = crate::CaoError> {
             tx_rs::with_tx(move |&mut ()| self.exists_result.clone())
         }
         fn find(
             &self,
-            id: PersonId,
+            _id: PersonId,
         ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = crate::CaoError> {
             tx_rs::with_tx(move |&mut ()| self.find_result.clone())
         }
         fn load(
             &self,
-            id: PersonId,
-            person: &Person,
+            _id: PersonId,
+            _person: &Person,
         ) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
             tx_rs::with_tx(move |&mut ()| self.load_result.clone())
         }
-        fn unload(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+        fn unload(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
             tx_rs::with_tx(move |&mut ()| self.unload_result.clone())
         }
     }
@@ -1458,11 +1467,221 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_cached_batch_import() {}
+    fn test_cached_batch_import() {
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Err(ServiceError::TransactionFailed(
+                UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
+            )),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_batch_import(vec![]);
+        assert_eq!(
+            result,
+            Err(ServiceError::InvalidRequest(
+                InvalidErrorKind::EmptyArgument
+            ))
+        );
+
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Err(ServiceError::TransactionFailed(
+                UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
+            )),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_batch_import(vec![Person::new(
+            "Alice",
+            date(2000, 1, 1),
+            None,
+            Some("Alice is here"),
+        )]);
+        assert_eq!(
+            result,
+            Err(ServiceError::TransactionFailed(
+                UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string()))
+            ))
+        );
+
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![1]),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_batch_import(vec![Person::new(
+            "Alice",
+            date(2000, 1, 1),
+            None,
+            Some("Alice is here"),
+        )]);
+        assert_eq!(
+            result,
+            Err(ServiceError::ServiceCacheUnavailable(
+                CaoError::Unavailable("valid cao".to_string())
+            ))
+        );
+    }
 
     #[test]
-    fn test_cached_list_all() {}
+    fn test_cached_list_all() {
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Err(ServiceError::TransactionFailed(
+                UsecaseError::CollectPersonFailed(DaoError::SelectError("valid dao".to_string())),
+            )),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_list_all();
+        assert_eq!(
+            result,
+            Err(ServiceError::TransactionFailed(
+                UsecaseError::CollectPersonFailed(DaoError::SelectError("valid dao".to_string()))
+            ))
+        );
+
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![(
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_list_all();
+        assert_eq!(
+            result,
+            Err(ServiceError::ServiceCacheUnavailable(
+                CaoError::Unavailable("valid cao".to_string())
+            ))
+        );
+    }
 
     #[test]
-    fn test_cached_unregister() {}
+    fn test_cached_unregister() {
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            unregister_result: Err(ServiceError::TransactionFailed(
+                UsecaseError::RemovePersonFailed(DaoError::DeleteError("valid dao".to_string())),
+            )),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_unregister(1);
+        assert_eq!(
+            result,
+            Err(ServiceError::TransactionFailed(
+                UsecaseError::RemovePersonFailed(DaoError::DeleteError("valid dao".to_string()))
+            ))
+        );
+
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                exists_result: Ok(false),
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Err(CaoError::Unavailable("valid cao".to_string())),
+            },
+        };
+        let result = service.cached_unregister(1);
+        assert_eq!(
+            result,
+            Err(ServiceError::ServiceCacheUnavailable(
+                CaoError::Unavailable("valid cao".to_string())
+            ))
+        );
+    }
 }
