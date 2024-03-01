@@ -994,6 +994,120 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
     }
+
+    #[test]
+    fn test_cached_list_all() {
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_result: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![
+                (
+                    3,
+                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                ),
+                (
+                    4,
+                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
+                ),
+                (
+                    5,
+                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
+                ),
+            ]),
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Ok(None), // 使われない
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Ok(()), // 使われない
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Ok(()), // 使われない
+            },
+        };
+
+        let _ = service.cached_list_all();
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 1);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![
+                (
+                    3,
+                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                ),
+                (
+                    4,
+                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
+                ),
+                (
+                    5,
+                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
+                ),
+            ]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+    }
+
+    #[test]
+    fn test_cached_unregister() {
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_result: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![]),
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Ok(None), // 使われない
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Ok(()), // 使われない
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Ok(()), // 使われない
+            },
+        };
+
+        let _ = service.cached_unregister(3);
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![3]);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![] as Vec<(PersonId, Person)>
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![3]);
+    }
 }
 
 // # エラー系スタブテスト
