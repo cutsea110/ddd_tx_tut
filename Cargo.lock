@@ -1809,6 +1809,7 @@ dependencies = [
 name = "tx-rs"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "env_logger",
  "itertool",
