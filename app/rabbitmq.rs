@@ -1,20 +1,22 @@
 pub use log::{error, trace};
+pub use std::rc::Rc;
 
 use crate::notifier;
 
+#[derive(Debug, Clone)]
 pub struct Client {
-    async_runtime: tokio::runtime::Runtime,
-    conn: lapin::Connection,
+    async_runtime: Rc<tokio::runtime::Runtime>,
+    conn: Rc<lapin::Connection>,
 }
 impl Client {
     pub fn open(addr: &str) -> Result<Self, notifier::NotifierError> {
-        let async_runtime = tokio::runtime::Builder::new_current_thread()
+        let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
 
         trace!("connecting to rabbitmq: {}", addr);
-        let conn = async_runtime.block_on(async {
+        let conn = runtime.block_on(async {
             lapin::Connection::connect(addr, lapin::ConnectionProperties::default())
                 .await
                 .map_err(|e| {
@@ -25,8 +27,8 @@ impl Client {
         trace!("connected to rabbitmq with {:?}", conn.configuration());
 
         Ok(Self {
-            async_runtime,
-            conn,
+            async_runtime: Rc::new(runtime),
+            conn: Rc::new(conn),
         })
     }
 }
