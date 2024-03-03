@@ -111,9 +111,9 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
     }
 }
 impl HaveNotifier for PersonServiceImpl {
-    type T = rabbitmq::Client;
+    type N = rabbitmq::Client;
 
-    fn get_notifier(&self) -> Self::T {
+    fn get_notifier(&self) -> Self::N {
         self.mq_client.clone()
     }
 }

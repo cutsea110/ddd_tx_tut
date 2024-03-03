@@ -11,7 +11,7 @@ pub trait Notifier {
 }
 
 pub trait HaveNotifier {
-    type T: Notifier;
+    type N: Notifier;
 
-    fn get_notifier(&self) -> Self::T;
+    fn get_notifier(&self) -> Self::N;
 }
