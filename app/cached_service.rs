@@ -177,9 +177,10 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> + HaveNotif
 //      この Service 実装はフェイクなので、間接的な入力と間接的な出力が整合するようにする
 //   3. CachedService のメソッド呼び出しに対して、期待される結果を返す Cache 構造体を用意する
 //      この Cache 構造体はフェイクなので、間接的な入力と間接的な出力が整合するようにする
-//   4. CachedService をここまでに用意したフェイクとダミーで構築する
-//   5. Service のメソッドを呼び出す
-//   6. Service からの戻り値を検証する
+//   4. ダミーの Notifier 構造体を用意する
+//   5. CachedService をここまでに用意したフェイクとダミーで構築する
+//   6. Service のメソッドを呼び出す
+//   7. Service からの戻り値を検証する
 //
 // * 注意
 //
@@ -192,12 +193,13 @@ mod fake_tests {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        date, HavePersonDao, PersonUsecase, UsecaseError,
+        date,
+        notifier::NotifierError,
+        HavePersonDao, PersonUsecase, UsecaseError,
     };
-
-    use super::*;
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
@@ -270,6 +272,13 @@ mod fake_tests {
             (): 'a,
         {
             tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
+    }
+
+    struct DummyNotifier;
+    impl Notifier for DummyNotifier {
+        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+            Ok(())
         }
     }
 
@@ -385,6 +394,13 @@ mod fake_tests {
 
         fn get_cao(&self) -> FakePersonCao {
             self.cao.clone()
+        }
+    }
+    impl HaveNotifier for TargetPersonService {
+        type N = DummyNotifier;
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
     }
 
@@ -601,12 +617,13 @@ mod spy_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        date, HavePersonDao, PersonUsecase, UsecaseError,
+        date,
+        notifier::NotifierError,
+        HavePersonDao, PersonUsecase, UsecaseError,
     };
-
-    use super::*;
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
@@ -679,6 +696,13 @@ mod spy_tests {
             (): 'a,
         {
             tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
+    }
+
+    struct DummyNotifier;
+    impl Notifier for DummyNotifier {
+        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+            Ok(())
         }
     }
 
@@ -805,6 +829,13 @@ mod spy_tests {
 
         fn get_cao(&self) -> MockPersonCao {
             self.cao.clone()
+        }
+    }
+    impl HaveNotifier for TargetPersonService {
+        type N = DummyNotifier;
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
     }
 
@@ -1178,7 +1209,9 @@ mod error_stub_tests {
 
     use crate::{
         dao::{DaoError, PersonDao},
-        date, CaoError, HavePersonDao, PersonUsecase, UsecaseError,
+        date,
+        notifier::NotifierError,
+        CaoError, HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     use super::*;
@@ -1254,6 +1287,13 @@ mod error_stub_tests {
             (): 'a,
         {
             tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
+    }
+
+    struct DummyNotifier;
+    impl Notifier for DummyNotifier {
+        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+            Ok(())
         }
     }
 
@@ -1352,6 +1392,13 @@ mod error_stub_tests {
 
         fn get_cao(&self) -> StubPersonCao {
             self.cao.clone()
+        }
+    }
+    impl HaveNotifier for TargetPersonService {
+        type N = DummyNotifier;
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
     }
 
