@@ -583,17 +583,18 @@ mod fake_tests {
 //
 // * 目的
 //
-//   CachedService の各メソッドが、 Cache と Service のメソッドを適切に呼び出していることを保障する
+//   CachedService の各メソッドが、 Cache, Notifier と Service のメソッドを適切に呼び出していることを保障する
 //   つまり、
 //    1. 必要なメソッドを必要回数だけ呼び出していること
 //    2. 不必要なメソッドを呼び出していないこと
-//    3. CachedService に渡った引数が適切に Cache や Service のメソッドに渡されていること
+//    3. CachedService に渡った引数が適切に Cache, Notifier や Service のメソッドに渡されていること
 //   を保障する
 //
 // * 方針
 //
-//   スパイ Service と スパイ Cache は呼び出されるたびに、それらを全て記録する
-//   ただし、 Service の返り値が Cache に使われたりその逆があるため、各スパイは返り値も制御する必要がある
+//   スパイ Service と スパイ Cache, スパイ Notifer は呼び出されるたびに、それらを全て記録する
+//   ただし、 Service の返り値が Cache や Notifer に使われたりその逆があるため、
+//   各スパイは返り値も制御する必要がある
 //   よってスタブを兼ねる必要があるため、それぞれをモックとして実装する
 //   各メソッドの呼び出された記録をテストの最後で確認する
 //
@@ -603,15 +604,16 @@ mod fake_tests {
 //      この構造体は実質使われないが、 Service に必要なので用意する
 //   2. メソッド呼び出しを記録しつつ、設定された返り値を返すモック Service を実装する
 //   3. メソッド呼び出しを記録しつつ、設定された返り値を返すモック Cache を実装する
-//   4. CachedService をここまでに用意したモックとダミーで構築する
-//   5. Service のメソッドを呼び出す
-//   6. Cache と Service の記録を検証する
+//   4. メソッド呼び出しを記録するスパイ Notifier を実装する
+//   5. CachedService をここまでに用意したモック、スパイとダミーで構築する
+//   6. CachedService のメソッドを呼び出す
+//   7. Cache, Notifier と Service の記録を検証する
 //
 // * 注意
 //
-//   1. このテストは CachedService の実装を保障するものであって、Service や Cache の実装を保障するものではない
-//   2. このテストは CachedService のメソッドが不適切な Cache メソッドや Service メソッド呼び出しをしていないことを保障するものであって Cache や Service の不適切な処理をしていないことを保障するものではない
-//   3. このテストでは Cache と Service のメソッド呼び出し順序については検証しない (将来的に検証することを拒否しない)
+//   1. このテストは CachedService の実装を保障するものであって、Service や Cache, Notifier の実装を保障するものではない
+//   2. このテストは CachedService のメソッドが不適切な Cache メソッドや Notifier メソッド あるいは Service メソッド呼び出しをしていないことを保障するものであって Cache, Notifier や Service の不適切な処理をしていないことを保障するものではない
+//   3. このテストでは Cache, Notifier と Service のメソッド呼び出し順序については検証しない (将来的に検証することを拒否しない)
 #[cfg(test)]
 mod spy_tests {
     use std::cell::RefCell;
@@ -1182,12 +1184,12 @@ mod spy_tests {
 //
 // * 目的
 //
-//   Cache や Service がエラーを返した場合の CachedService の挙動を保障する
+//   Cache, Notifier や Service がエラーを返した場合の CachedService の挙動を保障する
 //
 // * 方針
 //
-//   スタブ Cache や Service はメソッドが呼び出されると、事前に設定された任意のエラー値を返す
-//   CachedService のメソッドを呼び出して Cache あるいは Service からエラーを受け取ったときの CachedService の返り値を確認する
+//   スタブ Cache, スタブ Notifier や Service はメソッドが呼び出されると、事前に設定された任意のエラー値を返す
+//   CachedService のメソッドを呼び出して Cache, Notifier あるいは Service からエラーを受け取ったときの CachedService の返り値を確認する
 //
 // * 実装
 //
@@ -1197,9 +1199,11 @@ mod spy_tests {
 //      この Service 構造体はスタブであり、CachedService への間接的な入力のみ制御する
 //   3. Cache のメソッドが任意の結果を返せる種類の Cache 構造体を用意する
 //      この Cache 構造体はスタブであり、CachedService への間接的な入力のみ制御する
-//   4. その構造体を CachedService にプラグインする
-//   5. CachedService のメソッドを呼び出す
-//   6. CachedService のメソッドからの戻り値を確認する
+//   4. Notifier のメソッドが任意の結果を返せる種類の Notifier 構造体を用意する
+//      この Notifier 構造体はスタブであり、CachedService への間接的な入力のみ制御する
+//   5. その構造体を CachedService にプラグインする
+//   6. CachedService のメソッドを呼び出す
+//   7. CachedService のメソッドからの戻り値を確認する
 //
 // * 注意
 //
