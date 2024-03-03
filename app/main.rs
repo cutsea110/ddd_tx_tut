@@ -10,6 +10,7 @@ mod cached_service;
 mod dao;
 mod domain;
 mod pg_db;
+mod rabbitmq;
 mod redis_cache;
 mod service;
 mod usecase;
@@ -41,18 +42,21 @@ impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
 pub struct PersonServiceImpl {
     db_client: postgres::Client,
     cache_client: redis::Client,
+    mq_client: rabbitmq::Client,
     usecase: RefCell<PersonUsecaseImpl>,
 }
 impl PersonServiceImpl {
-    pub fn new(db_url: &str, cache_url: &str) -> Self {
-        let db_client = postgres::Client::connect(db_url, NoTls).expect("create db client");
-        let cache_client = redis::Client::open(cache_url).expect("create cache client");
+    pub fn new(db_uri: &str, cache_uri: &str, mq_uri: &str) -> Self {
+        let db_client = postgres::Client::connect(db_uri, NoTls).expect("create db client");
+        let cache_client = redis::Client::open(cache_uri).expect("create cache client");
+        let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
 
         let usecase = PersonUsecaseImpl::new(PgPersonDao);
 
         Self {
             db_client,
             cache_client,
+            mq_client,
             usecase: RefCell::new(usecase),
         }
     }
@@ -109,9 +113,9 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
 const QUEUE_NAME: &str = "notification";
 
 async fn publisher() -> Result<(), lapin::Error> {
-    let mq_url = env::var("AMQP_ADDR")
+    let mq_uri = env::var("AMQP_ADDR")
         .unwrap_or_else(|_| "amqp://admin:adminpass@localhost:5672/%2f".to_string());
-    let conn = lapin::Connection::connect(&mq_url, lapin::ConnectionProperties::default())
+    let conn = lapin::Connection::connect(&mq_uri, lapin::ConnectionProperties::default())
         .await
         .expect("connect to mq");
     let channel = conn.create_channel().await.expect("create channel");
@@ -156,13 +160,14 @@ fn main() {
             publisher().await.expect("publish message");
         });
 
-    let cache_url =
-        env::var("CACHE_URL").unwrap_or_else(|_| "redis://:adminpass@localhost:16379".to_string());
-
-    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let cache_uri =
+        env::var("CACHE_URI").unwrap_or_else(|_| "redis://:adminpass@localhost:16379".to_string());
+    let db_uri = env::var("DATABASE_URI").unwrap_or_else(|_| {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
     });
-    let mut service = PersonServiceImpl::new(&db_url, &cache_url);
+    let mq_uri = env::var("AMQP_URI")
+        .unwrap_or_else(|_| "amqp://admin:adminpass@localhost:5672/%2f".to_string());
+    let mut service = PersonServiceImpl::new(&db_uri, &cache_uri, &mq_uri);
 
     let (id, person) = service
         .cached_register("cutsea", date(1970, 11, 6), None, "rustacean")
