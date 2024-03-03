@@ -1,4 +1,3 @@
-use lapin::{self, options};
 use log::{error, trace};
 use postgres::NoTls;
 use std::cell::RefCell;
@@ -111,63 +110,20 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
     }
 }
 
-const QUEUE_NAME: &str = "notification";
-
-async fn publisher() -> Result<(), lapin::Error> {
-    let mq_uri = env::var("AMQP_ADDR")
-        .unwrap_or_else(|_| "amqp://admin:adminpass@localhost:5672/%2f".to_string());
-    let conn = lapin::Connection::connect(&mq_uri, lapin::ConnectionProperties::default())
-        .await
-        .expect("connect to mq");
-    let channel = conn.create_channel().await.expect("create channel");
-
-    channel
-        .queue_declare(
-            QUEUE_NAME,
-            options::QueueDeclareOptions::default(),
-            Default::default(),
-        )
-        .await
-        .expect("declare queue");
-
-    let msg = "Hello, RabbitMQ!";
-    channel
-        .basic_publish(
-            "",
-            QUEUE_NAME,
-            options::BasicPublishOptions::default(),
-            msg.as_bytes(),
-            lapin::BasicProperties::default(),
-        )
-        .await
-        .expect("publish message");
-
-    trace!("published: {}", msg);
-
-    Ok(())
-}
-
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
     env_logger::init();
 
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            publisher().await.expect("publish message");
-        });
-
     let cache_uri =
         env::var("CACHE_URI").unwrap_or_else(|_| "redis://:adminpass@localhost:16379".to_string());
     let db_uri = env::var("DATABASE_URI").unwrap_or_else(|_| {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
     });
-    let mq_uri = env::var("AMQP_URI")
-        .unwrap_or_else(|_| "amqp://admin:adminpass@localhost:5672/%2f".to_string());
+    let mq_uri = env::var("AMQP_URI").unwrap_or_else(|_| {
+        "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string()
+    });
     let mut service = PersonServiceImpl::new(&db_uri, &cache_uri, &mq_uri);
 
     let (id, person) = service

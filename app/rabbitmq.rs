@@ -13,6 +13,7 @@ impl Client {
             .build()
             .unwrap();
 
+        trace!("connecting to rabbitmq: {}", addr);
         let conn = async_runtime.block_on(async {
             lapin::Connection::connect(addr, lapin::ConnectionProperties::default())
                 .await
@@ -21,6 +22,7 @@ impl Client {
                     notifier::NotifierError::Unavailable(e.to_string())
                 })
         })?;
+        trace!("connected to rabbitmq with {:?}", conn.configuration());
 
         Ok(Self {
             async_runtime,
