@@ -9,6 +9,7 @@ mod cache;
 mod cached_service;
 mod dao;
 mod domain;
+mod notifier;
 mod pg_db;
 mod rabbitmq;
 mod redis_cache;
