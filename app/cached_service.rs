@@ -31,8 +31,8 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         if let Ok((id, person)) = &result {
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
-                // FIXME: ここはエラーを返す必要はない
-                // キャッシュが破損しているかもしれないので運用側には通知したい
+                // ここはエラーを返す必要はない
+                // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
                 warn!("failed to load person to cache: {}", e);
             }
 
@@ -59,8 +59,8 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // if the person is found in the db, load it to the cache
         if let Some(person) = &result {
             if let Err(e) = cao.run_tx(cao.load(id, person)) {
-                // FIXME: ここはエラーを返す必要はない
-                // キャッシュが壊れているかもしれないので運用側には通知したい
+                // ここはエラーを返す必要はない
+                // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
                 warn!("failed to load person to cache: {}", e);
             } else {
                 trace!("load person to cache: {}", person);
@@ -87,8 +87,8 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
-            // FIXME: ここはエラーを返す必要はない
-            // キャッシュが壊れているかもしれないので運用側には通知したい
+            // ここはエラーを返す必要はない
+            // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
                 warn!("failed to load person to cache: {}", e);
                 return Ok(ids);
@@ -107,8 +107,8 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // load all persons to the cache
         for (id, person) in result.iter() {
-            // FIXME: ここはエラーを返す必要はない
-            // キャッシュが壊れているかもしれないので運用側には通知したい
+            // ここはエラーを返す必要はない
+            // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
                 warn!("failed to load person to cache: {}", e);
                 return Ok(result);
@@ -125,8 +125,8 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // even if delete from db failed below, this cache clear is not a matter.
         if let Err(e) = cao.run_tx(cao.unload(id)) {
-            // FIXME: ここはエラーを返す必要はない
-            // キャッシュが壊れているかもしれないので運用側には通知したい
+            // ここはエラーを返す必要はない
+            // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
             warn!("failed to unload person from cache: {}", e);
         } else {
             trace!("unload from cache: {}", id);
