@@ -2,6 +2,7 @@ use log::{error, trace};
 use postgres::NoTls;
 use std::cell::RefCell;
 use std::env;
+use std::time::Duration;
 
 mod cache;
 mod cached_service;
@@ -100,7 +101,7 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
     type C = redis_cache::RedisPersonCao;
 
     fn get_cao(&self) -> Self::C {
-        redis_cache::RedisPersonCao::new(self.cache_client.clone())
+        redis_cache::RedisPersonCao::new(self.cache_client.clone(), Duration::from_secs(2))
     }
 }
 

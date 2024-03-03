@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use log::trace;
 use redis::{self, Commands, FromRedisValue, ToRedisArgs};
 
@@ -25,17 +27,21 @@ impl FromRedisValue for Person {
 #[derive(Debug, Clone)]
 pub struct RedisPersonCao {
     client: redis::Client,
+    connect_timeout: Duration,
 }
 impl RedisPersonCao {
-    pub fn new(client: redis::Client) -> Self {
-        Self { client }
+    pub fn new(client: redis::Client, connect_timeout: Duration) -> Self {
+        Self {
+            client,
+            connect_timeout,
+        }
     }
 }
 
 impl PersonCao<redis::Connection> for RedisPersonCao {
     fn get_conn(&self) -> Result<redis::Connection, CaoError> {
         self.client
-            .get_connection()
+            .get_connection_with_timeout(self.connect_timeout)
             .map_err(|e| CaoError::Unavailable(e.to_string()))
     }
 
