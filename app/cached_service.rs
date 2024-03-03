@@ -1,11 +1,12 @@
 use chrono::NaiveDate;
-use log::{trace, warn};
+use log::{error, trace, warn};
 
 pub use crate::cache::PersonCao;
 pub use crate::domain::{Person, PersonId};
+use crate::notifier::{HaveNotifier, Notifier};
 pub use crate::service::{InvalidErrorKind, PersonService, ServiceError};
 
-pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
+pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> + HaveNotifier {
     type C: PersonCao<Conn>;
 
     fn get_cao(&self) -> Self::C;
@@ -25,6 +26,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             data
         );
         let cao = self.get_cao();
+        let notifier = self.get_notifier();
 
         let result = self.register(name, birth_date, death_date, data);
         trace!("register person to db: {:?}", result);
@@ -32,8 +34,10 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         if let Ok((id, person)) = &result {
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
                 // ここはエラーを返す必要はない
-                // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
                 warn!("failed to load person to cache: {}", e);
+                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                    error!("notification service not available: {}", e);
+                }
             }
 
             trace!("load person to cache: {}", person);
@@ -45,6 +49,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_find(&'a mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
         trace!("cached find: {}", id);
         let cao = self.get_cao();
+        let notifier = self.get_notifier();
 
         // if the person is found in the cache, return it
         if let Ok(Some(p)) = cao.run_tx(cao.find(id)) {
@@ -60,8 +65,10 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         if let Some(person) = &result {
             if let Err(e) = cao.run_tx(cao.load(id, person)) {
                 // ここはエラーを返す必要はない
-                // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
                 warn!("failed to load person to cache: {}", e);
+                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                    error!("notification service not available: {}", e);
+                }
             } else {
                 trace!("load person to cache: {}", person);
             }
@@ -82,15 +89,18 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         trace!("cached batch import: {:?}", persons);
         let cao = self.get_cao();
+        let notifier = self.get_notifier();
 
         let ids = self.batch_import(persons.clone())?;
 
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
             // ここはエラーを返す必要はない
-            // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
                 warn!("failed to load person to cache: {}", e);
+                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                    error!("notification service not available: {}", e);
+                }
                 return Ok(ids);
             }
         }
@@ -102,15 +112,18 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_list_all(&'a mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
         trace!("cached list all");
         let cao = self.get_cao();
+        let notifier = self.get_notifier();
 
         let result = self.list_all()?;
 
         // load all persons to the cache
         for (id, person) in result.iter() {
             // ここはエラーを返す必要はない
-            // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
             if let Err(e) = cao.run_tx(cao.load(*id, person)) {
                 warn!("failed to load person to cache: {}", e);
+                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                    error!("notification service not available: {}", e);
+                }
                 return Ok(result);
             }
         }
@@ -122,12 +135,15 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
         trace!("cached unregister: {}", id);
         let cao = self.get_cao();
+        let notifier = self.get_notifier();
 
         // even if delete from db failed below, this cache clear is not a matter.
         if let Err(e) = cao.run_tx(cao.unload(id)) {
             // ここはエラーを返す必要はない
-            // FIXME: キャッシュが破損しているかもしれないので運用側には通知したい
             warn!("failed to unload person from cache: {}", e);
+            if let Err(e) = notifier.notify("admin", "cache service not available") {
+                error!("notification service not available: {}", e);
+            }
         } else {
             trace!("unload from cache: {}", id);
         }

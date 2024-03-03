@@ -1,4 +1,5 @@
 use log::{error, trace};
+use notifier::HaveNotifier;
 use postgres::NoTls;
 use std::cell::RefCell;
 use std::env;
@@ -107,6 +108,13 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
 
     fn get_cao(&self) -> Self::C {
         redis_cache::RedisPersonCao::new(self.cache_client.clone(), Duration::from_secs(2))
+    }
+}
+impl HaveNotifier for PersonServiceImpl {
+    type T = rabbitmq::Client;
+
+    fn get_notifier(&self) -> Self::T {
+        self.mq_client.clone()
     }
 }
 
