@@ -130,6 +130,7 @@ fn main() {
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
     });
     let mq_uri = env::var("AMQP_URI").unwrap_or_else(|_| {
+        // connection_timeout is in milliseconds
         "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string()
     });
     let mut service = PersonServiceImpl::new(&db_uri, &cache_uri, &mq_uri);
