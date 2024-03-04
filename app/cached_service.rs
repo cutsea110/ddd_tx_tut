@@ -624,7 +624,7 @@ mod spy_tests {
         dao::{DaoError, PersonDao},
         date,
         notifier::NotifierError,
-        HavePersonDao, PersonUsecase, UsecaseError,
+        CaoError, HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     struct DummyPersonDao;
@@ -701,9 +701,17 @@ mod spy_tests {
         }
     }
 
-    struct DummyNotifier;
-    impl Notifier for DummyNotifier {
-        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+    #[derive(Debug, Clone)]
+    struct SpyNotifier {
+        notify: Rc<RefCell<Vec<(String, String)>>>,
+    }
+    impl Notifier for SpyNotifier {
+        fn notify(&self, to: &str, message: &str) -> Result<(), NotifierError> {
+            self.notify
+                .borrow_mut()
+                .push((to.to_string(), message.to_string()));
+
+            // 返り値に意味はない
             Ok(())
         }
     }
@@ -723,6 +731,7 @@ mod spy_tests {
 
         usecase: RefCell<DummyPersonUsecase>,
         cao: MockPersonCao,
+        notifier: SpyNotifier,
     }
     // モックサービス実装です。ユースケースより先はダミーです。
     impl PersonService<'_, ()> for TargetPersonService {
@@ -834,10 +843,10 @@ mod spy_tests {
         }
     }
     impl HaveNotifier for TargetPersonService {
-        type N = DummyNotifier;
+        type N = SpyNotifier;
 
-        fn get_notifier(&self) -> DummyNotifier {
-            DummyNotifier
+        fn get_notifier(&self) -> Self::N {
+            self.notifier.clone()
         }
     }
 
@@ -870,6 +879,9 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
         };
 
         let _ = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
@@ -897,6 +909,75 @@ mod spy_tests {
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![] as Vec<(String, String)>
+        );
+
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find: RefCell::new(vec![]),
+            find_result: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![]), // 使われない
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Ok(None), // 使われない
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Ok(()), // 使われない
+            },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
+        };
+
+        let _ = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
+        assert_eq!(
+            *service.register.borrow(),
+            vec![(
+                "Alice".to_string(),
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here".to_string())
+            )]
+        );
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![(
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+            )]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![(
+                "admin".to_string(),
+                "cache service not available".to_string()
+            )],
+        );
     }
 
     #[test]
@@ -930,6 +1011,9 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
         };
 
         let _ = service.cached_find(1);
@@ -946,6 +1030,10 @@ mod spy_tests {
             vec![] as Vec<(PersonId, Person)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![] as Vec<(String, String)>
+        );
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
@@ -976,6 +1064,9 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
         };
 
         let _ = service.cached_find(1);
@@ -995,6 +1086,125 @@ mod spy_tests {
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![] as Vec<(String, String)>
+        );
+
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_result: Ok(Some(Person::new(
+                "Alice",
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here"),
+            ))),
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![]), // 使われない
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Ok(()), // 使われない
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Ok(()), // 使われない
+            },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
+        };
+
+        let _ = service.cached_find(1);
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![1]);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![(
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+            )]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![] as Vec<(String, String)>
+        );
+
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_result: Ok(Some(Person::new(
+                "Alice",
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here"),
+            ))),
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![]), // 使われない
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Ok(None),
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Ok(()), // 使われない
+            },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
+        };
+
+        let _ = service.cached_find(1);
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![1]);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![(
+                1,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+            )]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![(
+                "admin".to_string(),
+                "cache service not available".to_string()
+            )],
+        );
     }
 
     #[test]
@@ -1022,6 +1232,9 @@ mod spy_tests {
                 load_result: Ok(()), // 使われない
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
+            },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1063,6 +1276,77 @@ mod spy_tests {
             ]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![] as Vec<(String, String)>
+        );
+
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_result: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![3, 4, 5]),
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![]), // 使われない
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Ok(None), // 使われない
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Ok(()), // 使われない
+            },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
+        };
+
+        let _ = service.cached_batch_import(vec![
+            Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+            Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+            Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+        ]);
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![vec![
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+                Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+                Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+            ]]
+        );
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            // 一つ目はロードされて、そのあとはエラーにより中断されている状態
+            // 実際の場面では空であることが多いと思うが不定であるため、この値の検証にはあまり意味はない
+            vec![(
+                3,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
+            ),]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![(
+                "admin".to_string(),
+                "cache service not available".to_string()
+            )]
+        );
     }
 
     #[test]
@@ -1104,6 +1388,9 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
         };
 
         let _ = service.cached_list_all();
@@ -1133,6 +1420,74 @@ mod spy_tests {
             ]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.notifier.notify.borrow(), vec![]);
+
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_result: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![
+                (
+                    3,
+                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                ),
+                (
+                    4,
+                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
+                ),
+                (
+                    5,
+                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
+                ),
+            ]),
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Ok(None), // 使われない
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Err(CaoError::Unavailable("valid cao".to_string())),
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Ok(()), // 使われない
+            },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
+        };
+
+        let _ = service.cached_list_all();
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 1);
+        assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![(
+                3,
+                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            ),]
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![(
+                "admin".to_string(),
+                "cache service not available".to_string()
+            )]
+        );
     }
 
     #[test]
@@ -1161,6 +1516,9 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
         };
 
         let _ = service.cached_unregister(3);
@@ -1177,6 +1535,58 @@ mod spy_tests {
             vec![] as Vec<(PersonId, Person)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
+        assert_eq!(*service.notifier.notify.borrow(), vec![]);
+
+        let mut service = TargetPersonService {
+            register: RefCell::new(vec![]),
+            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            find: RefCell::new(vec![]),
+            find_result: Ok(None), // 使われない
+            batch_import: RefCell::new(vec![]),
+            batch_import_result: Ok(vec![]), // 使われない
+            list_all: RefCell::new(0),
+            list_all_result: Ok(vec![]),
+            unregister: RefCell::new(vec![]),
+            unregister_result: Ok(()), // 使われない
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: MockPersonCao {
+                exists: Rc::new(RefCell::new(vec![])),
+                exists_result: Ok(false), // 使われない
+                find: Rc::new(RefCell::new(vec![])),
+                find_result: Ok(None), // 使われない
+                load: Rc::new(RefCell::new(vec![])),
+                load_result: Ok(()), // 使われない
+                unload: Rc::new(RefCell::new(vec![])),
+                unload_result: Err(CaoError::Unavailable("cao valid".to_string())),
+            },
+            notifier: SpyNotifier {
+                notify: RefCell::new(vec![]).into(),
+            },
+        };
+
+        let _ = service.cached_unregister(3);
+        assert_eq!(*service.register.borrow(), vec![]);
+        assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(*service.unregister.borrow(), vec![3]);
+
+        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
+        assert_eq!(
+            *service.cao.load.borrow(),
+            vec![] as Vec<(PersonId, Person)>
+        );
+        assert_eq!(*service.cao.unload.borrow(), vec![3]);
+        assert_eq!(
+            *service.notifier.notify.borrow(),
+            vec![(
+                "admin".to_string(),
+                "cache service not available".to_string()
+            )]
+        );
     }
 }
 
