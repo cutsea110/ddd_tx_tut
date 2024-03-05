@@ -5,6 +5,7 @@ use thiserror::Error;
 
 use crate::cache::CaoError;
 use crate::domain::{Person, PersonId};
+use crate::notifier::Notifier;
 use crate::usecase::{PersonUsecase, UsecaseError};
 use tx_rs::Tx;
 
@@ -33,10 +34,13 @@ impl fmt::Display for InvalidErrorKind {
 
 pub trait PersonService<'a, Ctx> {
     type U: PersonUsecase<Ctx>;
+    type N: Notifier;
 
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
     where
         F: FnOnce(&mut Self::U, &mut Ctx) -> Result<T, UsecaseError>;
+
+    fn get_notifier(&self) -> Self::N;
 
     fn register(
         &'a mut self,
@@ -126,13 +130,13 @@ mod fake_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
         domain::date,
+        notifier::NotifierError,
         HavePersonDao,
     };
-
-    use super::*;
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
@@ -225,11 +229,19 @@ mod fake_tests {
         }
     }
 
+    struct DummyNotifier;
+    impl Notifier for DummyNotifier {
+        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+            Ok(())
+        }
+    }
+
     struct TargetPersonService {
         usecase: Rc<RefCell<FakePersonUsecase>>,
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = FakePersonUsecase;
+        type N = DummyNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -237,6 +249,10 @@ mod fake_tests {
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
     }
 
@@ -395,13 +411,13 @@ mod spy_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
         domain::date,
+        notifier::NotifierError,
         HavePersonDao,
     };
-
-    use super::*;
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
@@ -497,11 +513,19 @@ mod spy_tests {
         }
     }
 
+    struct DummyNotifier;
+    impl Notifier for DummyNotifier {
+        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+            Ok(())
+        }
+    }
+
     struct TargetPersonService {
         usecase: Rc<RefCell<SpyPersonUsecase>>,
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = SpyPersonUsecase;
+        type N = DummyNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -509,6 +533,10 @@ mod spy_tests {
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
     }
 
@@ -657,6 +685,7 @@ mod error_stub_tests {
     use crate::{
         dao::{DaoError, PersonDao},
         domain::date,
+        notifier::NotifierError,
         HavePersonDao,
     };
 
@@ -741,11 +770,19 @@ mod error_stub_tests {
         }
     }
 
+    struct DummyNotifier;
+    impl Notifier for DummyNotifier {
+        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+            Ok(())
+        }
+    }
+
     struct TargetPersonService {
         usecase: Rc<RefCell<StubPersonUsecase>>,
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = StubPersonUsecase;
+        type N = DummyNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -753,6 +790,10 @@ mod error_stub_tests {
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
     }
 

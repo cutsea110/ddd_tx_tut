@@ -1,5 +1,4 @@
 use log::{error, trace};
-use notifier::HaveNotifier;
 use postgres::NoTls;
 use std::cell::RefCell;
 use std::env;
@@ -64,6 +63,7 @@ impl PersonServiceImpl {
 }
 impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     type U = PersonUsecaseImpl;
+    type N = rabbitmq::Client;
 
     // service is responsible for transaction management
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
@@ -100,6 +100,10 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
             }
         }
     }
+
+    fn get_notifier(&self) -> Self::N {
+        self.mq_client.clone()
+    }
 }
 impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
     for PersonServiceImpl
@@ -108,13 +112,6 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
 
     fn get_cao(&self) -> Self::C {
         redis_cache::RedisPersonCao::new(self.cache_client.clone(), Duration::from_secs(2))
-    }
-}
-impl HaveNotifier for PersonServiceImpl {
-    type N = rabbitmq::Client;
-
-    fn get_notifier(&self) -> Self::N {
-        self.mq_client.clone()
     }
 }
 

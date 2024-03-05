@@ -9,9 +9,3 @@ pub enum NotifierError {
 pub trait Notifier {
     fn notify(&self, to: &str, message: &str) -> Result<(), NotifierError>;
 }
-
-pub trait HaveNotifier {
-    type N: Notifier;
-
-    fn get_notifier(&self) -> Self::N;
-}

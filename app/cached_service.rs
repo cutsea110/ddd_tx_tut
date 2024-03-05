@@ -3,10 +3,10 @@ use log::{error, trace, warn};
 
 pub use crate::cache::PersonCao;
 pub use crate::domain::{Person, PersonId};
-use crate::notifier::{HaveNotifier, Notifier};
+use crate::notifier::Notifier;
 pub use crate::service::{InvalidErrorKind, PersonService, ServiceError};
 
-pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> + HaveNotifier {
+pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     type C: PersonCao<Conn>;
 
     fn get_cao(&self) -> Self::C;
@@ -294,6 +294,7 @@ mod fake_tests {
     // フェイクのサービス実装です。ユースケースより先はダミーです。
     impl PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
+        type N = DummyNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -301,6 +302,10 @@ mod fake_tests {
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
 
         fn register(
@@ -394,13 +399,6 @@ mod fake_tests {
 
         fn get_cao(&self) -> FakePersonCao {
             self.cao.clone()
-        }
-    }
-    impl HaveNotifier for TargetPersonService {
-        type N = DummyNotifier;
-
-        fn get_notifier(&self) -> DummyNotifier {
-            DummyNotifier
         }
     }
 
@@ -736,6 +734,7 @@ mod spy_tests {
     // モックサービス実装です。ユースケースより先はダミーです。
     impl PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
+        type N = SpyNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -743,6 +742,10 @@ mod spy_tests {
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn get_notifier(&self) -> Self::N {
+            self.notifier.clone()
         }
 
         fn register(
@@ -840,13 +843,6 @@ mod spy_tests {
 
         fn get_cao(&self) -> MockPersonCao {
             self.cao.clone()
-        }
-    }
-    impl HaveNotifier for TargetPersonService {
-        type N = SpyNotifier;
-
-        fn get_notifier(&self) -> Self::N {
-            self.notifier.clone()
         }
     }
 
@@ -1725,6 +1721,7 @@ mod error_stub_tests {
     // スタブサービス実装です。ユースケースより先はダミーです。
     impl PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
+        type N = DummyNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -1732,6 +1729,10 @@ mod error_stub_tests {
         {
             let mut usecase = self.usecase.borrow_mut();
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+        }
+
+        fn get_notifier(&self) -> DummyNotifier {
+            DummyNotifier
         }
 
         fn register(
@@ -1806,13 +1807,6 @@ mod error_stub_tests {
 
         fn get_cao(&self) -> StubPersonCao {
             self.cao.clone()
-        }
-    }
-    impl HaveNotifier for TargetPersonService {
-        type N = DummyNotifier;
-
-        fn get_notifier(&self) -> DummyNotifier {
-            DummyNotifier
         }
     }
 
