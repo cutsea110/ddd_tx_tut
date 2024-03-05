@@ -397,7 +397,7 @@ mod fake_tests {
     impl PersonCachedService<'_, (), ()> for TargetPersonService {
         type C = FakePersonCao;
 
-        fn get_cao(&self) -> FakePersonCao {
+        fn get_cao(&self) -> Self::C {
             self.cao.clone()
         }
     }
@@ -841,7 +841,7 @@ mod spy_tests {
     impl PersonCachedService<'_, (), ()> for TargetPersonService {
         type C = MockPersonCao;
 
-        fn get_cao(&self) -> MockPersonCao {
+        fn get_cao(&self) -> Self::C {
             self.cao.clone()
         }
     }
@@ -1805,7 +1805,7 @@ mod error_stub_tests {
     impl PersonCachedService<'_, (), ()> for TargetPersonService {
         type C = StubPersonCao;
 
-        fn get_cao(&self) -> StubPersonCao {
+        fn get_cao(&self) -> Self::C {
             self.cao.clone()
         }
     }
