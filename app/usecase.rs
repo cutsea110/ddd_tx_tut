@@ -117,9 +117,8 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 mod fake_tests {
     use std::cell::RefCell;
 
-    use crate::domain::date;
-
     use super::*;
+    use crate::domain::date;
 
     struct FakePersonDao {
         last_id: RefCell<PersonId>,
@@ -336,9 +335,8 @@ mod fake_tests {
 mod spy_tests {
     use std::cell::RefCell;
 
-    use crate::domain::date;
-
     use super::*;
+    use crate::domain::date;
 
     struct SpyPersonDao {
         insert: RefCell<Vec<Person>>,
@@ -531,9 +529,8 @@ mod spy_tests {
 //
 #[cfg(test)]
 mod error_stub_tests {
-    use crate::domain::date;
-
     use super::*;
+    use crate::domain::date;
 
     struct StubPersonDao {
         insert_result: Result<PersonId, DaoError>,

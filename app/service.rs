@@ -682,14 +682,13 @@ mod error_stub_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
         domain::date,
         notifier::NotifierError,
         HavePersonDao,
     };
-
-    use super::*;
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {

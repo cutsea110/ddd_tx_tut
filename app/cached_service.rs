@@ -1617,14 +1617,13 @@ mod spy_tests {
 mod error_stub_tests {
     use std::cell::RefCell;
 
+    use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
         date,
         notifier::NotifierError,
         CaoError, HavePersonDao, PersonUsecase, UsecaseError,
     };
-
-    use super::*;
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
