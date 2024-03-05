@@ -251,7 +251,7 @@ mod fake_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> DummyNotifier {
+        fn get_notifier(&self) -> Self::N {
             DummyNotifier
         }
     }
@@ -535,7 +535,7 @@ mod spy_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> DummyNotifier {
+        fn get_notifier(&self) -> Self::N {
             DummyNotifier
         }
     }
@@ -792,7 +792,7 @@ mod error_stub_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> DummyNotifier {
+        fn get_notifier(&self) -> Self::N {
             DummyNotifier
         }
     }
