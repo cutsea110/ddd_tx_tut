@@ -3,7 +3,6 @@ use log::trace;
 use std::fmt;
 use thiserror::Error;
 
-use crate::cache::CaoError;
 use crate::domain::{Person, PersonId};
 use crate::notifier::Notifier;
 use crate::usecase::{PersonUsecase, UsecaseError};
@@ -15,8 +14,6 @@ pub enum ServiceError {
     TransactionFailed(UsecaseError),
     #[error("service unavailable: {0}")]
     ServiceUnavailable(String),
-    #[error("service unavailable: {0}")]
-    ServiceCacheUnavailable(CaoError),
     #[error("invalid request: {0}")]
     InvalidRequest(InvalidErrorKind),
 }

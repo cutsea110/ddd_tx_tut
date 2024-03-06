@@ -195,6 +195,7 @@ mod fake_tests {
 
     use super::*;
     use crate::{
+        cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
         notifier::NotifierError,
@@ -359,35 +360,32 @@ mod fake_tests {
         cache: Rc<RefCell<HashMap<PersonId, Person>>>,
     }
     impl PersonCao<()> for FakePersonCao {
-        fn get_conn(&self) -> Result<(), crate::CaoError> {
+        fn get_conn(&self) -> Result<(), CaoError> {
             Ok(())
         }
-        fn run_tx<T, F>(&self, f: F) -> Result<T, crate::CaoError>
+        fn run_tx<T, F>(&self, f: F) -> Result<T, CaoError>
         where
-            F: tx_rs::Tx<(), Item = T, Err = crate::CaoError>,
+            F: tx_rs::Tx<(), Item = T, Err = CaoError>,
         {
             f.run(&mut ())
         }
-        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = crate::CaoError> {
+        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(self.cache.borrow().contains_key(&id)))
         }
-        fn find(
-            &self,
-            id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = crate::CaoError> {
+        fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(self.cache.borrow().get(&id).cloned()))
         }
         fn load(
             &self,
             id: PersonId,
             person: &Person,
-        ) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+        ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.cache.borrow_mut().insert(id, person.clone());
                 Ok(())
             })
         }
-        fn unload(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+        fn unload(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.cache.borrow_mut().remove(&id);
                 Ok(())
@@ -619,10 +617,11 @@ mod spy_tests {
 
     use super::*;
     use crate::{
+        cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
         notifier::NotifierError,
-        CaoError, HavePersonDao, PersonUsecase, UsecaseError,
+        HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     struct DummyPersonDao;
@@ -788,34 +787,31 @@ mod spy_tests {
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct MockPersonCao {
         exists: Rc<RefCell<Vec<PersonId>>>,
-        exists_result: Result<bool, crate::CaoError>,
+        exists_result: Result<bool, CaoError>,
         find: Rc<RefCell<Vec<PersonId>>>,
-        find_result: Result<Option<Person>, crate::CaoError>,
+        find_result: Result<Option<Person>, CaoError>,
         load: Rc<RefCell<Vec<(PersonId, Person)>>>,
-        load_result: Result<(), crate::CaoError>,
+        load_result: Result<(), CaoError>,
         unload: Rc<RefCell<Vec<PersonId>>>,
-        unload_result: Result<(), crate::CaoError>,
+        unload_result: Result<(), CaoError>,
     }
     impl PersonCao<()> for MockPersonCao {
-        fn get_conn(&self) -> Result<(), crate::CaoError> {
+        fn get_conn(&self) -> Result<(), CaoError> {
             Ok(())
         }
-        fn run_tx<T, F>(&self, f: F) -> Result<T, crate::CaoError>
+        fn run_tx<T, F>(&self, f: F) -> Result<T, CaoError>
         where
-            F: tx_rs::Tx<(), Item = T, Err = crate::CaoError>,
+            F: tx_rs::Tx<(), Item = T, Err = CaoError>,
         {
             f.run(&mut ())
         }
-        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = crate::CaoError> {
+        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.exists.borrow_mut().push(id);
                 self.exists_result.clone()
             })
         }
-        fn find(
-            &self,
-            id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = crate::CaoError> {
+        fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.find.borrow_mut().push(id);
                 self.find_result.clone()
@@ -825,13 +821,13 @@ mod spy_tests {
             &self,
             id: PersonId,
             person: &Person,
-        ) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+        ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.load.borrow_mut().push((id, person.clone()));
                 self.load_result.clone()
             })
         }
-        fn unload(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+        fn unload(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.unload.borrow_mut().push(id);
                 self.unload_result.clone()
@@ -1619,10 +1615,11 @@ mod error_stub_tests {
 
     use super::*;
     use crate::{
+        cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
         notifier::NotifierError,
-        CaoError, HavePersonDao, PersonUsecase, UsecaseError,
+        HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     struct DummyPersonDao;
@@ -1766,38 +1763,35 @@ mod error_stub_tests {
     // スタブキャッシュ実装です
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct StubPersonCao {
-        exists_result: Result<bool, crate::CaoError>,
-        find_result: Result<Option<Person>, crate::CaoError>,
-        load_result: Result<(), crate::CaoError>,
-        unload_result: Result<(), crate::CaoError>,
+        exists_result: Result<bool, CaoError>,
+        find_result: Result<Option<Person>, CaoError>,
+        load_result: Result<(), CaoError>,
+        unload_result: Result<(), CaoError>,
     }
     impl PersonCao<()> for StubPersonCao {
-        fn get_conn(&self) -> Result<(), crate::CaoError> {
+        fn get_conn(&self) -> Result<(), CaoError> {
             Ok(())
         }
-        fn run_tx<T, F>(&self, f: F) -> Result<T, crate::CaoError>
+        fn run_tx<T, F>(&self, f: F) -> Result<T, CaoError>
         where
-            F: tx_rs::Tx<(), Item = T, Err = crate::CaoError>,
+            F: tx_rs::Tx<(), Item = T, Err = CaoError>,
         {
             f.run(&mut ())
         }
-        fn exists(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = crate::CaoError> {
+        fn exists(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.exists_result.clone())
         }
-        fn find(
-            &self,
-            _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = crate::CaoError> {
+        fn find(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.find_result.clone())
         }
         fn load(
             &self,
             _id: PersonId,
             _person: &Person,
-        ) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+        ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.load_result.clone())
         }
-        fn unload(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = crate::CaoError> {
+        fn unload(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.unload_result.clone())
         }
     }
