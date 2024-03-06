@@ -1,10 +1,10 @@
 use chrono::NaiveDate;
 use log::{error, trace, warn};
 
-pub use crate::cache::PersonCao;
-pub use crate::domain::{Person, PersonId};
+use crate::cache::PersonCao;
+use crate::domain::{Person, PersonId};
 use crate::notifier::Notifier;
-pub use crate::service::{InvalidErrorKind, PersonService, ServiceError};
+use crate::service::{InvalidErrorKind, PersonService, ServiceError};
 
 pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     type C: PersonCao<Conn>;
