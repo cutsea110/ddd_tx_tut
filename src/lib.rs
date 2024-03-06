@@ -1,5 +1,5 @@
-// TODO: replace by https://github.com/cutsea110/d3.git
-//
+//! transaction library
+//!
 pub trait Tx<Ctx> {
     type Item;
     type Err;
@@ -125,7 +125,7 @@ where
     }
 }
 
-fn map<Ctx, Tx1, F, T>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<T, Tx1::Err>
+fn _map<Ctx, Tx1, F, T>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<T, Tx1::Err>
 where
     Tx1: Tx<Ctx>,
     F: FnOnce(Tx1::Item) -> T,
@@ -135,7 +135,6 @@ where
         Err(e) => Err(e),
     }
 }
-
 pub struct Map<Tx1, F> {
     tx1: Tx1,
     f: F,
@@ -149,11 +148,24 @@ where
     type Err = Tx1::Err;
 
     fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        map(self.tx1, self.f)(ctx)
+        _map(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_map {
+    use super::*;
+
+    #[test]
+    fn test_map() {
+        let tx = with_tx(|_| Ok::<i32, ()>(21));
+        assert_eq!(tx.map(|v| v * 2).run(&mut ()), Ok(42));
+
+        let tx = with_tx(|_| Err::<i32, ()>(()));
+        assert_eq!(tx.map(|v| v * 2).run(&mut ()), Err(()));
     }
 }
 
-fn and_then<Ctx, Tx1, Tx2, F>(
+fn _and_then<Ctx, Tx1, Tx2, F>(
     tx1: Tx1,
     f: F,
 ) -> impl FnOnce(&mut Ctx) -> Result<Tx2::Item, Tx1::Err>
@@ -167,7 +179,6 @@ where
         Err(e) => Err(e),
     }
 }
-
 pub struct AndThen<Tx1, F> {
     tx1: Tx1,
     f: F,
@@ -182,11 +193,26 @@ where
     type Err = Tx1::Err;
 
     fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        and_then(self.tx1, self.f)(ctx)
+        _and_then(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_and_then {
+    use super::*;
+
+    #[test]
+    fn test_and_then() {
+        let tx1 = with_tx(|_| Ok::<i32, ()>(21));
+        let f = |v| with_tx(move |_| Ok::<i32, ()>(v * 2));
+        assert_eq!(tx1.and_then(f).run(&mut ()), Ok(42));
+
+        let tx1 = with_tx(|_| Err::<i32, ()>(()));
+        let f = |v| with_tx(move |_| Ok::<i32, ()>(v * 2));
+        assert_eq!(tx1.and_then(f).run(&mut ()), Err(()));
     }
 }
 
-fn then<Ctx, Tx1, Tx2, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx2::Item, Tx1::Err>
+fn _then<Ctx, Tx1, Tx2, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx2::Item, Tx1::Err>
 where
     Tx1: Tx<Ctx>,
     Tx2: Tx<Ctx, Err = Tx1::Err>,
@@ -194,7 +220,6 @@ where
 {
     move |ctx| f(tx1.run(ctx)).run(ctx)
 }
-
 pub struct Then<Tx1, F> {
     tx1: Tx1,
     f: F,
@@ -209,368 +234,12 @@ where
     type Err = Tx1::Err;
 
     fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        then(self.tx1, self.f)(ctx)
+        _then(self.tx1, self.f)(ctx)
     }
 }
-
-fn or_else<Ctx, Tx1, Tx2, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx2::Item, Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Item = Tx1::Item, Err = Tx1::Err>,
-    F: FnOnce(Tx1::Err) -> Tx2,
-{
-    move |ctx| match tx1.run(ctx) {
-        Ok(t) => Ok(t),
-        Err(e) => f(e).run(ctx),
-    }
-}
-
-pub struct OrElse<Tx1, F> {
-    tx1: Tx1,
-    f: F,
-}
-impl<Ctx, Tx1, Tx2, F> Tx<Ctx> for OrElse<Tx1, F>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Item = Tx1::Item, Err = Tx1::Err>,
-    F: FnOnce(Tx1::Err) -> Tx2,
-{
-    type Item = Tx1::Item;
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        or_else(self.tx1, self.f)(ctx)
-    }
-}
-
-fn join<Ctx, Tx1, Tx2>(
-    tx1: Tx1,
-    tx2: Tx2,
-) -> impl FnOnce(&mut Ctx) -> Result<(Tx1::Item, Tx2::Item), Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Err = Tx1::Err>,
-{
-    move |ctx| match (tx1.run(ctx), tx2.run(ctx)) {
-        (Ok(t), Ok(u)) => Ok((t, u)),
-        (Err(e), _) | (_, Err(e)) => Err(e),
-    }
-}
-
-pub struct Join<Tx1, Tx2> {
-    tx1: Tx1,
-    tx2: Tx2,
-}
-impl<Ctx, Tx1, Tx2> Tx<Ctx> for Join<Tx1, Tx2>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Err = Tx1::Err>,
-{
-    type Item = (Tx1::Item, Tx2::Item);
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        join(self.tx1, self.tx2)(ctx)
-    }
-}
-
-fn join3<Ctx, Tx1, Tx2, Tx3>(
-    tx1: Tx1,
-    tx2: Tx2,
-    tx3: Tx3,
-) -> impl FnOnce(&mut Ctx) -> Result<(Tx1::Item, Tx2::Item, Tx3::Item), Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Err = Tx1::Err>,
-    Tx3: Tx<Ctx, Err = Tx1::Err>,
-{
-    move |ctx| match (tx1.run(ctx), tx2.run(ctx), tx3.run(ctx)) {
-        (Ok(t), Ok(u), Ok(v)) => Ok((t, u, v)),
-        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => Err(e),
-    }
-}
-
-pub struct Join3<Tx1, Tx2, Tx3> {
-    tx1: Tx1,
-    tx2: Tx2,
-    tx3: Tx3,
-}
-impl<Ctx, Tx1, Tx2, Tx3> Tx<Ctx> for Join3<Tx1, Tx2, Tx3>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Err = Tx1::Err>,
-    Tx3: Tx<Ctx, Err = Tx1::Err>,
-{
-    type Item = (Tx1::Item, Tx2::Item, Tx3::Item);
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        join3(self.tx1, self.tx2, self.tx3)(ctx)
-    }
-}
-
-fn join4<Ctx, Tx1, Tx2, Tx3, Tx4>(
-    tx1: Tx1,
-    tx2: Tx2,
-    tx3: Tx3,
-    tx4: Tx4,
-) -> impl FnOnce(&mut Ctx) -> Result<(Tx1::Item, Tx2::Item, Tx3::Item, Tx4::Item), Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Err = Tx1::Err>,
-    Tx3: Tx<Ctx, Err = Tx1::Err>,
-    Tx4: Tx<Ctx, Err = Tx1::Err>,
-{
-    move |ctx| match (tx1.run(ctx), tx2.run(ctx), tx3.run(ctx), tx4.run(ctx)) {
-        (Ok(t), Ok(u), Ok(v), Ok(w)) => Ok((t, u, v, w)),
-        (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => Err(e),
-    }
-}
-
-pub struct Join4<Tx1, Tx2, Tx3, Tx4> {
-    tx1: Tx1,
-    tx2: Tx2,
-    tx3: Tx3,
-    tx4: Tx4,
-}
-impl<Ctx, Tx1, Tx2, Tx3, Tx4> Tx<Ctx> for Join4<Tx1, Tx2, Tx3, Tx4>
-where
-    Tx1: Tx<Ctx>,
-    Tx2: Tx<Ctx, Err = Tx1::Err>,
-    Tx3: Tx<Ctx, Err = Tx1::Err>,
-    Tx4: Tx<Ctx, Err = Tx1::Err>,
-{
-    type Item = (Tx1::Item, Tx2::Item, Tx3::Item, Tx4::Item);
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        join4(self.tx1, self.tx2, self.tx3, self.tx4)(ctx)
-    }
-}
-
-fn map_err<Ctx, Tx1, F, E>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, E>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Err) -> E,
-{
-    move |ctx| match tx1.run(ctx) {
-        Ok(t) => Ok(t),
-        Err(e) => Err(f(e)),
-    }
-}
-
-pub struct MapErr<Tx1, F> {
-    tx1: Tx1,
-    f: F,
-}
-impl<Ctx, Tx1, F, E> Tx<Ctx> for MapErr<Tx1, F>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Err) -> E,
-{
-    type Item = Tx1::Item;
-    type Err = E;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        map_err(self.tx1, self.f)(ctx)
-    }
-}
-
-fn try_map<Ctx, Tx1, F, T>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<T, Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Item) -> Result<T, Tx1::Err>,
-{
-    move |ctx| match tx1.run(ctx) {
-        Ok(t) => f(t),
-        Err(e) => Err(e),
-    }
-}
-
-pub struct TryMap<Tx1, F> {
-    tx1: Tx1,
-    f: F,
-}
-impl<Ctx, Tx1, F, T> Tx<Ctx> for TryMap<Tx1, F>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Item) -> Result<T, Tx1::Err>,
-{
-    type Item = T;
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        try_map(self.tx1, self.f)(ctx)
-    }
-}
-
-fn recover<Ctx, Tx1, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Err) -> Tx1::Item,
-{
-    move |ctx| match tx1.run(ctx) {
-        Ok(t) => Ok(t),
-        Err(e) => Ok(f(e)),
-    }
-}
-
-pub struct Recover<Tx1, F> {
-    tx1: Tx1,
-    f: F,
-}
-impl<Ctx, Tx1, F> Tx<Ctx> for Recover<Tx1, F>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Err) -> Tx1::Item,
-{
-    type Item = Tx1::Item;
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        recover(self.tx1, self.f)(ctx)
-    }
-}
-
-fn try_recover<Ctx, Tx1, F, E>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, E>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Err) -> Result<Tx1::Item, E>,
-{
-    move |ctx| match tx1.run(ctx) {
-        Ok(t) => Ok(t),
-        Err(e) => f(e),
-    }
-}
-
-pub struct TryRecover<Tx1, F> {
-    tx1: Tx1,
-    f: F,
-}
-impl<Ctx, Tx1, F, E> Tx<Ctx> for TryRecover<Tx1, F>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Err) -> Result<Tx1::Item, E>,
-{
-    type Item = Tx1::Item;
-    type Err = E;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        try_recover(self.tx1, self.f)(ctx)
-    }
-}
-
-fn abort<Ctx, Tx1, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Item) -> Tx1::Err,
-{
-    move |ctx| match tx1.run(ctx) {
-        Ok(t) => Err(f(t)),
-        Err(e) => Err(e),
-    }
-}
-
-pub struct Abort<Tx1, F> {
-    tx1: Tx1,
-    f: F,
-}
-impl<Ctx, Tx1, F> Tx<Ctx> for Abort<Tx1, F>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Item) -> Tx1::Err,
-{
-    type Item = Tx1::Item;
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        abort(self.tx1, self.f)(ctx)
-    }
-}
-
-fn try_abort<Ctx, Tx1, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, Tx1::Err>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Item) -> Result<Tx1::Item, Tx1::Err>,
-{
-    move |ctx| match tx1.run(ctx) {
-        Ok(t) => f(t),
-        Err(e) => Err(e),
-    }
-}
-
-pub struct TryAbort<Tx1, F> {
-    tx1: Tx1,
-    f: F,
-}
-impl<Ctx, Tx1, F> Tx<Ctx> for TryAbort<Tx1, F>
-where
-    Tx1: Tx<Ctx>,
-    F: FnOnce(Tx1::Item) -> Result<Tx1::Item, Tx1::Err>,
-{
-    type Item = Tx1::Item;
-    type Err = Tx1::Err;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        try_abort(self.tx1, self.f)(ctx)
-    }
-}
-
-pub fn with_tx<Ctx, F, T, E>(f: F) -> WithTx<F>
-where
-    F: FnOnce(&mut Ctx) -> Result<T, E>,
-{
-    WithTx { f }
-}
-pub struct WithTx<F> {
-    f: F,
-}
-impl<Ctx, F, T, E> Tx<Ctx> for WithTx<F>
-where
-    F: FnOnce(&mut Ctx) -> Result<T, E>,
-{
-    type Item = T;
-    type Err = E;
-
-    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
-        (self.f)(ctx)
-    }
-}
-
 #[cfg(test)]
-mod test {
+mod test_then {
     use super::*;
-
-    struct Transaction(i32);
-
-    impl<Ctx> Tx<Ctx> for Transaction {
-        type Item = i32;
-        type Err = ();
-
-        fn run(self, _: &mut Ctx) -> Result<Self::Item, Self::Err> {
-            Ok(self.0)
-        }
-    }
-
-    #[test]
-    fn test_map() {
-        let tx = with_tx(|_| Ok::<i32, ()>(21));
-        assert_eq!(tx.map(|v| v * 2).run(&mut ()), Ok(42));
-
-        let tx = with_tx(|_| Err::<i32, ()>(()));
-        assert_eq!(tx.map(|v| v * 2).run(&mut ()), Err(()));
-    }
-
-    #[test]
-    fn test_and_then() {
-        let tx1 = with_tx(|_| Ok::<i32, ()>(21));
-        let f = |v| with_tx(move |_| Ok::<i32, ()>(v * 2));
-        assert_eq!(tx1.and_then(f).run(&mut ()), Ok(42));
-
-        let tx1 = with_tx(|_| Err::<i32, ()>(()));
-        let f = |v| with_tx(move |_| Ok::<i32, ()>(v * 2));
-        assert_eq!(tx1.and_then(f).run(&mut ()), Err(()));
-    }
 
     #[test]
     fn test_then() {
@@ -592,6 +261,42 @@ mod test {
         };
         assert_eq!(tx1.then(f).run(&mut ()), Err(()));
     }
+}
+
+fn _or_else<Ctx, Tx1, Tx2, F>(
+    tx1: Tx1,
+    f: F,
+) -> impl FnOnce(&mut Ctx) -> Result<Tx2::Item, Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Item = Tx1::Item, Err = Tx1::Err>,
+    F: FnOnce(Tx1::Err) -> Tx2,
+{
+    move |ctx| match tx1.run(ctx) {
+        Ok(t) => Ok(t),
+        Err(e) => f(e).run(ctx),
+    }
+}
+pub struct OrElse<Tx1, F> {
+    tx1: Tx1,
+    f: F,
+}
+impl<Ctx, Tx1, Tx2, F> Tx<Ctx> for OrElse<Tx1, F>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Item = Tx1::Item, Err = Tx1::Err>,
+    F: FnOnce(Tx1::Err) -> Tx2,
+{
+    type Item = Tx1::Item;
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _or_else(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_or_else {
+    use super::*;
 
     #[test]
     fn test_or_else() {
@@ -603,6 +308,40 @@ mod test {
         let f = |_: ()| with_tx(|_| Ok::<i32, ()>(42));
         assert_eq!(tx1.or_else(f).run(&mut ()), Ok(42));
     }
+}
+
+fn _join<Ctx, Tx1, Tx2>(
+    tx1: Tx1,
+    tx2: Tx2,
+) -> impl FnOnce(&mut Ctx) -> Result<(Tx1::Item, Tx2::Item), Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Err = Tx1::Err>,
+{
+    move |ctx| match (tx1.run(ctx), tx2.run(ctx)) {
+        (Ok(t), Ok(u)) => Ok((t, u)),
+        (Err(e), _) | (_, Err(e)) => Err(e),
+    }
+}
+pub struct Join<Tx1, Tx2> {
+    tx1: Tx1,
+    tx2: Tx2,
+}
+impl<Ctx, Tx1, Tx2> Tx<Ctx> for Join<Tx1, Tx2>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Err = Tx1::Err>,
+{
+    type Item = (Tx1::Item, Tx2::Item);
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _join(self.tx1, self.tx2)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_join {
+    use super::*;
 
     #[test]
     fn test_join() {
@@ -618,6 +357,44 @@ mod test {
         let tx2 = with_tx(|_| Err::<&str, ()>(()));
         assert_eq!(tx1.join(tx2).run(&mut ()), Err(()));
     }
+}
+
+fn _join3<Ctx, Tx1, Tx2, Tx3>(
+    tx1: Tx1,
+    tx2: Tx2,
+    tx3: Tx3,
+) -> impl FnOnce(&mut Ctx) -> Result<(Tx1::Item, Tx2::Item, Tx3::Item), Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Err = Tx1::Err>,
+    Tx3: Tx<Ctx, Err = Tx1::Err>,
+{
+    move |ctx| match (tx1.run(ctx), tx2.run(ctx), tx3.run(ctx)) {
+        (Ok(t), Ok(u), Ok(v)) => Ok((t, u, v)),
+        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => Err(e),
+    }
+}
+pub struct Join3<Tx1, Tx2, Tx3> {
+    tx1: Tx1,
+    tx2: Tx2,
+    tx3: Tx3,
+}
+impl<Ctx, Tx1, Tx2, Tx3> Tx<Ctx> for Join3<Tx1, Tx2, Tx3>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Err = Tx1::Err>,
+    Tx3: Tx<Ctx, Err = Tx1::Err>,
+{
+    type Item = (Tx1::Item, Tx2::Item, Tx3::Item);
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _join3(self.tx1, self.tx2, self.tx3)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_join3 {
+    use super::*;
 
     #[test]
     fn test_join3() {
@@ -641,6 +418,48 @@ mod test {
         let tx3 = with_tx(|_| Err::<bool, ()>(()));
         assert_eq!(tx1.join3(tx2, tx3).run(&mut ()), Err(()));
     }
+}
+
+fn _join4<Ctx, Tx1, Tx2, Tx3, Tx4>(
+    tx1: Tx1,
+    tx2: Tx2,
+    tx3: Tx3,
+    tx4: Tx4,
+) -> impl FnOnce(&mut Ctx) -> Result<(Tx1::Item, Tx2::Item, Tx3::Item, Tx4::Item), Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Err = Tx1::Err>,
+    Tx3: Tx<Ctx, Err = Tx1::Err>,
+    Tx4: Tx<Ctx, Err = Tx1::Err>,
+{
+    move |ctx| match (tx1.run(ctx), tx2.run(ctx), tx3.run(ctx), tx4.run(ctx)) {
+        (Ok(t), Ok(u), Ok(v), Ok(w)) => Ok((t, u, v, w)),
+        (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => Err(e),
+    }
+}
+pub struct Join4<Tx1, Tx2, Tx3, Tx4> {
+    tx1: Tx1,
+    tx2: Tx2,
+    tx3: Tx3,
+    tx4: Tx4,
+}
+impl<Ctx, Tx1, Tx2, Tx3, Tx4> Tx<Ctx> for Join4<Tx1, Tx2, Tx3, Tx4>
+where
+    Tx1: Tx<Ctx>,
+    Tx2: Tx<Ctx, Err = Tx1::Err>,
+    Tx3: Tx<Ctx, Err = Tx1::Err>,
+    Tx4: Tx<Ctx, Err = Tx1::Err>,
+{
+    type Item = (Tx1::Item, Tx2::Item, Tx3::Item, Tx4::Item);
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _join4(self.tx1, self.tx2, self.tx3, self.tx4)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_join4 {
+    use super::*;
 
     #[test]
     fn test_join4() {
@@ -677,6 +496,37 @@ mod test {
         let tx4 = with_tx(|_| Err::<i32, ()>(()));
         assert_eq!(tx1.join4(tx2, tx3, tx4).run(&mut ()), Err(()));
     }
+}
+
+fn _map_err<Ctx, Tx1, F, E>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, E>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Err) -> E,
+{
+    move |ctx| match tx1.run(ctx) {
+        Ok(t) => Ok(t),
+        Err(e) => Err(f(e)),
+    }
+}
+pub struct MapErr<Tx1, F> {
+    tx1: Tx1,
+    f: F,
+}
+impl<Ctx, Tx1, F, E> Tx<Ctx> for MapErr<Tx1, F>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Err) -> E,
+{
+    type Item = Tx1::Item;
+    type Err = E;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _map_err(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_map_err {
+    use super::*;
 
     #[test]
     fn test_map_err() {
@@ -688,6 +538,37 @@ mod test {
         let f = |_: ()| "ng";
         assert_eq!(tx1.map_err(f).run(&mut ()), Ok(42));
     }
+}
+
+fn _try_map<Ctx, Tx1, F, T>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<T, Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Item) -> Result<T, Tx1::Err>,
+{
+    move |ctx| match tx1.run(ctx) {
+        Ok(t) => f(t),
+        Err(e) => Err(e),
+    }
+}
+pub struct TryMap<Tx1, F> {
+    tx1: Tx1,
+    f: F,
+}
+impl<Ctx, Tx1, F, T> Tx<Ctx> for TryMap<Tx1, F>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Item) -> Result<T, Tx1::Err>,
+{
+    type Item = T;
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _try_map(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_try_map {
+    use super::*;
 
     #[test]
     fn test_try_map() {
@@ -699,6 +580,37 @@ mod test {
         let f = |v| Ok::<i32, &str>(v * 2);
         assert_eq!(tx1.try_map(f).run(&mut ()), Ok(42));
     }
+}
+
+fn _recover<Ctx, Tx1, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Err) -> Tx1::Item,
+{
+    move |ctx| match tx1.run(ctx) {
+        Ok(t) => Ok(t),
+        Err(e) => Ok(f(e)),
+    }
+}
+pub struct Recover<Tx1, F> {
+    tx1: Tx1,
+    f: F,
+}
+impl<Ctx, Tx1, F> Tx<Ctx> for Recover<Tx1, F>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Err) -> Tx1::Item,
+{
+    type Item = Tx1::Item;
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _recover(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_recover {
+    use super::*;
 
     #[test]
     fn test_recover() {
@@ -710,6 +622,37 @@ mod test {
         let f = |_: &str| 42;
         assert_eq!(tx1.recover(f).run(&mut ()), Ok(21));
     }
+}
+
+fn _try_recover<Ctx, Tx1, F, E>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, E>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Err) -> Result<Tx1::Item, E>,
+{
+    move |ctx| match tx1.run(ctx) {
+        Ok(t) => Ok(t),
+        Err(e) => f(e),
+    }
+}
+pub struct TryRecover<Tx1, F> {
+    tx1: Tx1,
+    f: F,
+}
+impl<Ctx, Tx1, F, E> Tx<Ctx> for TryRecover<Tx1, F>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Err) -> Result<Tx1::Item, E>,
+{
+    type Item = Tx1::Item;
+    type Err = E;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _try_recover(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_try_recover {
+    use super::*;
 
     #[test]
     fn test_try_recover() {
@@ -729,6 +672,37 @@ mod test {
         let f = |_: &str| Err::<i32, &str>("error again");
         assert_eq!(tx1.try_recover(f).run(&mut ()), Err("error again"));
     }
+}
+
+fn _abort<Ctx, Tx1, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Item) -> Tx1::Err,
+{
+    move |ctx| match tx1.run(ctx) {
+        Ok(t) => Err(f(t)),
+        Err(e) => Err(e),
+    }
+}
+pub struct Abort<Tx1, F> {
+    tx1: Tx1,
+    f: F,
+}
+impl<Ctx, Tx1, F> Tx<Ctx> for Abort<Tx1, F>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Item) -> Tx1::Err,
+{
+    type Item = Tx1::Item;
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _abort(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_abort {
+    use super::*;
 
     #[test]
     fn test_abort() {
@@ -740,6 +714,37 @@ mod test {
         let f = |_| "abort";
         assert_eq!(tx1.abort(f).run(&mut ()), Err("error"));
     }
+}
+
+fn _try_abort<Ctx, Tx1, F>(tx1: Tx1, f: F) -> impl FnOnce(&mut Ctx) -> Result<Tx1::Item, Tx1::Err>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Item) -> Result<Tx1::Item, Tx1::Err>,
+{
+    move |ctx| match tx1.run(ctx) {
+        Ok(t) => f(t),
+        Err(e) => Err(e),
+    }
+}
+pub struct TryAbort<Tx1, F> {
+    tx1: Tx1,
+    f: F,
+}
+impl<Ctx, Tx1, F> Tx<Ctx> for TryAbort<Tx1, F>
+where
+    Tx1: Tx<Ctx>,
+    F: FnOnce(Tx1::Item) -> Result<Tx1::Item, Tx1::Err>,
+{
+    type Item = Tx1::Item;
+    type Err = Tx1::Err;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        _try_abort(self.tx1, self.f)(ctx)
+    }
+}
+#[cfg(test)]
+mod test_try_abort {
+    use super::*;
 
     #[test]
     fn test_try_abort() {
@@ -750,5 +755,26 @@ mod test {
         let tx1 = with_tx(|_| Err::<i32, &str>("error"));
         let f = |_| Err::<i32, &str>("try abort");
         assert_eq!(tx1.try_abort(f).run(&mut ()), Err("error"));
+    }
+}
+
+pub fn with_tx<Ctx, F, T, E>(f: F) -> WithTx<F>
+where
+    F: FnOnce(&mut Ctx) -> Result<T, E>,
+{
+    WithTx { f }
+}
+pub struct WithTx<F> {
+    f: F,
+}
+impl<Ctx, F, T, E> Tx<Ctx> for WithTx<F>
+where
+    F: FnOnce(&mut Ctx) -> Result<T, E>,
+{
+    type Item = T;
+    type Err = E;
+
+    fn run(self, ctx: &mut Ctx) -> Result<Self::Item, Self::Err> {
+        (self.f)(ctx)
     }
 }
