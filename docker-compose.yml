@@ -13,6 +13,14 @@ services:
     volumes:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
+  kvs:
+    image: amazon/dynamodb-local
+    ports:
+      - 18000:8000
+    environment:
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+
   cache:
     image: redis:7.2-alpine
     container_name: redis

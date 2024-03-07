@@ -29,6 +29,15 @@ sampledb=#
 
 The postgres db's named volumes are empty in `docker-compose.yml`, so you lost permanent data after `docker-compose down -v`.
 
+
+If you check nosql(dynamodb-local), do like this:
+
+```bash
+export AWS_ACCESS_KEY_ID=dummy
+export AWS_SECRET_ACCESS_KEY=dummy
+aws dynamodb --endpoint-url http://localhost:18000 list-tables
+```
+
 If you check cache(redis), do like this:
 
 ```bash
