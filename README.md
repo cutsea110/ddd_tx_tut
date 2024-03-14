@@ -36,6 +36,17 @@ If you check nosql(dynamodb-local), do like this:
 export AWS_ACCESS_KEY_ID=dummy
 export AWS_SECRET_ACCESS_KEY=dummy
 aws dynamodb --endpoint-url http://localhost:18000 list-tables
+
+aws dynamodb --endpoint-url http://localhost:18000 create-table --cli-input-json file://person.json
+
+aws dynamodb --endpoint-url http://localhost:18000 \
+    put-item --table-name cities \
+	--item '{"population":{"N":38164},"date_mod":{"S":"1950-6-22"},"key":{"S":"t0924"},"name":{"S":"足利"}}'
+
+aws dynamodb --endpoint-url http://localhost:18000 \
+    scan --table-name cities
+aws dynamodb --endpoint-url http://localhost:18000 \
+    get-item --table-name cities --key '{"key":{"S":"t0925"}}'
 ```
 
 If you check cache(redis), do like this:
