@@ -40,13 +40,12 @@ aws dynamodb --endpoint-url http://localhost:18000 list-tables
 aws dynamodb --endpoint-url http://localhost:18000 create-table --cli-input-json file://person.json
 
 aws dynamodb --endpoint-url http://localhost:18000 \
-    put-item --table-name cities \
-	--item '{"population":{"N":38164},"date_mod":{"S":"1950-6-22"},"key":{"S":"t0924"},"name":{"S":"足利"}}'
-
+    put-item --table-name person \
+	--item "{\"id\":{\"N\":\"10001\"},\"name\":{\"S\":\"Abel\"},\"birth_date\":{\"N\":\"$(date --date '1802-08-05' +%s)\"},\"death_date\":{\"N\":\"$(date --date '1829-04-06' +%s)\"},\"data\":{\"B\":\"Abel's theorem\"}}"
 aws dynamodb --endpoint-url http://localhost:18000 \
-    scan --table-name cities
+    scan --table-name person
 aws dynamodb --endpoint-url http://localhost:18000 \
-    get-item --table-name cities --key '{"key":{"S":"t0925"}}'
+    get-item --table-name person --key '{"id":{"N":"10001"},"name":{"S":"Abel"}}'
 ```
 
 If you check cache(redis), do like this:
