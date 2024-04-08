@@ -8,7 +8,7 @@
 docker-compose up -d
 export DATABASE_URI="postgres://admin:adminpass@localhost:15432/sampledb"
 export CACHE_URI="redis://:adminpass@localhost:16379"
-export AMQP_URI="amqp:://admin:adminpass@localhost:5672/%2f"
+export AMQP_URI="amqp://admin:adminpass@localhost:5672/%2f"
 ```
 
 If you check rdb directly, do like this:
