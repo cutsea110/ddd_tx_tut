@@ -14,7 +14,7 @@ services:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
   kvs:
-    image: amazon/dynamodb-local
+    image: amazon/dynamodb-local:2.4.0
     ports:
       - 18000:8000
     environment:
