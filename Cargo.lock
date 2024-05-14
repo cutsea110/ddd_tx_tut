@@ -1133,12 +1133,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8478577c03552c21db0e2724ffb8986a5ce7af88107e6be5d2ee6e158c12800"
 
 [[package]]
-name = "itertool"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e6c4a04718e2694530b5cc60e315975fe7e684288b306efd446780b6eedda49"
-
-[[package]]
 name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2312,7 +2306,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "env_logger",
- "itertool",
+ "itertools",
  "lapin",
  "log",
  "postgres",
