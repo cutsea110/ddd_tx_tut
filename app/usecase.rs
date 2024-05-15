@@ -28,8 +28,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("insert person: {:?}", person);
-        dao.insert(person)
-            .map_err(|e| UsecaseError::EntryPersonFailed(e))
+        dao.insert(person).map_err(UsecaseError::EntryPersonFailed)
     }
     fn find<'a>(
         &'a mut self,
@@ -40,7 +39,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("find person_id: {:?}", id);
-        dao.fetch(id).map_err(|e| UsecaseError::FindPersonFailed(e))
+        dao.fetch(id).map_err(UsecaseError::FindPersonFailed)
     }
     fn entry_and_verify<'a>(
         &'a mut self,
@@ -64,7 +63,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                     ))
                 })
             })
-            .map_err(|e| UsecaseError::EntryAndVerifyPersonFailed(e))
+            .map_err(UsecaseError::EntryAndVerifyPersonFailed)
     }
     fn collect<'a>(
         &'a mut self,
@@ -74,8 +73,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("collect all persons");
-        dao.select()
-            .map_err(|e| UsecaseError::CollectPersonFailed(e))
+        dao.select().map_err(UsecaseError::CollectPersonFailed)
     }
     fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
     where
@@ -83,8 +81,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("remove person_id: {:?}", id);
-        dao.delete(id)
-            .map_err(|e| UsecaseError::RemovePersonFailed(e))
+        dao.delete(id).map_err(UsecaseError::RemovePersonFailed)
     }
 }
 
