@@ -50,13 +50,13 @@ impl PersonServiceImpl {
         let cache_client = redis::Client::open(cache_uri).expect("create cache client");
         let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
 
-        let usecase = PersonUsecaseImpl::new(PgPersonDao);
+        let usecase = RefCell::new(PersonUsecaseImpl::new(PgPersonDao));
 
         Self {
             db_client,
             cache_client,
             mq_client,
-            usecase: RefCell::new(usecase),
+            usecase,
         }
     }
 }
