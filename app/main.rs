@@ -121,14 +121,14 @@ fn main() {
     env_logger::init();
 
     let cache_uri =
-        env::var("CACHE_URI").unwrap_or_else(|_| "redis://:adminpass@localhost:16379".to_string());
-    let db_uri = env::var("DATABASE_URI").unwrap_or_else(|_| {
-        "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string()
-    });
-    let mq_uri = env::var("AMQP_URI").unwrap_or_else(|_| {
+        env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
+    let db_uri = env::var("DATABASE_URI").unwrap_or(
+        "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string(),
+    );
+    let mq_uri = env::var("AMQP_URI").unwrap_or(
         // connection_timeout is in milliseconds
-        "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string()
-    });
+        "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
+    );
     let mut service = PersonServiceImpl::new(&db_uri, &cache_uri, &mq_uri);
 
     let (id, person) = service
