@@ -100,6 +100,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 //
 // * 実装
 //
+//                          Test Double
 //        +---------+      +------------+
 //        | Usecase |      | Fake DAO   |
 //        | ======= |      | ========== |
@@ -326,6 +327,7 @@ mod fake_tests {
 //
 // * 実装
 //
+//                          Test Double
 //        +---------+      +------------+
 //        | Usecase |      | Spy DAO    |
 //        | ======= |      | ========== |
@@ -542,6 +544,7 @@ mod spy_tests {
 //
 // * 実装
 //
+//                          Test Double
 //        +---------+      +------------+
 //        | Usecase |      | Stub DAO   |
 //        | ======= |      | ========== |
