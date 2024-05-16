@@ -157,19 +157,19 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
 // # フェイクテスト
 //
-// * 目的
+// ## 目的
 //
 //   CachedService の正常系のテストを行う
 //   CachedService の各メソッドが、 Cache と Service とから通常期待される結果を受け取ったときに
 //   適切にふるまうことを保障する
 //
-// * 方針
+// ## 方針
 //
 //   Cache のフェイクと Service のフェイクに対して CachedService を実行し、その結果を確認する
 //   フェイクはテスト時の比較チェックのしやすさを考慮して HashMap ではなく Vec で登録データを保持する
 //   データ数は多くないので、Vec でリニアサーチしても十分な速度が出ると考える
 //
-// * 実装
+// ## 実装
 //
 //   1. ダミーの DAO 構造体、ユースケース構造体を用意する
 //      この構造体は実質使われないが、 Service に必要なので用意する
@@ -182,7 +182,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 //   6. Service のメソッドを呼び出す
 //   7. Service からの戻り値を検証する
 //
-// * 注意
+// ## 注意
 //
 //   1. このテストは CachedService の実装を保障するものであって、Service や Cache の実装を保障するものではない
 //   2. 同様にこのテストは ユースケースや DAO の実装を保障するものではない
@@ -577,7 +577,7 @@ mod fake_tests {
 
 // # スパイテスト(モック利用)
 //
-// * 目的
+// ## 目的
 //
 //   CachedService の各メソッドが、 Cache, Notifier と Service のメソッドを適切に呼び出していることを保障する
 //   つまり、
@@ -586,7 +586,7 @@ mod fake_tests {
 //    3. CachedService に渡った引数が適切に Cache, Notifier や Service のメソッドに渡されていること
 //   を保障する
 //
-// * 方針
+// ## 方針
 //
 //   スパイ Service と スパイ Cache, スパイ Notifer は呼び出されるたびに、それらを全て記録する
 //   ただし、 Service の返り値が Cache や Notifer に使われたりその逆があるため、
@@ -594,7 +594,7 @@ mod fake_tests {
 //   よってスタブを兼ねる必要があるため、それぞれをモックとして実装する
 //   各メソッドの呼び出された記録をテストの最後で確認する
 //
-// * 実装
+// ## 実装
 //
 //   1. ダミーの DAO 構造体、ユースケース構造体を用意する
 //      この構造体は実質使われないが、 Service に必要なので用意する
@@ -605,7 +605,7 @@ mod fake_tests {
 //   6. CachedService のメソッドを呼び出す
 //   7. Cache, Notifier と Service の記録を検証する
 //
-// * 注意
+// ## 注意
 //
 //   1. このテストは CachedService の実装を保障するものであって、Service や Cache, Notifier の実装を保障するものではない
 //   2. このテストは CachedService のメソッドが不適切な Cache メソッドや Notifier メソッド あるいは Service メソッド呼び出しをしていないことを保障するものであって Cache, Notifier や Service の不適切な処理をしていないことを保障するものではない
@@ -1584,16 +1584,16 @@ mod spy_tests {
 
 // # エラー系スタブテスト
 //
-// * 目的
+// ## 目的
 //
 //   Cache, Notifier や Service がエラーを返した場合の CachedService の挙動を保障する
 //
-// * 方針
+// ## 方針
 //
 //   スタブ Cache, スタブ Notifier や Service はメソッドが呼び出されると、事前に設定された任意のエラー値を返す
 //   CachedService のメソッドを呼び出して Cache, Notifier あるいは Service からエラーを受け取ったときの CachedService の返り値を確認する
 //
-// * 実装
+// ## 実装
 //
 //   1. ダミーの DAO 構造体とユースケース構造体を用意する
 //      この構造体は実質使われないが、 Service の構成で必要になるため用意する
@@ -1607,7 +1607,7 @@ mod spy_tests {
 //   6. CachedService のメソッドを呼び出す
 //   7. CachedService のメソッドからの戻り値を確認する
 //
-// * 注意
+// ## 注意
 //
 #[cfg(test)]
 mod error_stub_tests {
