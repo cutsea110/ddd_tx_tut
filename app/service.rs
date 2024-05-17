@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use log::trace;
+use log::{error, trace};
 use std::fmt;
 use thiserror::Error;
 
@@ -53,27 +53,50 @@ pub trait PersonService<'a, Ctx> {
             death_date,
             data
         );
+        let notifier = self.get_notifier();
+
         self.run_tx(move |usecase, ctx| {
             usecase
                 .entry_and_verify(Person::new(name, birth_date, death_date, Some(data)))
                 .run(ctx)
         })
+        .map_err(|e| {
+            if let Err(e) = notifier.notify("admin", "cannot register person") {
+                error!("notification service not available: {}", e);
+            }
+            return e;
+        })
     }
 
     fn find(&'a mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
         trace!("find person: id={}", id);
+        let notifier = self.get_notifier();
+
         self.run_tx(move |usecase, ctx| usecase.find(id).run(ctx))
+            .map_err(|e| {
+                if let Err(e) = notifier.notify("admin", "cannot find person") {
+                    error!("notification service not available: {}", e);
+                }
+                return e;
+            })
     }
 
     fn batch_import(&'a mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
         trace!("batch import persons: {:?}", persons);
+        let notifier = self.get_notifier();
+
         let mut ids = vec![];
         self.run_tx(move |usecase, ctx| {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
                 match res {
                     Ok(id) => ids.push(id),
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        if let Err(e) = notifier.notify("admin", "cannot entry person") {
+                            error!("notification service not available: {}", e);
+                        }
+                        return Err(e);
+                    }
                 }
             }
             Ok(ids)
@@ -82,12 +105,28 @@ pub trait PersonService<'a, Ctx> {
 
     fn list_all(&'a mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
         trace!("list all persons");
+        let notifier = self.get_notifier();
+
         self.run_tx(move |usecase, ctx| usecase.collect().run(ctx))
+            .map_err(|e| {
+                if let Err(e) = notifier.notify("admin", "cannot list all persons") {
+                    error!("notification service not available: {}", e);
+                }
+                return e;
+            })
     }
 
     fn unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
         trace!("unregister person: id={}", id);
+        let notifier = self.get_notifier();
+
         self.run_tx(move |usecase, ctx| usecase.remove(id).run(ctx))
+            .map_err(|e| {
+                if let Err(e) = notifier.notify("admin", "cannot remove person") {
+                    error!("notification service not available: {}", e);
+                }
+                return e;
+            })
     }
 }
 
