@@ -61,7 +61,11 @@ pub trait PersonService<'a, Ctx> {
                 .run(ctx)
         })
         .map_err(|e| {
-            if let Err(e) = notifier.notify("admin", "cannot register person") {
+            let msg = format!(
+                "cannot register person: name={}, birth_date={}, death_date={:?}, data={}",
+                name, birth_date, death_date, data
+            );
+            if let Err(e) = notifier.notify("admin", &msg) {
                 error!("notification service not available: {}", e);
             }
             return e;
@@ -74,7 +78,8 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| usecase.find(id).run(ctx))
             .map_err(|e| {
-                if let Err(e) = notifier.notify("admin", "cannot find person") {
+                let msg = format!("cannot find person: id={}", id);
+                if let Err(e) = notifier.notify("admin", &msg) {
                     error!("notification service not available: {}", e);
                 }
                 return e;
@@ -92,7 +97,8 @@ pub trait PersonService<'a, Ctx> {
                 match res {
                     Ok(id) => ids.push(id),
                     Err(e) => {
-                        if let Err(e) = notifier.notify("admin", "cannot entry person") {
+                        let msg = format!("cannot entry person: {:?}", e);
+                        if let Err(e) = notifier.notify("admin", &msg) {
                             error!("notification service not available: {}", e);
                         }
                         return Err(e);
@@ -122,7 +128,8 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| usecase.remove(id).run(ctx))
             .map_err(|e| {
-                if let Err(e) = notifier.notify("admin", "cannot remove person") {
+                let msg = format!("cannot remove person: id={}", id);
+                if let Err(e) = notifier.notify("admin", &msg) {
                     error!("notification service not available: {}", e);
                 }
                 return e;
