@@ -60,6 +60,13 @@ pub trait PersonService<'a, Ctx> {
                 .entry_and_verify(Person::new(name, birth_date, death_date, Some(data)))
                 .run(ctx)
         })
+        .and_then(|(id, p)| {
+            let msg = format!(r#"{{ "person_id": {} }}"#, id);
+            if let Err(e) = notifier.notify("entry_person", &msg) {
+                error!("notification service not available: {}", e);
+            }
+            return Ok((id, p));
+        })
         .map_err(|e| {
             let msg = format!(
                 "cannot register person: name={}, birth_date={}, death_date={:?}, data={}",
@@ -95,7 +102,14 @@ pub trait PersonService<'a, Ctx> {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
                 match res {
-                    Ok(id) => ids.push(id),
+                    Ok(id) => {
+                        ids.push(id);
+
+                        let msg = format!(r#"{{ "person_id": {} }}"#, id);
+                        if let Err(e) = notifier.notify("entry_person", &msg) {
+                            error!("notification service not available: {}", e);
+                        }
+                    }
                     Err(e) => {
                         let msg = format!("cannot entry person: {:?}", e);
                         if let Err(e) = notifier.notify("admin", &msg) {
@@ -127,6 +141,13 @@ pub trait PersonService<'a, Ctx> {
         let notifier = self.get_notifier();
 
         self.run_tx(move |usecase, ctx| usecase.remove(id).run(ctx))
+            .and_then(|_| {
+                let msg = format!(r#"{{ "person_id": {} }}"#, id);
+                if let Err(e) = notifier.notify("unregister_person", &msg) {
+                    error!("notification service not available: {}", e);
+                }
+                return Ok(());
+            })
             .map_err(|e| {
                 let msg = format!("cannot remove person: id={}", id);
                 if let Err(e) = notifier.notify("admin", &msg) {
