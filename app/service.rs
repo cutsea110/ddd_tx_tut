@@ -628,19 +628,28 @@ mod spy_tests {
         }
     }
 
-    struct DummyNotifier;
-    impl Notifier for DummyNotifier {
+    #[derive(Debug, Clone)]
+    struct SpyNotifier {
+        notify: Rc<RefCell<Vec<(String, String)>>>,
+    }
+    impl Notifier for SpyNotifier {
         fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+            self.notify
+                .borrow_mut()
+                .push((_to.to_string(), _message.to_string()));
+
+            // 返り値に意味はない
             Ok(())
         }
     }
 
     struct TargetPersonService {
         usecase: Rc<RefCell<SpyPersonUsecase>>,
+        notifier: SpyNotifier,
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = SpyPersonUsecase;
-        type N = DummyNotifier;
+        type N = SpyNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -651,7 +660,7 @@ mod spy_tests {
         }
 
         fn get_notifier(&self) -> Self::N {
-            DummyNotifier
+            self.notifier.clone()
         }
     }
 
@@ -665,8 +674,12 @@ mod spy_tests {
             collect: RefCell::new(0),
             remove: RefCell::new(vec![]),
         }));
+        let notifier = SpyNotifier {
+            notify: RefCell::new(vec![]).into(),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: notifier.clone(),
         };
 
         let expected = Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
@@ -682,6 +695,18 @@ mod spy_tests {
 
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().entry_and_verify.borrow()[0], expected);
+
+        // Notifier のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_notifier().notify.borrow().len(), 1);
+
+        // Service の引数が Notifier にそのまま渡されていることを検証
+        assert_eq!(
+            service.get_notifier().notify.borrow()[0],
+            (
+                "entry_person".to_string(),
+                r#"{ "person_id": 42 }"#.to_string()
+            )
+        );
     }
 
     #[test]
@@ -694,8 +719,12 @@ mod spy_tests {
             collect: RefCell::new(0),
             remove: RefCell::new(vec![]),
         }));
+        let notifier = SpyNotifier {
+            notify: RefCell::new(vec![]).into(),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: notifier.clone(),
         };
 
         let persons = vec![
@@ -716,6 +745,28 @@ mod spy_tests {
 
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().entry.borrow().clone(), expected);
+
+        // Notifier のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_notifier().notify.borrow().len(), 3);
+
+        // Service の引数が Notifier にそのまま渡されていることを検証
+        assert_eq!(
+            *service.get_notifier().notify.borrow(),
+            vec![
+                (
+                    "entry_person".to_string(),
+                    r#"{ "person_id": 42 }"#.to_string()
+                ),
+                (
+                    "entry_person".to_string(),
+                    r#"{ "person_id": 42 }"#.to_string()
+                ),
+                (
+                    "entry_person".to_string(),
+                    r#"{ "person_id": 42 }"#.to_string()
+                )
+            ]
+        );
     }
 
     #[test]
@@ -728,8 +779,12 @@ mod spy_tests {
             collect: RefCell::new(0),
             remove: RefCell::new(vec![]),
         }));
+        let notifier = SpyNotifier {
+            notify: RefCell::new(vec![]).into(),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: notifier.clone(),
         };
 
         let _ = service.list_all();
@@ -740,6 +795,9 @@ mod spy_tests {
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
         assert_eq!(*usecase.borrow().collect.borrow(), 1);
         assert_eq!(usecase.borrow().remove.borrow().len(), 0);
+
+        // Notifier のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_notifier().notify.borrow().len(), 0);
     }
     #[test]
     fn test_unregister() {
@@ -751,8 +809,12 @@ mod spy_tests {
             collect: RefCell::new(0),
             remove: RefCell::new(vec![]),
         }));
+        let notifier = SpyNotifier {
+            notify: RefCell::new(vec![]).into(),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: notifier.clone(),
         };
 
         let _ = service.unregister(42);
@@ -766,6 +828,18 @@ mod spy_tests {
 
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().remove.borrow()[0], 42);
+
+        // Notifier のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_notifier().notify.borrow().len(), 1);
+
+        // Service の引数が Notifier にそのまま渡されていることを検証
+        assert_eq!(
+            *service.get_notifier().notify.borrow(),
+            vec![(
+                "unregister_person".to_string(),
+                r#"{ "person_id": 42 }"#.to_string()
+            )]
+        );
     }
 }
 
