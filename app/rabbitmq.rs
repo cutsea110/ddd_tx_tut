@@ -42,30 +42,28 @@ impl notifier::Notifier for Client {
                 error!("failed to create channel: {}", e);
                 notifier::NotifierError::Unavailable(e.to_string())
             })?;
-            let _ = chan
-                .queue_declare(
-                    to,
-                    lapin::options::QueueDeclareOptions::default(),
-                    lapin::types::FieldTable::default(),
-                )
-                .await
-                .map_err(|e| {
-                    error!("failed to declare queue: {}", e);
-                    notifier::NotifierError::Unavailable(e.to_string())
-                })?;
-            let _ = chan
-                .basic_publish(
-                    "",
-                    to,
-                    lapin::options::BasicPublishOptions::default(),
-                    message.as_bytes(),
-                    lapin::BasicProperties::default(),
-                )
-                .await
-                .map_err(|e| {
-                    error!("failed to publish message: {}", e);
-                    notifier::NotifierError::Unavailable(e.to_string())
-                })?;
+            chan.queue_declare(
+                to,
+                lapin::options::QueueDeclareOptions::default(),
+                lapin::types::FieldTable::default(),
+            )
+            .await
+            .map_err(|e| {
+                error!("failed to declare queue: {}", e);
+                notifier::NotifierError::Unavailable(e.to_string())
+            })?;
+            chan.basic_publish(
+                "",
+                to,
+                lapin::options::BasicPublishOptions::default(),
+                message.as_bytes(),
+                lapin::BasicProperties::default(),
+            )
+            .await
+            .map_err(|e| {
+                error!("failed to publish message: {}", e);
+                notifier::NotifierError::Unavailable(e.to_string())
+            })?;
             trace!("published: {} to {}", message, to);
 
             Ok(())
