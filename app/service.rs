@@ -679,7 +679,7 @@ mod spy_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: notifier.clone(),
+            notifier,
         };
 
         let expected = Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
@@ -724,7 +724,7 @@ mod spy_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: notifier.clone(),
+            notifier,
         };
 
         let persons = vec![
@@ -784,7 +784,7 @@ mod spy_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: notifier.clone(),
+            notifier,
         };
 
         let _ = service.list_all();
@@ -814,7 +814,7 @@ mod spy_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: notifier.clone(),
+            notifier,
         };
 
         let _ = service.unregister(42);
@@ -983,19 +983,30 @@ mod error_stub_tests {
         }
     }
 
-    struct DummyNotifier;
-    impl Notifier for DummyNotifier {
-        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
-            Ok(())
+    #[derive(Debug, Clone)]
+    struct StubNotifier;
+    impl Notifier for StubNotifier {
+        fn notify(&self, to: &str, _message: &str) -> Result<(), NotifierError> {
+            match to {
+                "entry_person" | "unregister_person" => Err(NotifierError::Unavailable(format!(
+                    r#"failed to notify for queue="{}""#,
+                    to
+                ))),
+                _ => Err(NotifierError::UnknownDestination(format!(
+                    r#"queue="{}""#,
+                    to
+                ))),
+            }
         }
     }
 
     struct TargetPersonService {
         usecase: Rc<RefCell<StubPersonUsecase>>,
+        notifier: StubNotifier,
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = StubPersonUsecase;
-        type N = DummyNotifier;
+        type N = StubNotifier;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -1006,7 +1017,7 @@ mod error_stub_tests {
         }
 
         fn get_notifier(&self) -> Self::N {
-            DummyNotifier
+            self.notifier.clone()
         }
     }
 
@@ -1024,6 +1035,7 @@ mod error_stub_tests {
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: StubNotifier,
         };
 
         let result = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
@@ -1050,6 +1062,7 @@ mod error_stub_tests {
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: StubNotifier,
         };
 
         let result = service.batch_import(vec![
@@ -1075,6 +1088,7 @@ mod error_stub_tests {
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: StubNotifier,
         };
 
         let result = service.list_all();
@@ -1097,6 +1111,7 @@ mod error_stub_tests {
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
+            notifier: StubNotifier,
         };
 
         let result = service.unregister(42);
