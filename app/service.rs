@@ -984,18 +984,19 @@ mod error_stub_tests {
     }
 
     #[derive(Debug, Clone)]
-    struct StubNotifier;
+    struct StubNotifier {
+        admin_result: Result<(), NotifierError>,
+        entry_person_result: Result<(), NotifierError>,
+        unregister_person_result: Result<(), NotifierError>,
+        otherwise_result: Result<(), NotifierError>,
+    }
     impl Notifier for StubNotifier {
         fn notify(&self, to: &str, _message: &str) -> Result<(), NotifierError> {
             match to {
-                "entry_person" | "unregister_person" => Err(NotifierError::Unavailable(format!(
-                    r#"failed to notify for queue="{}""#,
-                    to
-                ))),
-                _ => Err(NotifierError::UnknownDestination(format!(
-                    r#"queue="{}""#,
-                    to
-                ))),
+                "entry_person" => self.entry_person_result.clone(),
+                "unregister_person" => self.unregister_person_result.clone(),
+                "admin" => self.admin_result.clone(),
+                _ => self.otherwise_result.clone(),
             }
         }
     }
@@ -1033,9 +1034,77 @@ mod error_stub_tests {
             collect_result: Ok(vec![]), // 使わない
             remove_result: Ok(()),      // 使わない
         }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: StubNotifier,
+            notifier,
+        };
+
+        let result = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
+        let expected = usecase
+            .borrow()
+            .entry_and_verify_result
+            .clone()
+            .unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
+    fn test_register_entry_and_verify_notify_error_for_entry_person() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((
+                1,
+                Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            )),
+            collect_result: Ok(vec![]), // 使わない
+            remove_result: Ok(()),      // 使わない
+        }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
+        };
+
+        let result = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_register_entry_and_verify_notify_error_for_admin() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Err(UsecaseError::EntryAndVerifyPersonFailed(
+                DaoError::InsertError("valid dao".to_string()),
+            )),
+            collect_result: Ok(vec![]), // 使わない
+            remove_result: Ok(()),      // 使わない
+        }));
+        let notifier = StubNotifier {
+            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
         };
 
         let result = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
@@ -1060,9 +1129,15 @@ mod error_stub_tests {
             collect_result: Ok(vec![]), // 使わない
             remove_result: Ok(()),      // 使わない
         }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: StubNotifier,
+            notifier,
         };
 
         let result = service.batch_import(vec![
@@ -1072,6 +1147,69 @@ mod error_stub_tests {
         let expected = usecase.borrow().entry_result.clone().unwrap_err();
 
         assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
+    fn test_batch_import_notify_error_for_entry_person() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(42),
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+            remove_result: Ok(()),      // 使わない
+        }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
+        };
+
+        let result = service.batch_import(vec![
+            Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+        ]);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_batch_import_notify_error_for_admin() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Err(UsecaseError::EntryPersonFailed(DaoError::InsertError(
+                "valid dao".to_string(),
+            ))),
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+            remove_result: Ok(()),      // 使わない
+        }));
+        let notifier = StubNotifier {
+            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
+        };
+
+        let result = service.batch_import(vec![
+            Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+        ]);
+        let expected = Err(ServiceError::TransactionFailed(
+            usecase.borrow().entry_result.clone().unwrap_err(),
+        ));
+
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -1086,9 +1224,44 @@ mod error_stub_tests {
             ))),
             remove_result: Ok(()), // 使わない
         }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: StubNotifier,
+            notifier,
+        };
+
+        let result = service.list_all();
+        let expected = usecase.borrow().collect_result.clone().unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
+    fn test_list_all_notify_for_admin() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
+                "valid dao".to_string(),
+            ))),
+            remove_result: Ok(()), // 使わない
+        }));
+        let notifier = StubNotifier {
+            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
         };
 
         let result = service.list_all();
@@ -1109,9 +1282,70 @@ mod error_stub_tests {
                 "valid dao".to_string(),
             ))),
         }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier: StubNotifier,
+            notifier,
+        };
+
+        let result = service.unregister(42);
+        let expected = usecase.borrow().remove_result.clone().unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
+    fn test_unregister_notify_for_unregister_person() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+            remove_result: Ok(()),
+        }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Ok(()),
+            unregister_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
+        };
+
+        let result = service.unregister(42);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_unregister_notify_for_admin() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+            remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
+                "valid dao".to_string(),
+            ))),
+        }));
+        let notifier = StubNotifier {
+            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            entry_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
         };
 
         let result = service.unregister(42);

@@ -2,8 +2,6 @@ use thiserror::Error;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum NotifierError {
-    #[error("unknown destination: {0}")]
-    UnknownDestination(String),
     #[error("notifier unavailable: {0}")]
     Unavailable(String),
 }
