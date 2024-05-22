@@ -511,7 +511,7 @@ mod fake_tests {
 //   3. スパイの Notifier 構造体を用意する
 //   4. Service をここまでに用意したスパイで構築する
 //   5. Service のメソッドを呼び出す
-//   6. その後で Usecase 構造体と Notifier 構造体の記録を検証する
+//   6. Usecase 構造体と Notifier 構造体の記録を検証する
 //
 // ## 注意
 //
