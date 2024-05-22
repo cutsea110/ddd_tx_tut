@@ -55,19 +55,6 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
         f.run(&mut conn)
     }
 
-    fn exists(
-        &self,
-        id: PersonId,
-    ) -> impl tx_rs::Tx<redis::Connection, Item = bool, Err = CaoError> {
-        tx_rs::with_tx(move |conn: &mut redis::Connection| {
-            let key = format!("person:{}", id);
-            let exists: bool = conn
-                .exists(&key)
-                .map_err(|e| CaoError::Unavailable(e.to_string()))?;
-
-            Ok(exists)
-        })
-    }
     fn find(
         &self,
         id: PersonId,

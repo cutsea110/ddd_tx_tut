@@ -392,9 +392,6 @@ mod fake_tests {
         {
             f.run(&mut ())
         }
-        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = CaoError> {
-            tx_rs::with_tx(move |&mut ()| Ok(self.cache.borrow().contains_key(&id)))
-        }
         fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(self.cache.borrow().get(&id).cloned()))
         }
@@ -831,8 +828,6 @@ mod spy_tests {
     // モックキャッシュ実装です
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct MockPersonCao {
-        exists: Rc<RefCell<Vec<PersonId>>>,
-        exists_result: Result<bool, CaoError>,
         find: Rc<RefCell<Vec<PersonId>>>,
         find_result: Result<Option<Person>, CaoError>,
         load: Rc<RefCell<Vec<(PersonId, Person)>>>,
@@ -849,12 +844,6 @@ mod spy_tests {
             F: tx_rs::Tx<(), Item = T, Err = CaoError>,
         {
             f.run(&mut ())
-        }
-        fn exists(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = CaoError> {
-            tx_rs::with_tx(move |&mut ()| {
-                self.exists.borrow_mut().push(id);
-                self.exists_result.clone()
-            })
         }
         fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
@@ -907,8 +896,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -936,7 +923,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -969,8 +955,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -998,7 +982,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1034,8 +1017,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(Some(Person::new(
                     "Alice",
@@ -1060,7 +1041,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![1]);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1092,8 +1072,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None),
                 load: Rc::new(RefCell::new(vec![])),
@@ -1113,7 +1091,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![1]);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1148,8 +1125,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Err(CaoError::Unavailable("valid cao".to_string())),
                 load: Rc::new(RefCell::new(vec![])),
@@ -1169,7 +1144,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![1]);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1204,8 +1178,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None),
                 load: Rc::new(RefCell::new(vec![])),
@@ -1225,7 +1197,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![1]);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1261,8 +1232,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -1293,7 +1262,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1333,8 +1301,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -1365,7 +1331,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1416,8 +1381,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -1437,7 +1400,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 1);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1487,8 +1449,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -1508,7 +1468,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 1);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1544,8 +1503,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -1565,7 +1522,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![3]);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1589,8 +1545,6 @@ mod spy_tests {
                 dao: DummyPersonDao,
             }),
             cao: MockPersonCao {
-                exists: Rc::new(RefCell::new(vec![])),
-                exists_result: Ok(false), // 使われない
                 find: Rc::new(RefCell::new(vec![])),
                 find_result: Ok(None), // 使われない
                 load: Rc::new(RefCell::new(vec![])),
@@ -1610,7 +1564,6 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![3]);
 
-        assert_eq!(*service.cao.exists.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
@@ -1831,7 +1784,6 @@ mod error_stub_tests {
     // スタブキャッシュ実装です
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct StubPersonCao {
-        exists_result: Result<bool, CaoError>,
         find_result: Result<Option<Person>, CaoError>,
         load_result: Result<(), CaoError>,
         unload_result: Result<(), CaoError>,
@@ -1845,9 +1797,6 @@ mod error_stub_tests {
             F: tx_rs::Tx<(), Item = T, Err = CaoError>,
         {
             f.run(&mut ())
-        }
-        fn exists(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = bool, Err = CaoError> {
-            tx_rs::with_tx(move |&mut ()| self.exists_result.clone())
         }
         fn find(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.find_result.clone())
@@ -1885,7 +1834,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Ok(()),
                 unload_result: Ok(()),
@@ -1912,7 +1860,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Err(CaoError::Unavailable("valid cao".to_string())),
                 unload_result: Ok(()),
@@ -1945,7 +1892,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Ok(()),
                 unload_result: Ok(()),
@@ -1977,7 +1923,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(true),
                 find_result: Err(CaoError::Unavailable("valid cao".to_string())),
                 load_result: Ok(()),
                 unload_result: Ok(()),
@@ -2012,7 +1957,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Ok(()),
                 unload_result: Ok(()),
@@ -2041,7 +1985,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Ok(()),
                 unload_result: Ok(()),
@@ -2073,7 +2016,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Err(CaoError::Unavailable("valid cao".to_string())),
                 unload_result: Ok(()),
@@ -2105,7 +2047,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Ok(()),
                 unload_result: Ok(()),
@@ -2135,7 +2076,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Err(CaoError::Unavailable("valid cao".to_string())),
                 unload_result: Ok(()),
@@ -2168,7 +2108,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Ok(()),
                 unload_result: Ok(()),
@@ -2195,7 +2134,6 @@ mod error_stub_tests {
                 dao: DummyPersonDao,
             }),
             cao: StubPersonCao {
-                exists_result: Ok(false),
                 find_result: Ok(None),
                 load_result: Ok(()),
                 unload_result: Err(CaoError::Unavailable("valid cao".to_string())),
