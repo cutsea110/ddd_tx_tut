@@ -3,7 +3,7 @@ use log::{error, trace};
 use std::fmt;
 use thiserror::Error;
 
-use crate::domain::{Person, PersonId};
+use crate::domain::{PersonId, PersonLayout};
 use crate::notifier::Notifier;
 use crate::usecase::{PersonUsecase, UsecaseError};
 use tx_rs::Tx;
@@ -45,7 +45,7 @@ pub trait PersonService<'a, Ctx> {
         birth_date: NaiveDate,
         death_date: Option<NaiveDate>,
         data: &str,
-    ) -> Result<(PersonId, Person), ServiceError> {
+    ) -> Result<(PersonId, PersonLayout), ServiceError> {
         trace!(
             "register person: name={}, birth_date={}, death_date={:?}, data={}",
             name,
@@ -57,7 +57,7 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| {
             usecase
-                .entry_and_verify(Person::new(name, birth_date, death_date, Some(data)))
+                .entry_and_verify(PersonLayout::new(name, birth_date, death_date, Some(data)))
                 .run(ctx)
         })
         .and_then(|(id, p)| {
@@ -79,7 +79,7 @@ pub trait PersonService<'a, Ctx> {
         })
     }
 
-    fn find(&'a mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
+    fn find(&'a mut self, id: PersonId) -> Result<Option<PersonLayout>, ServiceError> {
         trace!("find person: id={}", id);
         let notifier = self.get_notifier();
 
@@ -93,7 +93,10 @@ pub trait PersonService<'a, Ctx> {
             })
     }
 
-    fn batch_import(&'a mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
+    fn batch_import(
+        &'a mut self,
+        persons: Vec<PersonLayout>,
+    ) -> Result<Vec<PersonId>, ServiceError> {
         trace!("batch import persons: {:?}", persons);
         let notifier = self.get_notifier();
 
@@ -123,7 +126,7 @@ pub trait PersonService<'a, Ctx> {
         })
     }
 
-    fn list_all(&'a mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
+    fn list_all(&'a mut self) -> Result<Vec<(PersonId, PersonLayout)>, ServiceError> {
         trace!("list all persons");
         let notifier = self.get_notifier();
 
@@ -228,16 +231,21 @@ mod fake_tests {
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -246,7 +254,7 @@ mod fake_tests {
     }
 
     struct FakePersonUsecase {
-        db: Vec<(PersonId, Person)>,
+        db: Vec<(PersonId, PersonLayout)>,
         dao: DummyPersonDao,
     }
     impl HavePersonDao<()> for FakePersonUsecase {
@@ -257,7 +265,7 @@ mod fake_tests {
     impl PersonUsecase<()> for FakePersonUsecase {
         fn entry<'a>(
             &'a mut self,
-            person: Person,
+            person: PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
         where
             (): 'a,
@@ -270,7 +278,7 @@ mod fake_tests {
         fn find<'a>(
             &'a mut self,
             id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -284,8 +292,8 @@ mod fake_tests {
         }
         fn entry_and_verify<'a>(
             &'a mut self,
-            person: Person,
-        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+            person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, PersonLayout), Err = UsecaseError>
         where
             (): 'a,
         {
@@ -296,7 +304,7 @@ mod fake_tests {
         }
         fn collect<'a>(
             &'a mut self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -354,7 +362,7 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
         let expected_id = 1;
-        let expected = Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
+        let expected = PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
 
         let res = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
         assert_eq!(res, Ok((expected_id, expected)));
@@ -370,9 +378,9 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
         let persons = vec![
-            Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
-            Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+            PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
         ];
         let expected = persons.clone();
 
@@ -394,15 +402,15 @@ mod fake_tests {
             db: vec![
                 (
                     1,
-                    Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                    PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
                 ),
                 (
                     2,
-                    Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                    PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
                 ),
                 (
                     3,
-                    Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                    PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
                 ),
             ],
             dao: DummyPersonDao,
@@ -427,15 +435,15 @@ mod fake_tests {
             db: vec![
                 (
                     1,
-                    Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                    PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
                 ),
                 (
                     2,
-                    Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                    PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
                 ),
                 (
                     3,
-                    Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                    PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
                 ),
             ],
             dao: DummyPersonDao,
@@ -448,11 +456,11 @@ mod fake_tests {
         let expected = vec![
             (
                 1,
-                Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             ),
             (
                 3,
-                Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
             ),
         ];
 
@@ -536,16 +544,21 @@ mod spy_tests {
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -555,9 +568,9 @@ mod spy_tests {
 
     struct SpyPersonUsecase {
         dao: DummyPersonDao,
-        entry: RefCell<Vec<Person>>,
+        entry: RefCell<Vec<PersonLayout>>,
         find: RefCell<Vec<PersonId>>,
-        entry_and_verify: RefCell<Vec<Person>>,
+        entry_and_verify: RefCell<Vec<PersonLayout>>,
         collect: RefCell<i32>,
         remove: RefCell<Vec<PersonId>>,
     }
@@ -569,7 +582,7 @@ mod spy_tests {
     impl PersonUsecase<()> for SpyPersonUsecase {
         fn entry<'a>(
             &'a mut self,
-            person: Person,
+            person: PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
         where
             (): 'a,
@@ -582,7 +595,7 @@ mod spy_tests {
         fn find<'a>(
             &'a mut self,
             id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -593,8 +606,8 @@ mod spy_tests {
         }
         fn entry_and_verify<'a>(
             &'a mut self,
-            person: Person,
-        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+            person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, PersonLayout), Err = UsecaseError>
         where
             (): 'a,
         {
@@ -605,7 +618,7 @@ mod spy_tests {
         }
         fn collect<'a>(
             &'a mut self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -682,7 +695,7 @@ mod spy_tests {
             notifier,
         };
 
-        let expected = Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
+        let expected = PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
 
         let _ = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
 
@@ -728,9 +741,9 @@ mod spy_tests {
         };
 
         let persons = vec![
-            Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
-            Person::new("Eve", date(1996, 12, 15), None, Some("Eve is interseptor")),
+            PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interseptor")),
         ];
         let expected = persons.clone();
 
@@ -906,16 +919,21 @@ mod error_stub_tests {
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -926,9 +944,9 @@ mod error_stub_tests {
     struct StubPersonUsecase {
         dao: DummyPersonDao,
         entry_result: Result<PersonId, UsecaseError>,
-        find_result: Result<Option<Person>, UsecaseError>,
-        entry_and_verify_result: Result<(PersonId, Person), UsecaseError>,
-        collect_result: Result<Vec<(PersonId, Person)>, UsecaseError>,
+        find_result: Result<Option<PersonLayout>, UsecaseError>,
+        entry_and_verify_result: Result<(PersonId, PersonLayout), UsecaseError>,
+        collect_result: Result<Vec<(PersonId, PersonLayout)>, UsecaseError>,
         remove_result: Result<(), UsecaseError>,
     }
     impl HavePersonDao<()> for StubPersonUsecase {
@@ -939,7 +957,7 @@ mod error_stub_tests {
     impl PersonUsecase<()> for StubPersonUsecase {
         fn entry<'a>(
             &'a mut self,
-            _person: Person,
+            _person: PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
         where
             (): 'a,
@@ -949,7 +967,7 @@ mod error_stub_tests {
         fn find<'a>(
             &'a mut self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -957,8 +975,8 @@ mod error_stub_tests {
         }
         fn entry_and_verify<'a>(
             &'a mut self,
-            _person: Person,
-        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, PersonLayout), Err = UsecaseError>
         where
             (): 'a,
         {
@@ -966,7 +984,7 @@ mod error_stub_tests {
         }
         fn collect<'a>(
             &'a mut self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -1063,7 +1081,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 1,
-                Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             )),
             collect_result: Ok(vec![]), // 使わない
             remove_result: Ok(()),      // 使わない
@@ -1125,9 +1143,12 @@ mod error_stub_tests {
                 "valid dao".to_string(),
             ))),
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Ok(vec![]), // 使わない
-            remove_result: Ok(()),      // 使わない
+            remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
@@ -1141,8 +1162,8 @@ mod error_stub_tests {
         };
 
         let result = service.batch_import(vec![
-            Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
         ]);
         let expected = usecase.borrow().entry_result.clone().unwrap_err();
 
@@ -1155,9 +1176,12 @@ mod error_stub_tests {
             dao: DummyPersonDao,
             entry_result: Ok(42),
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Ok(vec![]), // 使わない
-            remove_result: Ok(()),      // 使わない
+            remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
@@ -1171,8 +1195,8 @@ mod error_stub_tests {
         };
 
         let result = service.batch_import(vec![
-            Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
         ]);
 
         assert!(result.is_ok());
@@ -1186,9 +1210,12 @@ mod error_stub_tests {
                 "valid dao".to_string(),
             ))),
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Ok(vec![]), // 使わない
-            remove_result: Ok(()),      // 使わない
+            remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
@@ -1202,8 +1229,8 @@ mod error_stub_tests {
         };
 
         let result = service.batch_import(vec![
-            Person::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            Person::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+            PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
         ]);
         let expected = Err(ServiceError::TransactionFailed(
             usecase.borrow().entry_result.clone().unwrap_err(),
@@ -1218,7 +1245,10 @@ mod error_stub_tests {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
             ))),
@@ -1247,7 +1277,10 @@ mod error_stub_tests {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
             ))),
@@ -1276,7 +1309,10 @@ mod error_stub_tests {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
                 "valid dao".to_string(),
@@ -1305,7 +1341,10 @@ mod error_stub_tests {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             remove_result: Ok(()),
         }));
@@ -1331,7 +1370,10 @@ mod error_stub_tests {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
             find_result: Ok(None), // 使わない
-            entry_and_verify_result: Ok((42, Person::new("Alice", date(2012, 11, 2), None, None))), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
                 "valid dao".to_string(),

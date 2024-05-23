@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use log::{error, trace, warn};
 
 use crate::cache::PersonCao;
-use crate::domain::{Person, PersonId};
+use crate::domain::{PersonId, PersonLayout};
 use crate::notifier::Notifier;
 use crate::service::{InvalidErrorKind, PersonService, ServiceError};
 
@@ -17,7 +17,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         birth_date: NaiveDate,
         death_date: Option<NaiveDate>,
         data: &str,
-    ) -> Result<(PersonId, Person), ServiceError> {
+    ) -> Result<(PersonId, PersonLayout), ServiceError> {
         trace!(
             "cached register: {} {} {:?} {}",
             name,
@@ -46,7 +46,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         result
     }
 
-    fn cached_find(&'a mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
+    fn cached_find(&'a mut self, id: PersonId) -> Result<Option<PersonLayout>, ServiceError> {
         trace!("cached find: {}", id);
         let cao = self.get_cao();
         let notifier = self.get_notifier();
@@ -79,7 +79,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
     fn cached_batch_import(
         &'a mut self,
-        persons: Vec<Person>,
+        persons: Vec<PersonLayout>,
     ) -> Result<Vec<PersonId>, ServiceError> {
         if persons.is_empty() {
             return Err(ServiceError::InvalidRequest(
@@ -109,7 +109,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         Ok(ids)
     }
 
-    fn cached_list_all(&'a mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
+    fn cached_list_all(&'a mut self) -> Result<Vec<(PersonId, PersonLayout)>, ServiceError> {
         trace!("cached list all");
         let cao = self.get_cao();
         let notifier = self.get_notifier();
@@ -227,16 +227,21 @@ mod fake_tests {
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -255,7 +260,7 @@ mod fake_tests {
     impl PersonUsecase<()> for DummyPersonUsecase {
         fn entry<'a>(
             &'a mut self,
-            _person: Person,
+            _person: PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
         where
             (): 'a,
@@ -265,7 +270,7 @@ mod fake_tests {
         fn find<'a>(
             &'a mut self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -273,8 +278,8 @@ mod fake_tests {
         }
         fn entry_and_verify<'a>(
             &'a mut self,
-            person: Person,
-        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+            person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, PersonLayout), Err = UsecaseError>
         where
             (): 'a,
         {
@@ -282,7 +287,7 @@ mod fake_tests {
         }
         fn collect<'a>(
             &'a mut self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -311,7 +316,7 @@ mod fake_tests {
     /// FakePersonCao のみ get_cao() で clone されるため内部データを Rc でラップしています。
     struct TargetPersonService {
         next_id: RefCell<PersonId>,
-        db: RefCell<HashMap<PersonId, Person>>,
+        db: RefCell<HashMap<PersonId, PersonLayout>>,
         usecase: Rc<RefCell<DummyPersonUsecase>>,
         cao: FakePersonCao,
     }
@@ -338,21 +343,24 @@ mod fake_tests {
             birth_date: NaiveDate,
             death_date: Option<NaiveDate>,
             data: &str,
-        ) -> Result<(PersonId, Person), ServiceError> {
+        ) -> Result<(PersonId, PersonLayout), ServiceError> {
             let id = *self.next_id.borrow();
             *self.next_id.borrow_mut() += 1;
 
-            let person = Person::new(name, birth_date, death_date, Some(data));
+            let person = PersonLayout::new(name, birth_date, death_date, Some(data));
 
             self.db.borrow_mut().insert(id, person.clone());
             Ok((id, person))
         }
 
-        fn find(&'_ mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
+        fn find(&'_ mut self, id: PersonId) -> Result<Option<PersonLayout>, ServiceError> {
             Ok(self.db.borrow().get(&id).cloned())
         }
 
-        fn batch_import(&'_ mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
+        fn batch_import(
+            &'_ mut self,
+            persons: Vec<PersonLayout>,
+        ) -> Result<Vec<PersonId>, ServiceError> {
             let mut ids = vec![];
             for person in persons {
                 let id = *self.next_id.borrow();
@@ -364,7 +372,7 @@ mod fake_tests {
             Ok(ids)
         }
 
-        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
+        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonLayout)>, ServiceError> {
             Ok(self
                 .db
                 .borrow()
@@ -380,7 +388,7 @@ mod fake_tests {
     }
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FakePersonCao {
-        cache: Rc<RefCell<HashMap<PersonId, Person>>>,
+        cache: Rc<RefCell<HashMap<PersonId, PersonLayout>>>,
     }
     impl PersonCao<()> for FakePersonCao {
         fn get_conn(&self) -> Result<(), CaoError> {
@@ -392,13 +400,16 @@ mod fake_tests {
         {
             f.run(&mut ())
         }
-        fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
+        fn find(
+            &self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(self.cache.borrow().get(&id).cloned()))
         }
         fn load(
             &self,
             id: PersonId,
-            person: &Person,
+            person: &PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.cache.borrow_mut().insert(id, person.clone());
@@ -433,7 +444,7 @@ mod fake_tests {
             },
         };
 
-        let expected = Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
+        let expected = PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
         let result = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
 
         assert!(result.is_ok());
@@ -468,7 +479,7 @@ mod fake_tests {
                 cache: RefCell::new(
                     vec![(
                         1,
-                        Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                        PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                     )]
                     .into_iter()
                     .collect(),
@@ -477,7 +488,7 @@ mod fake_tests {
             },
         };
 
-        let expected = Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
+        let expected = PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
         let result = service.cached_find(1);
 
         assert!(result.is_ok());
@@ -488,7 +499,7 @@ mod fake_tests {
             db: RefCell::new(
                 vec![(
                     1,
-                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                 )]
                 .into_iter()
                 .collect(),
@@ -501,7 +512,7 @@ mod fake_tests {
             },
         };
 
-        let expected = Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
+        let expected = PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"));
         let result = service.cached_find(1);
 
         assert!(result.is_ok());
@@ -522,8 +533,8 @@ mod fake_tests {
         };
 
         let result = service.cached_batch_import(vec![
-            Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
-            Person::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
+            PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            PersonLayout::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
         ]);
 
         assert!(result.is_ok());
@@ -538,11 +549,11 @@ mod fake_tests {
                 vec![
                     (
                         1,
-                        Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                        PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                     ),
                     (
                         2,
-                        Person::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
+                        PersonLayout::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
                     ),
                 ]
                 .into_iter()
@@ -570,11 +581,11 @@ mod fake_tests {
                 vec![
                     (
                         1,
-                        Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                        PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                     ),
                     (
                         2,
-                        Person::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
+                        PersonLayout::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
                     ),
                 ]
                 .into_iter()
@@ -668,16 +679,21 @@ mod spy_tests {
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -696,7 +712,7 @@ mod spy_tests {
     impl PersonUsecase<()> for DummyPersonUsecase {
         fn entry<'a>(
             &'a mut self,
-            _person: Person,
+            _person: PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
         where
             (): 'a,
@@ -706,7 +722,7 @@ mod spy_tests {
         fn find<'a>(
             &'a mut self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -714,8 +730,8 @@ mod spy_tests {
         }
         fn entry_and_verify<'a>(
             &'a mut self,
-            person: Person,
-        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+            person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, PersonLayout), Err = UsecaseError>
         where
             (): 'a,
         {
@@ -723,7 +739,7 @@ mod spy_tests {
         }
         fn collect<'a>(
             &'a mut self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -758,13 +774,13 @@ mod spy_tests {
     /// テスト用のモックサービスです。
     struct TargetPersonService {
         register: RefCell<Vec<(String, NaiveDate, Option<NaiveDate>, Option<String>)>>,
-        register_result: Result<(PersonId, Person), ServiceError>,
+        register_result: Result<(PersonId, PersonLayout), ServiceError>,
         find: RefCell<Vec<PersonId>>,
-        find_result: Result<Option<Person>, ServiceError>,
-        batch_import: RefCell<Vec<Vec<Person>>>,
+        find_result: Result<Option<PersonLayout>, ServiceError>,
+        batch_import: RefCell<Vec<Vec<PersonLayout>>>,
         batch_import_result: Result<Vec<PersonId>, ServiceError>,
         list_all: RefCell<i32>,
-        list_all_result: Result<Vec<(PersonId, Person)>, ServiceError>,
+        list_all_result: Result<Vec<(PersonId, PersonLayout)>, ServiceError>,
         unregister: RefCell<Vec<PersonId>>,
         unregister_result: Result<(), ServiceError>,
 
@@ -795,7 +811,7 @@ mod spy_tests {
             birth_date: NaiveDate,
             death_date: Option<NaiveDate>,
             data: &str,
-        ) -> Result<(PersonId, Person), ServiceError> {
+        ) -> Result<(PersonId, PersonLayout), ServiceError> {
             self.register.borrow_mut().push((
                 name.to_string(),
                 birth_date,
@@ -805,17 +821,20 @@ mod spy_tests {
             self.register_result.clone()
         }
 
-        fn find(&'_ mut self, id: PersonId) -> Result<Option<Person>, ServiceError> {
+        fn find(&'_ mut self, id: PersonId) -> Result<Option<PersonLayout>, ServiceError> {
             self.find.borrow_mut().push(id);
             self.find_result.clone()
         }
 
-        fn batch_import(&'_ mut self, persons: Vec<Person>) -> Result<Vec<PersonId>, ServiceError> {
+        fn batch_import(
+            &'_ mut self,
+            persons: Vec<PersonLayout>,
+        ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import.borrow_mut().push(persons);
             self.batch_import_result.clone()
         }
 
-        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
+        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonLayout)>, ServiceError> {
             *self.list_all.borrow_mut() += 1;
             self.list_all_result.clone()
         }
@@ -829,8 +848,8 @@ mod spy_tests {
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct MockPersonCao {
         find: Rc<RefCell<Vec<PersonId>>>,
-        find_result: Result<Option<Person>, CaoError>,
-        load: Rc<RefCell<Vec<(PersonId, Person)>>>,
+        find_result: Result<Option<PersonLayout>, CaoError>,
+        load: Rc<RefCell<Vec<(PersonId, PersonLayout)>>>,
         load_result: Result<(), CaoError>,
         unload: Rc<RefCell<Vec<PersonId>>>,
         unload_result: Result<(), CaoError>,
@@ -845,7 +864,10 @@ mod spy_tests {
         {
             f.run(&mut ())
         }
-        fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
+        fn find(
+            &self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.find.borrow_mut().push(id);
                 self.find_result.clone()
@@ -854,7 +876,7 @@ mod spy_tests {
         fn load(
             &self,
             id: PersonId,
-            person: &Person,
+            person: &PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.load.borrow_mut().push((id, person.clone()));
@@ -882,7 +904,7 @@ mod spy_tests {
             register: RefCell::new(vec![]),
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
@@ -919,7 +941,10 @@ mod spy_tests {
             )]
         );
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
@@ -928,7 +953,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -941,7 +966,7 @@ mod spy_tests {
             register: RefCell::new(vec![]),
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
@@ -978,7 +1003,10 @@ mod spy_tests {
             )]
         );
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
@@ -987,7 +1015,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1004,7 +1032,7 @@ mod spy_tests {
     fn test_cached_find() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1018,7 +1046,7 @@ mod spy_tests {
             }),
             cao: MockPersonCao {
                 find: Rc::new(RefCell::new(vec![])),
-                find_result: Ok(Some(Person::new(
+                find_result: Ok(Some(PersonLayout::new(
                     "Alice",
                     date(2000, 1, 1),
                     None,
@@ -1037,14 +1065,17 @@ mod spy_tests {
         let _ = service.cached_find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![1]);
         assert_eq!(
             *service.cao.load.borrow(),
-            vec![] as Vec<(PersonId, Person)>
+            vec![] as Vec<(PersonId, PersonLayout)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1054,9 +1085,9 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
-            find_result: Ok(Some(Person::new(
+            find_result: Ok(Some(PersonLayout::new(
                 "Alice",
                 date(2000, 1, 1),
                 None,
@@ -1087,7 +1118,10 @@ mod spy_tests {
         let _ = service.cached_find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![1]);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
@@ -1096,7 +1130,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1107,9 +1141,9 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
-            find_result: Ok(Some(Person::new(
+            find_result: Ok(Some(PersonLayout::new(
                 "Alice",
                 date(2000, 1, 1),
                 None,
@@ -1140,7 +1174,10 @@ mod spy_tests {
         let _ = service.cached_find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![1]);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
@@ -1149,7 +1186,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1160,9 +1197,9 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
-            find_result: Ok(Some(Person::new(
+            find_result: Ok(Some(PersonLayout::new(
                 "Alice",
                 date(2000, 1, 1),
                 None,
@@ -1193,7 +1230,10 @@ mod spy_tests {
         let _ = service.cached_find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![1]);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
@@ -1202,7 +1242,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1219,7 +1259,7 @@ mod spy_tests {
     fn test_cached_batch_import() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1245,18 +1285,18 @@ mod spy_tests {
         };
 
         let _ = service.cached_batch_import(vec![
-            Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
-            Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
-            Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+            PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+            PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+            PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
         ]);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.batch_import.borrow(),
             vec![vec![
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
-                Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
-                Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+                PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+                PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
             ]]
         );
         assert_eq!(*service.list_all.borrow(), 0);
@@ -1268,15 +1308,15 @@ mod spy_tests {
             vec![
                 (
                     3,
-                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
                 ),
                 (
                     4,
-                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver"))
+                    PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver"))
                 ),
                 (
                     5,
-                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor"))
+                    PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor"))
                 ),
             ]
         );
@@ -1288,7 +1328,7 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1314,18 +1354,18 @@ mod spy_tests {
         };
 
         let _ = service.cached_batch_import(vec![
-            Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
-            Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
-            Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+            PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+            PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+            PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
         ]);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.batch_import.borrow(),
             vec![vec![
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
-                Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
-                Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+                PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+                PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
             ]]
         );
         assert_eq!(*service.list_all.borrow(), 0);
@@ -1338,7 +1378,7 @@ mod spy_tests {
             // 実際の場面では空であることが多いと思うが不定であるため、この値の検証にはあまり意味はない
             vec![(
                 3,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
             ),]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1355,7 +1395,7 @@ mod spy_tests {
     fn test_cached_list_all() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1364,15 +1404,15 @@ mod spy_tests {
             list_all_result: Ok(vec![
                 (
                     3,
-                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                 ),
                 (
                     4,
-                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
+                    PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
                 ),
                 (
                     5,
-                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
+                    PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
                 ),
             ]),
             unregister: RefCell::new(vec![]),
@@ -1396,7 +1436,10 @@ mod spy_tests {
         let _ = service.cached_list_all();
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 1);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
@@ -1406,15 +1449,15 @@ mod spy_tests {
             vec![
                 (
                     3,
-                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                 ),
                 (
                     4,
-                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
+                    PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
                 ),
                 (
                     5,
-                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
+                    PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
                 ),
             ]
         );
@@ -1423,7 +1466,7 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1432,15 +1475,15 @@ mod spy_tests {
             list_all_result: Ok(vec![
                 (
                     3,
-                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                 ),
                 (
                     4,
-                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
+                    PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
                 ),
                 (
                     5,
-                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
+                    PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
                 ),
             ]),
             unregister: RefCell::new(vec![]),
@@ -1464,7 +1507,10 @@ mod spy_tests {
         let _ = service.cached_list_all();
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 1);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
@@ -1473,7 +1519,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 3,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             ),]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1490,7 +1536,7 @@ mod spy_tests {
     fn test_cached_unregister() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1518,21 +1564,24 @@ mod spy_tests {
         let _ = service.cached_unregister(3);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![3]);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
-            vec![] as Vec<(PersonId, Person)>
+            vec![] as Vec<(PersonId, PersonLayout)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
         assert_eq!(*service.notifier.notify.borrow(), vec![]);
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, Person::new("", date(2000, 1, 1), None, Some("")))), // 使われない
+            register_result: Ok((1, PersonLayout::new("", date(2000, 1, 1), None, Some("")))), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1560,14 +1609,17 @@ mod spy_tests {
         let _ = service.cached_unregister(3);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.batch_import.borrow(), vec![] as Vec<Vec<Person>>);
+        assert_eq!(
+            *service.batch_import.borrow(),
+            vec![] as Vec<Vec<PersonLayout>>
+        );
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![3]);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
-            vec![] as Vec<(PersonId, Person)>
+            vec![] as Vec<(PersonId, PersonLayout)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
         assert_eq!(
@@ -1645,16 +1697,21 @@ mod error_stub_tests {
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -1673,7 +1730,7 @@ mod error_stub_tests {
     impl PersonUsecase<()> for DummyPersonUsecase {
         fn entry<'a>(
             &'a mut self,
-            _person: Person,
+            _person: PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = UsecaseError>
         where
             (): 'a,
@@ -1683,7 +1740,7 @@ mod error_stub_tests {
         fn find<'a>(
             &'a mut self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -1691,8 +1748,8 @@ mod error_stub_tests {
         }
         fn entry_and_verify<'a>(
             &'a mut self,
-            person: Person,
-        ) -> impl tx_rs::Tx<(), Item = (PersonId, Person), Err = UsecaseError>
+            person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (PersonId, PersonLayout), Err = UsecaseError>
         where
             (): 'a,
         {
@@ -1700,7 +1757,7 @@ mod error_stub_tests {
         }
         fn collect<'a>(
             &'a mut self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
         where
             (): 'a,
         {
@@ -1726,10 +1783,10 @@ mod error_stub_tests {
 
     /// テスト用のスタブサービスです。
     struct TargetPersonService {
-        register_result: Result<(PersonId, Person), ServiceError>,
-        find_result: Result<Option<Person>, ServiceError>,
+        register_result: Result<(PersonId, PersonLayout), ServiceError>,
+        find_result: Result<Option<PersonLayout>, ServiceError>,
         batch_import_result: Result<Vec<PersonId>, ServiceError>,
-        list_all_result: Result<Vec<(PersonId, Person)>, ServiceError>,
+        list_all_result: Result<Vec<(PersonId, PersonLayout)>, ServiceError>,
         unregister_result: Result<(), ServiceError>,
 
         usecase: RefCell<DummyPersonUsecase>,
@@ -1758,22 +1815,22 @@ mod error_stub_tests {
             _birth_date: NaiveDate,
             _death_date: Option<NaiveDate>,
             _data: &str,
-        ) -> Result<(PersonId, Person), ServiceError> {
+        ) -> Result<(PersonId, PersonLayout), ServiceError> {
             self.register_result.clone()
         }
 
-        fn find(&'_ mut self, _id: PersonId) -> Result<Option<Person>, ServiceError> {
+        fn find(&'_ mut self, _id: PersonId) -> Result<Option<PersonLayout>, ServiceError> {
             self.find_result.clone()
         }
 
         fn batch_import(
             &'_ mut self,
-            _persons: Vec<Person>,
+            _persons: Vec<PersonLayout>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import_result.clone()
         }
 
-        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, Person)>, ServiceError> {
+        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonLayout)>, ServiceError> {
             self.list_all_result.clone()
         }
 
@@ -1784,7 +1841,7 @@ mod error_stub_tests {
     // スタブキャッシュ実装です
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct StubPersonCao {
-        find_result: Result<Option<Person>, CaoError>,
+        find_result: Result<Option<PersonLayout>, CaoError>,
         load_result: Result<(), CaoError>,
         unload_result: Result<(), CaoError>,
     }
@@ -1798,13 +1855,16 @@ mod error_stub_tests {
         {
             f.run(&mut ())
         }
-        fn find(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
+        fn find(
+            &self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.find_result.clone())
         }
         fn load(
             &self,
             _id: PersonId,
-            _person: &Person,
+            _person: &PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.load_result.clone())
         }
@@ -1850,7 +1910,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
@@ -1870,7 +1930,7 @@ mod error_stub_tests {
             result,
             Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             ))
         );
     }
@@ -1880,7 +1940,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Err(ServiceError::TransactionFailed(
                 UsecaseError::FindPersonFailed(DaoError::SelectError("valid dao".to_string())),
@@ -1908,9 +1968,9 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
-            find_result: Ok(Some(Person::new(
+            find_result: Ok(Some(PersonLayout::new(
                 "Alice",
                 date(2000, 1, 1),
                 None,
@@ -1931,7 +1991,7 @@ mod error_stub_tests {
         let result = service.cached_find(1);
         assert_eq!(
             result,
-            Ok(Some(Person::new(
+            Ok(Some(PersonLayout::new(
                 "Alice",
                 date(2000, 1, 1),
                 None,
@@ -1945,7 +2005,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Err(ServiceError::TransactionFailed(
@@ -1973,7 +2033,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Err(ServiceError::TransactionFailed(
@@ -1990,7 +2050,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(vec![Person::new(
+        let result = service.cached_batch_import(vec![PersonLayout::new(
             "Alice",
             date(2000, 1, 1),
             None,
@@ -2006,7 +2066,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![1]),
@@ -2021,7 +2081,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(vec![Person::new(
+        let result = service.cached_batch_import(vec![PersonLayout::new(
             "Alice",
             date(2000, 1, 1),
             None,
@@ -2035,7 +2095,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
@@ -2063,13 +2123,13 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )]),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
@@ -2086,7 +2146,7 @@ mod error_stub_tests {
             result,
             Ok(vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )])
         );
     }
@@ -2096,7 +2156,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
@@ -2124,7 +2184,7 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),

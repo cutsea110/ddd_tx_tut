@@ -17,7 +17,7 @@ mod usecase;
 
 use cached_service::PersonCachedService;
 use dao::HavePersonDao;
-use domain::{date, Person};
+use domain::{date, PersonLayout};
 use pg_db::PgPersonDao;
 use service::{PersonService, ServiceError};
 use usecase::{PersonUsecase, UsecaseError};
@@ -142,25 +142,25 @@ fn main() {
     service.cached_unregister(id).expect("delete person");
 
     let persons = vec![
-        Person::new(
+        PersonLayout::new(
             "Abel",
             date(1802, 8, 5),
             date(1829, 4, 6).into(),
             Some("Abel's theorem"),
         ),
-        Person::new(
+        PersonLayout::new(
             "Euler",
             date(1707, 4, 15),
             date(1783, 9, 18).into(),
             Some("Euler's identity"),
         ),
-        Person::new(
+        PersonLayout::new(
             "Galois",
             date(1811, 10, 25),
             date(1832, 5, 31).into(),
             Some("Group Theory"),
         ),
-        Person::new(
+        PersonLayout::new(
             "Gauss",
             date(1777, 4, 30),
             date(1855, 2, 23).into(),
