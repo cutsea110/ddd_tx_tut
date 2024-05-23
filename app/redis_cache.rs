@@ -4,10 +4,10 @@ use log::trace;
 use redis::{self, Commands, FromRedisValue, ToRedisArgs};
 
 use crate::cache::{CaoError, PersonCao};
-use crate::domain::{PersonId, PersonLayout};
+use crate::domain::{Person, PersonId};
 
-// this suppose PersonLayout is serde-ized
-impl ToRedisArgs for PersonLayout {
+// this suppose Person is serde-ized
+impl ToRedisArgs for Person {
     fn write_redis_args<W: ?Sized>(&self, out: &mut W)
     where
         W: redis::RedisWrite,
@@ -16,11 +16,11 @@ impl ToRedisArgs for PersonLayout {
         out.write_arg(s.as_bytes());
     }
 }
-// this suppose PersonLayout is serde-ized
-impl FromRedisValue for PersonLayout {
+// this suppose Person is serde-ized
+impl FromRedisValue for Person {
     fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
         let s: String = redis::from_redis_value(v)?;
-        let p: PersonLayout = serde_json::from_str(&s).expect("deserialize");
+        let p: Person = serde_json::from_str(&s).expect("deserialize");
         Ok(p)
     }
 }
@@ -58,10 +58,10 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
     fn find(
         &self,
         id: PersonId,
-    ) -> impl tx_rs::Tx<redis::Connection, Item = Option<PersonLayout>, Err = CaoError> {
+    ) -> impl tx_rs::Tx<redis::Connection, Item = Option<Person>, Err = CaoError> {
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
-            let p: Option<PersonLayout> = conn
+            let p: Option<Person> = conn
                 .get(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
 
@@ -71,7 +71,7 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
     fn load(
         &self,
         id: PersonId,
-        person: &PersonLayout,
+        person: &Person,
     ) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);

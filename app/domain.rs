@@ -9,13 +9,13 @@ pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
 pub type PersonId = i32;
 /// actually, this is a layout. This means that the data is represented in a certain way.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersonLayout {
+pub struct Person {
     pub name: String,
     pub birth_date: NaiveDate,
     pub death_date: Option<NaiveDate>,
     pub data: Option<String>,
 }
-impl PersonLayout {
+impl Person {
     pub fn new(
         name: &str,
         birth_date: NaiveDate,
@@ -30,7 +30,7 @@ impl PersonLayout {
         }
     }
 }
-impl fmt::Display for PersonLayout {
+impl fmt::Display for Person {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

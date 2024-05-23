@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::domain::{PersonId, PersonLayout};
+use crate::domain::{Person, PersonId};
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DaoError {
@@ -12,12 +12,9 @@ pub enum DaoError {
     DeleteError(String),
 }
 pub trait PersonDao<Ctx> {
-    fn insert(&self, person: PersonLayout) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = DaoError>;
-    fn fetch(
-        &self,
-        id: PersonId,
-    ) -> impl tx_rs::Tx<Ctx, Item = Option<PersonLayout>, Err = DaoError>;
-    fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, PersonLayout)>, Err = DaoError>;
+    fn insert(&self, person: Person) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = DaoError>;
+    fn fetch(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = DaoError>;
+    fn select(&self) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = DaoError>;
     fn delete(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = DaoError>;
 }
 

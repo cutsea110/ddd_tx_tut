@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::domain::{PersonId, PersonLayout};
+use crate::domain::{Person, PersonId};
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum CaoError {
@@ -15,14 +15,8 @@ pub trait PersonCao<Ctx> {
     where
         F: tx_rs::Tx<Ctx, Item = T, Err = CaoError>;
 
-    fn find(
-        &self,
-        id: PersonId,
-    ) -> impl tx_rs::Tx<Ctx, Item = Option<PersonLayout>, Err = CaoError>;
-    fn load(
-        &self,
-        id: PersonId,
-        person: &PersonLayout,
-    ) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
+    fn find(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = CaoError>;
+    fn load(&self, id: PersonId, person: &Person)
+        -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
     fn unload(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = CaoError>;
 }
