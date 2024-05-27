@@ -32,7 +32,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         trace!("register person to db: {:?}", result);
 
         if let Ok((id, person)) = &result {
-            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(*id, &person.clone().into())) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
@@ -54,7 +54,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // if the person is found in the cache, return it
         if let Ok(Some(p)) = cao.run_tx(cao.find(id)) {
             trace!("cache hit!: {}", id);
-            return Ok(Some(p));
+            return Ok(Some(p.clone().into()));
         }
         trace!("cache miss!: {}", id);
 
@@ -63,7 +63,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // if the person is found in the db, load it to the cache
         if let Some(person) = &result {
-            if let Err(e) = cao.run_tx(cao.load(id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(id, &person.clone().into())) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
@@ -96,7 +96,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
             // ここはエラーを返す必要はない
-            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(*id, &person.clone().into())) {
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
                     error!("notification service not available: {}", e);
@@ -119,7 +119,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // load all persons to the cache
         for (id, person) in result.iter() {
             // ここはエラーを返す必要はない
-            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(*id, &person.clone().into())) {
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
                     error!("notification service not available: {}", e);

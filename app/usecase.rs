@@ -28,7 +28,8 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("insert person: {:?}", person);
-        dao.insert(person).map_err(UsecaseError::EntryPersonFailed)
+        dao.insert(person.into())
+            .map_err(UsecaseError::EntryPersonFailed)
     }
     fn find<'a>(
         &'a mut self,
@@ -39,7 +40,9 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("find person_id: {:?}", id);
-        dao.fetch(id).map_err(UsecaseError::FindPersonFailed)
+        dao.fetch(id)
+            .map(|p| p.map(Into::into))
+            .map_err(UsecaseError::FindPersonFailed)
     }
     fn entry_and_verify<'a>(
         &'a mut self,
@@ -50,11 +53,11 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("entry and verify person: {:?}", person);
-        dao.insert(person)
+        dao.insert(person.into())
             .and_then(move |id| {
                 dao.fetch(id).try_map(move |person| {
                     if let Some(p) = person {
-                        return Ok((id, p));
+                        return Ok((id, p.into()));
                     }
 
                     warn!("can't find the person just entried: {}", id);
@@ -73,7 +76,9 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     {
         let dao = self.get_dao();
         trace!("collect all persons");
-        dao.select().map_err(UsecaseError::CollectPersonFailed)
+        dao.select()
+            .map(|persons| persons.into_iter().map(|(id, p)| (id, p.into())).collect())
+            .map_err(UsecaseError::CollectPersonFailed)
     }
     fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
     where
