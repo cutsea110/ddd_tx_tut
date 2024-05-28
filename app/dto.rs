@@ -91,7 +91,18 @@ mod tests {
 
         // Layout を変更しても Person には影響しない
         layout.set_name("name2");
-        assert_ne!(layout, PersonLayout::from(person.clone()));
+        layout.set_birth_date(date(2000, 1, 2));
+        layout.set_death_date(None);
+        layout.set_data(None);
+        assert_eq!(
+            person,
+            Person::new(
+                "name",
+                date(2000, 1, 1),
+                Some(date(2100, 12, 31)),
+                Some("data")
+            )
+        );
     }
 
     #[test]
@@ -116,6 +127,17 @@ mod tests {
 
         // layout を変更しても person には影響しない
         layout.set_name("name2");
-        assert_ne!(person, Person::from(layout));
+        layout.set_birth_date(date(2000, 1, 2));
+        layout.set_death_date(None);
+        layout.set_data(None);
+        assert_eq!(
+            person,
+            Person::new(
+                "name",
+                date(2000, 1, 1),
+                Some(date(2100, 12, 31)),
+                Some("data")
+            )
+        );
     }
 }
