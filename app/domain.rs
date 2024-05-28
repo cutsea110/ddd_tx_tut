@@ -6,6 +6,7 @@ pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
 }
 
 pub type PersonId = i32;
+/// Person entity (as domain object)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Person {
     name: String,
@@ -13,6 +14,7 @@ pub struct Person {
     death_date: Option<NaiveDate>,
     data: Option<String>,
 }
+
 impl Person {
     pub fn new(
         name: &str,
@@ -35,6 +37,7 @@ impl Person {
         dto.set_data(self.data.as_deref());
     }
 }
+
 impl fmt::Display for Person {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -44,6 +47,8 @@ impl fmt::Display for Person {
         )
     }
 }
+
+/// For DTO like structs
 pub trait PersonNotification {
     fn set_name(&mut self, name: &str);
     fn set_birth_date(&mut self, birth_date: NaiveDate);
