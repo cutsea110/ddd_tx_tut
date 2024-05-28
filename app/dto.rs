@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use log::trace;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{Person, PersonNotification};
@@ -28,15 +29,19 @@ impl PersonLayout {
 
 impl PersonNotification for PersonLayout {
     fn set_name(&mut self, name: &str) {
+        trace!("set_name: {}", name);
         self.name = name.to_string();
     }
     fn set_birth_date(&mut self, birth_date: NaiveDate) {
+        trace!("set_birth_date: {}", birth_date);
         self.birth_date = birth_date;
     }
     fn set_death_date(&mut self, death_date: Option<NaiveDate>) {
+        trace!("set_death_date: {:?}", death_date);
         self.death_date = death_date;
     }
     fn set_data(&mut self, data: Option<&str>) {
+        trace!("set_data: {:?}", data);
         self.data = data.map(|d| d.to_string());
     }
 }
