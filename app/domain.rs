@@ -28,6 +28,13 @@ impl Person {
             data: data.map(|d| d.to_string()),
         }
     }
+
+    pub fn notify(&self, dto: &mut impl PersonNotification) {
+        dto.set_name(&self.name);
+        dto.set_birth_date(self.birth_date);
+        dto.set_death_date(self.death_date);
+        dto.set_data(self.data.as_deref());
+    }
 }
 impl fmt::Display for Person {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -38,8 +45,14 @@ impl fmt::Display for Person {
         )
     }
 }
+pub trait PersonNotification {
+    fn set_name(&mut self, name: &str);
+    fn set_birth_date(&mut self, birth_date: NaiveDate);
+    fn set_death_date(&mut self, death_date: Option<NaiveDate>);
+    fn set_data(&mut self, data: Option<&str>);
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonLayout {
     pub name: String,
     pub birth_date: NaiveDate,
@@ -61,24 +74,36 @@ impl PersonLayout {
         }
     }
 }
-// TODO: use notification
+
+impl PersonNotification for PersonLayout {
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+    fn set_birth_date(&mut self, birth_date: NaiveDate) {
+        self.birth_date = birth_date;
+    }
+    fn set_death_date(&mut self, death_date: Option<NaiveDate>) {
+        self.death_date = death_date;
+    }
+    fn set_data(&mut self, data: Option<&str>) {
+        self.data = data.map(|d| d.to_string());
+    }
+}
+
 impl From<Person> for PersonLayout {
     fn from(person: Person) -> Self {
-        Self {
-            name: person.name,
-            birth_date: person.birth_date,
-            death_date: person.death_date,
-            data: person.data,
-        }
+        let mut layout = PersonLayout::default();
+        person.notify(&mut layout);
+        layout
     }
 }
 impl From<PersonLayout> for Person {
     fn from(person: PersonLayout) -> Self {
-        Self {
-            name: person.name,
-            birth_date: person.birth_date,
-            death_date: person.death_date,
-            data: person.data,
-        }
+        Self::new(
+            &person.name,
+            person.birth_date,
+            person.death_date,
+            person.data.as_deref(),
+        )
     }
 }
