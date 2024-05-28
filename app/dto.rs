@@ -72,7 +72,8 @@ mod tests {
             Some(date(2100, 12, 31)),
             Some("data"),
         );
-        let layout = PersonLayout::from(person.clone());
+
+        let mut layout = PersonLayout::from(person.clone());
         assert_eq!(
             layout,
             PersonLayout::new(
@@ -82,7 +83,10 @@ mod tests {
                 Some("data")
             )
         );
-        assert_eq!(person, Person::from(layout));
+
+        // Layout を変更しても Person には影響しない
+        layout.set_name("name2");
+        assert_ne!(layout, PersonLayout::from(person.clone()));
     }
 
     #[test]
@@ -93,6 +97,7 @@ mod tests {
             Some(date(2100, 12, 31)),
             Some("data"),
         );
+
         let person = Person::from(layout.clone());
         assert_eq!(
             person,
@@ -103,6 +108,5 @@ mod tests {
                 Some("data")
             )
         );
-        assert_eq!(layout, PersonLayout::from(person));
     }
 }
