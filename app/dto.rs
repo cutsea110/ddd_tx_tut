@@ -58,3 +58,51 @@ impl From<PersonLayout> for Person {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::date;
+
+    #[test]
+    fn test_person_layout() {
+        let person = Person::new(
+            "name",
+            date(2000, 1, 1),
+            Some(date(2100, 12, 31)),
+            Some("data"),
+        );
+        let layout = PersonLayout::from(person.clone());
+        assert_eq!(
+            layout,
+            PersonLayout::new(
+                "name",
+                date(2000, 1, 1),
+                Some(date(2100, 12, 31)),
+                Some("data")
+            )
+        );
+        assert_eq!(person, Person::from(layout));
+    }
+
+    #[test]
+    fn test_layout_person() {
+        let layout = PersonLayout::new(
+            "name",
+            date(2000, 1, 1),
+            Some(date(2100, 12, 31)),
+            Some("data"),
+        );
+        let person = Person::from(layout.clone());
+        assert_eq!(
+            person,
+            Person::new(
+                "name",
+                date(2000, 1, 1),
+                Some(date(2100, 12, 31)),
+                Some("data")
+            )
+        );
+        assert_eq!(layout, PersonLayout::from(person));
+    }
+}
