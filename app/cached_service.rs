@@ -32,7 +32,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         trace!("register person to db: {:?}", result);
 
         if let Ok((id, person)) = &result {
-            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(*id, &person.clone().into())) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
@@ -54,7 +54,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // if the person is found in the cache, return it
         if let Ok(Some(p)) = cao.run_tx(cao.find(id)) {
             trace!("cache hit!: {}", id);
-            return Ok(Some(p));
+            return Ok(Some(p.clone().into()));
         }
         trace!("cache miss!: {}", id);
 
@@ -63,7 +63,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         // if the person is found in the db, load it to the cache
         if let Some(person) = &result {
-            if let Err(e) = cao.run_tx(cao.load(id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(id, &person.clone().into())) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
@@ -96,7 +96,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
             // ここはエラーを返す必要はない
-            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(*id, &person.clone().into())) {
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
                     error!("notification service not available: {}", e);
@@ -119,7 +119,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         // load all persons to the cache
         for (id, person) in result.iter() {
             // ここはエラーを返す必要はない
-            if let Err(e) = cao.run_tx(cao.load(*id, person)) {
+            if let Err(e) = cao.run_tx(cao.load(*id, &person.clone().into())) {
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = notifier.notify("admin", "cache service not available") {
                     error!("notification service not available: {}", e);
@@ -221,22 +221,28 @@ mod fake_tests {
         cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
+        domain::PersonLayout,
         notifier::NotifierError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -380,7 +386,7 @@ mod fake_tests {
     }
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FakePersonCao {
-        cache: Rc<RefCell<HashMap<PersonId, Person>>>,
+        cache: Rc<RefCell<HashMap<PersonId, PersonLayout>>>,
     }
     impl PersonCao<()> for FakePersonCao {
         fn get_conn(&self) -> Result<(), CaoError> {
@@ -392,13 +398,16 @@ mod fake_tests {
         {
             f.run(&mut ())
         }
-        fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
+        fn find(
+            &self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(self.cache.borrow().get(&id).cloned()))
         }
         fn load(
             &self,
             id: PersonId,
-            person: &Person,
+            person: &PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.cache.borrow_mut().insert(id, person.clone());
@@ -468,7 +477,7 @@ mod fake_tests {
                 cache: RefCell::new(
                     vec![(
                         1,
-                        Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                        PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                     )]
                     .into_iter()
                     .collect(),
@@ -662,22 +671,28 @@ mod spy_tests {
         cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
+        domain::PersonLayout,
         notifier::NotifierError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -829,8 +844,8 @@ mod spy_tests {
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct MockPersonCao {
         find: Rc<RefCell<Vec<PersonId>>>,
-        find_result: Result<Option<Person>, CaoError>,
-        load: Rc<RefCell<Vec<(PersonId, Person)>>>,
+        find_result: Result<Option<PersonLayout>, CaoError>,
+        load: Rc<RefCell<Vec<(PersonId, PersonLayout)>>>,
         load_result: Result<(), CaoError>,
         unload: Rc<RefCell<Vec<PersonId>>>,
         unload_result: Result<(), CaoError>,
@@ -845,7 +860,10 @@ mod spy_tests {
         {
             f.run(&mut ())
         }
-        fn find(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
+        fn find(
+            &self,
+            id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.find.borrow_mut().push(id);
                 self.find_result.clone()
@@ -854,7 +872,7 @@ mod spy_tests {
         fn load(
             &self,
             id: PersonId,
-            person: &Person,
+            person: &PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| {
                 self.load.borrow_mut().push((id, person.clone()));
@@ -928,7 +946,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -987,7 +1005,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1018,7 +1036,7 @@ mod spy_tests {
             }),
             cao: MockPersonCao {
                 find: Rc::new(RefCell::new(vec![])),
-                find_result: Ok(Some(Person::new(
+                find_result: Ok(Some(PersonLayout::new(
                     "Alice",
                     date(2000, 1, 1),
                     None,
@@ -1044,7 +1062,7 @@ mod spy_tests {
         assert_eq!(*service.cao.find.borrow(), vec![1]);
         assert_eq!(
             *service.cao.load.borrow(),
-            vec![] as Vec<(PersonId, Person)>
+            vec![] as Vec<(PersonId, PersonLayout)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1096,7 +1114,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1149,7 +1167,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1202,7 +1220,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 1,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here"))
             )]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1268,15 +1286,15 @@ mod spy_tests {
             vec![
                 (
                     3,
-                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
                 ),
                 (
                     4,
-                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver"))
+                    PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver"))
                 ),
                 (
                     5,
-                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor"))
+                    PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor"))
                 ),
             ]
         );
@@ -1338,7 +1356,7 @@ mod spy_tests {
             // 実際の場面では空であることが多いと思うが不定であるため、この値の検証にはあまり意味はない
             vec![(
                 3,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"))
             ),]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1406,15 +1424,15 @@ mod spy_tests {
             vec![
                 (
                     3,
-                    Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
                 ),
                 (
                     4,
-                    Person::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
+                    PersonLayout::new("Bob", date(2001, 2, 2), None, Some("Bob is here")),
                 ),
                 (
                     5,
-                    Person::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
+                    PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
                 ),
             ]
         );
@@ -1473,7 +1491,7 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![(
                 3,
-                Person::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             ),]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
@@ -1525,7 +1543,7 @@ mod spy_tests {
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
-            vec![] as Vec<(PersonId, Person)>
+            vec![] as Vec<(PersonId, PersonLayout)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
         assert_eq!(*service.notifier.notify.borrow(), vec![]);
@@ -1567,7 +1585,7 @@ mod spy_tests {
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
-            vec![] as Vec<(PersonId, Person)>
+            vec![] as Vec<(PersonId, PersonLayout)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
         assert_eq!(
@@ -1639,22 +1657,28 @@ mod error_stub_tests {
         cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
+        domain::PersonLayout,
         notifier::NotifierError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -1784,7 +1808,7 @@ mod error_stub_tests {
     // スタブキャッシュ実装です
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct StubPersonCao {
-        find_result: Result<Option<Person>, CaoError>,
+        find_result: Result<Option<PersonLayout>, CaoError>,
         load_result: Result<(), CaoError>,
         unload_result: Result<(), CaoError>,
     }
@@ -1798,13 +1822,16 @@ mod error_stub_tests {
         {
             f.run(&mut ())
         }
-        fn find(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = CaoError> {
+        fn find(
+            &self,
+            _id: PersonId,
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.find_result.clone())
         }
         fn load(
             &self,
             _id: PersonId,
-            _person: &Person,
+            _person: &PersonLayout,
         ) -> impl tx_rs::Tx<(), Item = (), Err = CaoError> {
             tx_rs::with_tx(move |&mut ()| self.load_result.clone())
         }

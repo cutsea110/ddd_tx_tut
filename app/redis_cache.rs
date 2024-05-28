@@ -4,10 +4,10 @@ use log::trace;
 use redis::{self, Commands, FromRedisValue, ToRedisArgs};
 
 use crate::cache::{CaoError, PersonCao};
-use crate::domain::{Person, PersonId};
+use crate::domain::{PersonId, PersonLayout};
 
-// this suppose Person is serde-ized
-impl ToRedisArgs for Person {
+// this suppose PersonLayout is serde-ized
+impl ToRedisArgs for PersonLayout {
     fn write_redis_args<W: ?Sized>(&self, out: &mut W)
     where
         W: redis::RedisWrite,
@@ -16,11 +16,11 @@ impl ToRedisArgs for Person {
         out.write_arg(s.as_bytes());
     }
 }
-// this suppose Person is serde-ized
-impl FromRedisValue for Person {
+// this suppose PersonLayout is serde-ized
+impl FromRedisValue for PersonLayout {
     fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
         let s: String = redis::from_redis_value(v)?;
-        let p: Person = serde_json::from_str(&s).expect("deserialize");
+        let p: PersonLayout = serde_json::from_str(&s).expect("deserialize");
         Ok(p)
     }
 }
@@ -58,24 +58,24 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
     fn find(
         &self,
         id: PersonId,
-    ) -> impl tx_rs::Tx<redis::Connection, Item = Option<Person>, Err = CaoError> {
+    ) -> impl tx_rs::Tx<redis::Connection, Item = Option<PersonLayout>, Err = CaoError> {
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
-            let p: Option<Person> = conn
+            let p: Option<PersonLayout> = conn
                 .get(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
 
-            Ok(p)
+            Ok(p.into())
         })
     }
     fn load(
         &self,
         id: PersonId,
-        person: &Person,
+        person: &PersonLayout,
     ) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
-            conn.set(&key, person)
+            conn.set(&key, &person)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
 
             Ok(())

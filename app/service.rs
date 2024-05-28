@@ -221,23 +221,28 @@ mod fake_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::date,
+        domain::{date, PersonLayout},
         notifier::NotifierError,
         HavePersonDao,
     };
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -529,23 +534,28 @@ mod spy_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::date,
+        domain::{date, PersonLayout},
         notifier::NotifierError,
         HavePersonDao,
     };
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
@@ -899,23 +909,28 @@ mod error_stub_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::date,
+        domain::{date, PersonLayout},
         notifier::NotifierError,
         HavePersonDao,
     };
 
     struct DummyPersonDao;
     impl PersonDao<()> for DummyPersonDao {
-        fn insert(&self, _person: Person) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(
+            &self,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(1))
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<Person>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(None))
         }
-        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, Person)>, Err = DaoError> {
+        fn select(
+            &self,
+        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
