@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_layout_person() {
-        let layout = PersonLayout::new(
+        let mut layout = PersonLayout::new(
             "name",
             date(2000, 1, 1),
             Some(date(2100, 12, 31)),
@@ -113,5 +113,9 @@ mod tests {
                 Some("data")
             )
         );
+
+        // layout を変更しても person には影響しない
+        layout.set_name("name2");
+        assert_ne!(person, Person::from(layout));
     }
 }
