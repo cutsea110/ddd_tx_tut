@@ -221,7 +221,7 @@ mod fake_tests {
         cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
-        domain::PersonLayout,
+        dto::PersonLayout,
         notifier::NotifierError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
@@ -671,7 +671,7 @@ mod spy_tests {
         cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
-        domain::PersonLayout,
+        dto::PersonLayout,
         notifier::NotifierError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
@@ -1657,7 +1657,7 @@ mod error_stub_tests {
         cache::CaoError,
         dao::{DaoError, PersonDao},
         date,
-        domain::PersonLayout,
+        dto::PersonLayout,
         notifier::NotifierError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };

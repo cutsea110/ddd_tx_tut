@@ -221,7 +221,8 @@ mod fake_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::{date, PersonLayout},
+        domain::date,
+        dto::PersonLayout,
         notifier::NotifierError,
         HavePersonDao,
     };
@@ -534,7 +535,8 @@ mod spy_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::{date, PersonLayout},
+        domain::date,
+        dto::PersonLayout,
         notifier::NotifierError,
         HavePersonDao,
     };
@@ -909,7 +911,8 @@ mod error_stub_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::{date, PersonLayout},
+        domain::date,
+        dto::PersonLayout,
         notifier::NotifierError,
         HavePersonDao,
     };

@@ -1,6 +1,7 @@
 use thiserror::Error;
 
-use crate::domain::{PersonId, PersonLayout};
+use crate::domain::PersonId;
+use crate::dto::PersonLayout;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DaoError {

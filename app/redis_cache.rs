@@ -4,7 +4,8 @@ use log::trace;
 use redis::{self, Commands, FromRedisValue, ToRedisArgs};
 
 use crate::cache::{CaoError, PersonCao};
-use crate::domain::{PersonId, PersonLayout};
+use crate::domain::PersonId;
+use crate::dto::PersonLayout;
 
 // this suppose PersonLayout is serde-ized
 impl ToRedisArgs for PersonLayout {

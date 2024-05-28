@@ -8,6 +8,7 @@ mod cache;
 mod cached_service;
 mod dao;
 mod domain;
+mod dto;
 mod notifier;
 mod pg_db;
 mod rabbitmq;

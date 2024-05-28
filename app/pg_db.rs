@@ -2,7 +2,8 @@ use chrono::NaiveDate;
 use std::str;
 
 use crate::dao::{DaoError, PersonDao};
-use crate::domain::{PersonId, PersonLayout};
+use crate::domain::PersonId;
+use crate::dto::PersonLayout;
 
 #[derive(Debug, Clone)]
 pub struct PgPersonDao;

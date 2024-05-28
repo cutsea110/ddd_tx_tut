@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use crate::dao::{DaoError, HavePersonDao, PersonDao};
 use crate::domain::{Person, PersonId};
+use crate::dto::PersonLayout;
 use tx_rs::Tx;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
@@ -41,7 +42,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         let dao = self.get_dao();
         trace!("find person_id: {:?}", id);
         dao.fetch(id)
-            .map(|p| p.map(Into::into))
+            .map(|p: Option<PersonLayout>| p.map(Into::into))
             .map_err(UsecaseError::FindPersonFailed)
     }
     fn entry_and_verify<'a>(
@@ -77,7 +78,9 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         let dao = self.get_dao();
         trace!("collect all persons");
         dao.select()
-            .map(|persons| persons.into_iter().map(|(id, p)| (id, p.into())).collect())
+            .map(|persons: Vec<(PersonId, PersonLayout)>| {
+                persons.into_iter().map(|(id, p)| (id, p.into())).collect()
+            })
             .map_err(UsecaseError::CollectPersonFailed)
     }
     fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
@@ -134,7 +137,8 @@ mod fake_tests {
     use std::cell::RefCell;
 
     use super::*;
-    use crate::domain::{date, PersonLayout};
+    use crate::domain::date;
+    use crate::dto::PersonLayout;
 
     struct FakePersonDao {
         last_id: RefCell<PersonId>,
@@ -378,7 +382,8 @@ mod spy_tests {
     use std::cell::RefCell;
 
     use super::*;
-    use crate::domain::{date, PersonLayout};
+    use crate::domain::date;
+    use crate::dto::PersonLayout;
 
     struct SpyPersonDao {
         insert: RefCell<Vec<PersonLayout>>,
@@ -594,7 +599,8 @@ mod spy_tests {
 #[cfg(test)]
 mod error_stub_tests {
     use super::*;
-    use crate::domain::{date, PersonLayout};
+    use crate::domain::date;
+    use crate::dto::PersonLayout;
 
     struct StubPersonDao {
         insert_result: Result<PersonId, DaoError>,
