@@ -7,13 +7,12 @@ pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
 }
 
 pub type PersonId = i32;
-// TODO: remove pub
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Person {
-    pub name: String,
-    pub birth_date: NaiveDate,
-    pub death_date: Option<NaiveDate>,
-    pub data: Option<String>,
+    name: String,
+    birth_date: NaiveDate,
+    death_date: Option<NaiveDate>,
+    data: Option<String>,
 }
 impl Person {
     pub fn new(
