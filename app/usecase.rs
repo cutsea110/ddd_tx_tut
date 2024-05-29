@@ -2,7 +2,7 @@ use log::{trace, warn};
 use thiserror::Error;
 
 use crate::dao::{DaoError, HavePersonDao, PersonDao};
-use crate::domain::{Person, PersonId};
+use crate::domain::PersonId;
 use crate::dto::PersonLayout;
 use tx_rs::Tx;
 
@@ -22,43 +22,40 @@ pub enum UsecaseError {
 pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn entry<'a>(
         &'a mut self,
-        person: Person,
+        person: PersonLayout,
     ) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = UsecaseError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         trace!("insert person: {:?}", person);
-        dao.insert(person.into())
-            .map_err(UsecaseError::EntryPersonFailed)
+        dao.insert(person).map_err(UsecaseError::EntryPersonFailed)
     }
     fn find<'a>(
         &'a mut self,
         id: PersonId,
-    ) -> impl tx_rs::Tx<Ctx, Item = Option<Person>, Err = UsecaseError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Option<PersonLayout>, Err = UsecaseError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         trace!("find person_id: {:?}", id);
-        dao.fetch(id)
-            .map(|p: Option<PersonLayout>| p.map(Into::into))
-            .map_err(UsecaseError::FindPersonFailed)
+        dao.fetch(id).map_err(UsecaseError::FindPersonFailed)
     }
     fn entry_and_verify<'a>(
         &'a mut self,
-        person: Person,
-    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, Person), Err = UsecaseError>
+        person: PersonLayout,
+    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, PersonLayout), Err = UsecaseError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         trace!("entry and verify person: {:?}", person);
-        dao.insert(person.into())
+        dao.insert(person)
             .and_then(move |id| {
                 dao.fetch(id).try_map(move |person| {
                     if let Some(p) = person {
-                        return Ok((id, p.into()));
+                        return Ok((id, p));
                     }
 
                     warn!("can't find the person just entried: {}", id);
@@ -71,17 +68,13 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     }
     fn collect<'a>(
         &'a mut self,
-    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, Person)>, Err = UsecaseError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
     where
         Ctx: 'a,
     {
         let dao = self.get_dao();
         trace!("collect all persons");
-        dao.select()
-            .map(|persons: Vec<(PersonId, PersonLayout)>| {
-                persons.into_iter().map(|(id, p)| (id, p.into())).collect()
-            })
-            .map_err(UsecaseError::CollectPersonFailed)
+        dao.select().map_err(UsecaseError::CollectPersonFailed)
     }
     fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
     where
@@ -197,7 +190,7 @@ mod fake_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
+        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone().into();
         let expected_id = 1;
 
@@ -230,7 +223,7 @@ mod fake_tests {
         let result = usecase.find(13).run(&mut ());
         assert_eq!(
             result,
-            Ok(Some(Person::new(
+            Ok(Some(PersonLayout::new(
                 "Alice",
                 date(2012, 11, 2),
                 None,
@@ -246,7 +239,7 @@ mod fake_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
+        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone();
         let expected_id = 14;
 
@@ -283,7 +276,7 @@ mod fake_tests {
 
         let result = usecase.collect().run(&mut ());
         assert_eq!(
-            result.map(|mut v: Vec<(PersonId, Person)>| {
+            result.map(|mut v: Vec<(PersonId, PersonLayout)>| {
                 v.sort_by_key(|(id, _)| *id);
                 v
             }),
@@ -449,7 +442,7 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
         let expected = person.clone().into();
 
         let _ = usecase.entry(person).run(&mut ()).unwrap();
@@ -500,7 +493,7 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
         let expected = person.clone().into();
 
         let _ = usecase.entry_and_verify(person).run(&mut ());
@@ -654,7 +647,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry(person).run(&mut ());
 
         assert!(result.is_err());
@@ -693,7 +686,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());
@@ -713,7 +706,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = Person::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());
