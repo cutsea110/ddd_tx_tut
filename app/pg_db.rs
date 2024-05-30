@@ -75,6 +75,26 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
             .map_err(|e| DaoError::SelectError(e.to_string()))
         })
     }
+    fn save(
+        &self,
+        id: PersonId,
+        person: PersonLayout,
+    ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = (), Err = DaoError> {
+        tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
+            tx.execute(
+		"UPDATE person SET name = $1, birth_date = $2, death_date = $3, data = $4 WHERE id = $5",
+		&[
+		    &person.name,
+		    &person.birth_date,
+		    &person.death_date,
+		    &person.data.map(|d| d.as_str().as_bytes().to_vec()),
+		    &id,
+		],
+	    )
+            .map(|_| ())
+            .map_err(|e| DaoError::UpdateError(e.to_string()))
+        })
+    }
     fn delete(
         &self,
         id: PersonId,

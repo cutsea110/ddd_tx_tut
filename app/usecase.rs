@@ -1,8 +1,9 @@
+use chrono::NaiveDate;
 use log::{trace, warn};
 use thiserror::Error;
 
 use crate::dao::{DaoError, HavePersonDao, PersonDao};
-use crate::domain::PersonId;
+use crate::domain::{Person, PersonId};
 use crate::dto::PersonLayout;
 use tx_rs::Tx;
 
@@ -16,6 +17,8 @@ pub enum UsecaseError {
     EntryAndVerifyPersonFailed(DaoError),
     #[error("collect person failed: {0}")]
     CollectPersonFailed(DaoError),
+    #[error("save person failed: {0}")]
+    SavePersonFailed(DaoError),
     #[error("remove person failed: {0}")]
     RemovePersonFailed(DaoError),
 }
@@ -59,9 +62,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                     }
 
                     warn!("can't find the person just entried: {}", id);
-                    Err(DaoError::SelectError(
-                        format!("not found: {id}").to_string(),
-                    ))
+                    Err(DaoError::SelectError(format!("not found: {id}")))
                 })
             })
             .map_err(UsecaseError::EntryAndVerifyPersonFailed)
@@ -75,6 +76,34 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         let dao = self.get_dao();
         trace!("collect all persons");
         dao.select().map_err(UsecaseError::CollectPersonFailed)
+    }
+    fn death<'a>(
+        &'a mut self,
+        id: PersonId,
+        date: NaiveDate,
+    ) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
+    where
+        Ctx: 'a,
+    {
+        let dao = self.get_dao();
+        trace!("death person_id: {:?}", id);
+        dao.fetch(id)
+            .try_map(move |p| {
+                if let Some(person) = p {
+                    return Ok(person);
+                }
+
+                warn!("can't find the person to dead: {}", id);
+                Err(DaoError::SelectError(format!("person not found: {id}")))
+            })
+            .map_err(UsecaseError::FindPersonFailed)
+            .and_then(move |p| {
+                let mut person: Person = p.into();
+                person.dead_at(date);
+                trace!("person dead: {:?}", person);
+                dao.save(id, person.into())
+                    .map_err(UsecaseError::SavePersonFailed)
+            })
     }
     fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
     where
@@ -164,6 +193,19 @@ mod fake_tests {
             let result = self.data.borrow().clone();
 
             tx_rs::with_tx(move |()| Ok(result))
+        }
+        fn save(
+            &self,
+            id: PersonId,
+            person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            self.data
+                .borrow_mut()
+                .iter_mut()
+                .find(|(i, _)| *i == id)
+                .map(|(_, p)| *p = person);
+
+            tx_rs::with_tx(move |()| Ok(()))
         }
         fn delete(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             let result = self.data.borrow_mut().retain(|(i, _)| *i != id);
@@ -413,6 +455,16 @@ mod spy_tests {
             // 返り値には意味なし
             tx_rs::with_tx(|()| Ok(vec![]))
         }
+        fn save(
+            &self,
+            _id: PersonId,
+            person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            self.insert.borrow_mut().push(person);
+
+            // 返り値には意味なし
+            tx_rs::with_tx(|()| Ok(()))
+        }
         fn delete(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             self.delete.borrow_mut().push(id);
 
@@ -599,6 +651,7 @@ mod error_stub_tests {
         insert_result: Result<PersonId, DaoError>,
         fetch_result: Result<Option<PersonLayout>, DaoError>,
         select_result: Result<Vec<(PersonId, PersonLayout)>, DaoError>,
+        save_result: Result<(), DaoError>,
         delete_result: Result<(), DaoError>,
     }
     // Ctx 不要なので () にしている
@@ -619,6 +672,13 @@ mod error_stub_tests {
             &self,
         ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(|()| self.select_result.clone())
+        }
+        fn save(
+            &self,
+            _id: PersonId,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |()| self.save_result.clone())
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |()| self.delete_result.clone())
@@ -641,6 +701,7 @@ mod error_stub_tests {
             insert_result: Err(DaoError::InsertError("valid dao".to_string())),
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
+            save_result: Ok(()),       // 使わない
             delete_result: Ok(()),     // 使わない
         };
         let expected = UsecaseError::EntryPersonFailed(dao.insert_result.clone().unwrap_err());
@@ -660,6 +721,7 @@ mod error_stub_tests {
             insert_result: Ok(42), // 使わない
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
+            save_result: Ok(()),       // 使わない
             delete_result: Ok(()),     // 使わない
         };
         let expected = UsecaseError::FindPersonFailed(dao.fetch_result.clone().unwrap_err());
@@ -679,6 +741,7 @@ mod error_stub_tests {
             insert_result: Err(DaoError::InsertError("valid dao".to_string())),
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
+            save_result: Ok(()),       // 使わない
             delete_result: Ok(()),     // 使わない
         };
         let expected =
@@ -699,6 +762,7 @@ mod error_stub_tests {
             insert_result: Ok(42),
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
+            save_result: Ok(()),       // 使わない
             delete_result: Ok(()),     // 使わない
         };
         let expected =
@@ -719,6 +783,7 @@ mod error_stub_tests {
             insert_result: Ok(42),  // 使わない
             fetch_result: Ok(None), // 使わない
             select_result: Err(DaoError::SelectError("valid dao".to_string())),
+            save_result: Ok(()),   // 使わない
             delete_result: Ok(()), // 使わない
         };
         let expected = UsecaseError::CollectPersonFailed(dao.select_result.clone().unwrap_err());
@@ -736,6 +801,7 @@ mod error_stub_tests {
             insert_result: Ok(42),     // 使わない
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
+            save_result: Ok(()),       // 使わない
             delete_result: Err(DaoError::DeleteError("valid dao".to_string())),
         };
         let expected = UsecaseError::RemovePersonFailed(dao.delete_result.clone().unwrap_err());

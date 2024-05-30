@@ -133,6 +133,28 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         Ok(result)
     }
 
+    fn cached_death(&'a mut self, id: PersonId, death_date: NaiveDate) -> Result<(), ServiceError> {
+        trace!("cached death: {} {}", id, death_date);
+        let cao = self.get_cao();
+        let notifier = self.get_notifier();
+
+        let _ = self.death(id, death_date)?;
+        trace!("update death date in db: {} {}", id, death_date);
+
+        // even if delete from db failed below, this cache clear is not a matter.
+        if let Err(e) = cao.run_tx(cao.unload(id)) {
+            // ここはエラーを返す必要はない
+            warn!("failed to unload person from cache: {}", e);
+            if let Err(e) = notifier.notify("admin", "cache service not available") {
+                error!("notification service not available: {}", e);
+            }
+        } else {
+            trace!("unload from cache: {}", id);
+        }
+
+        Ok(())
+    }
+
     fn cached_unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
         trace!("cached unregister: {}", id);
         let cao = self.get_cao();
@@ -245,6 +267,13 @@ mod fake_tests {
             &self,
         ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn save(
+            &self,
+            _id: PersonId,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(()))
@@ -698,6 +727,13 @@ mod spy_tests {
             &self,
         ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn save(
+            &self,
+            _id: PersonId,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(()))
@@ -1717,6 +1753,13 @@ mod error_stub_tests {
             &self,
         ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
+        }
+        fn save(
+            &self,
+            _id: PersonId,
+            _person: PersonLayout,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
         }
         fn delete(&self, _id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(()))

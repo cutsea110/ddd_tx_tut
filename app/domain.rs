@@ -30,6 +30,15 @@ impl Person {
         }
     }
 
+    pub fn dead_at(&mut self, date: NaiveDate) {
+        assert!(
+            date >= self.birth_date,
+            "death date must be after birth date"
+        );
+
+        self.death_date = Some(date);
+    }
+
     pub fn notify(&self, dto: &mut impl PersonNotification) {
         dto.set_name(&self.name);
         dto.set_birth_date(self.birth_date);

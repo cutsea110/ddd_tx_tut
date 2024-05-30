@@ -135,12 +135,15 @@ fn main() {
     let mut service = PersonServiceImpl::new(&db_uri, &cache_uri, &mq_uri);
 
     let (id, person) = service
-        .cached_register("cutsea", date(1970, 11, 6), None, "rustacean")
+        .cached_register("poor man", date(2001, 9, 11), None, "one person")
         .expect("register one person");
     println!("id:{} {:?}", id, person);
 
     if let Some(p) = service.cached_find(id).expect("find person") {
         println!("cache hit:{:?}", p);
+        service
+            .cached_death(id, date(2011, 3, 11))
+            .expect("kill person");
     }
     service.cached_unregister(id).expect("delete person");
 
