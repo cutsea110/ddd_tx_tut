@@ -324,6 +324,16 @@ mod fake_tests {
         {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
+        fn death<'a>(
+            &'a mut self,
+            _id: PersonId,
+            _date: NaiveDate,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
         fn remove<'a>(
             &'a mut self,
             _id: PersonId,
@@ -605,6 +615,32 @@ mod fake_tests {
     }
 
     #[test]
+    fn test_cached_death() {
+        let mut service = TargetPersonService {
+            next_id: RefCell::new(3),
+            db: RefCell::new(
+                vec![(
+                    1,
+                    PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            usecase: Rc::new(RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            })),
+            cao: FakePersonCao {
+                cache: RefCell::new(HashMap::new()).into(),
+            },
+        };
+
+        let result = service.cached_death(1, date(2030, 11, 22));
+
+        assert!(result.is_ok());
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
     fn test_cached_unregister() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(3),
@@ -784,6 +820,16 @@ mod spy_tests {
         {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
+        fn death<'a>(
+            &'a mut self,
+            _id: PersonId,
+            _date: NaiveDate,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
         fn remove<'a>(
             &'a mut self,
             _id: PersonId,
@@ -820,6 +866,8 @@ mod spy_tests {
         batch_import_result: Result<Vec<PersonId>, ServiceError>,
         list_all: RefCell<i32>,
         list_all_result: Result<Vec<(PersonId, PersonLayout)>, ServiceError>,
+        death: RefCell<Vec<(PersonId, NaiveDate)>>,
+        death_result: Result<(), ServiceError>,
         unregister: RefCell<Vec<PersonId>>,
         unregister_result: Result<(), ServiceError>,
 
@@ -876,6 +924,11 @@ mod spy_tests {
         fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonLayout)>, ServiceError> {
             *self.list_all.borrow_mut() += 1;
             self.list_all_result.clone()
+        }
+
+        fn death(&'_ mut self, id: PersonId, date: NaiveDate) -> Result<(), ServiceError> {
+            self.death.borrow_mut().push((id, date));
+            self.death_result.clone()
         }
 
         fn unregister(&'_ mut self, id: PersonId) -> Result<(), ServiceError> {
@@ -951,6 +1004,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -985,6 +1040,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1013,6 +1072,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1047,6 +1108,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1078,6 +1143,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1136,6 +1203,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1162,6 +1231,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![1]);
@@ -1192,6 +1265,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1218,6 +1293,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![1]);
@@ -1248,6 +1327,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1274,6 +1355,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![1]);
@@ -1305,6 +1390,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![3, 4, 5]),
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1339,6 +1426,10 @@ mod spy_tests {
             ]]
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1374,6 +1465,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![3, 4, 5]),
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1408,6 +1501,10 @@ mod spy_tests {
             ]]
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1454,6 +1551,8 @@ mod spy_tests {
                     PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
                 ),
             ]),
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1480,6 +1579,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 1);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1525,6 +1628,8 @@ mod spy_tests {
                     PersonLayout::new("Eve", date(2002, 3, 3), None, Some("Eve is here")),
                 ),
             ]),
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1551,6 +1656,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 1);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1582,6 +1691,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]),
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1608,6 +1719,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![3]);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1627,6 +1742,8 @@ mod spy_tests {
             batch_import_result: Ok(vec![]), // 使われない
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]),
+            death: RefCell::new(vec![]),
+            death_result: Ok(()), // 使われない
             unregister: RefCell::new(vec![]),
             unregister_result: Ok(()), // 使われない
             usecase: RefCell::new(DummyPersonUsecase {
@@ -1653,6 +1770,10 @@ mod spy_tests {
             vec![] as Vec<Vec<PersonLayout>>
         );
         assert_eq!(*service.list_all.borrow(), 0);
+        assert_eq!(
+            *service.death.borrow(),
+            vec![] as Vec<(PersonId, NaiveDate)>
+        );
         assert_eq!(*service.unregister.borrow(), vec![3]);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
@@ -1810,6 +1931,16 @@ mod error_stub_tests {
         {
             tx_rs::with_tx(move |&mut ()| Ok(vec![]))
         }
+        fn death<'a>(
+            &'a mut self,
+            _id: PersonId,
+            _date: NaiveDate,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
         fn remove<'a>(
             &'a mut self,
             _id: PersonId,
@@ -1834,6 +1965,7 @@ mod error_stub_tests {
         find_result: Result<Option<PersonLayout>, ServiceError>,
         batch_import_result: Result<Vec<PersonId>, ServiceError>,
         list_all_result: Result<Vec<(PersonId, PersonLayout)>, ServiceError>,
+        death_result: Result<(), ServiceError>,
         unregister_result: Result<(), ServiceError>,
 
         usecase: RefCell<DummyPersonUsecase>,
@@ -1879,6 +2011,10 @@ mod error_stub_tests {
 
         fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonLayout)>, ServiceError> {
             self.list_all_result.clone()
+        }
+
+        fn death(&'_ mut self, _id: PersonId, _date: NaiveDate) -> Result<(), ServiceError> {
+            self.death_result.clone()
         }
 
         fn unregister(&'_ mut self, _id: PersonId) -> Result<(), ServiceError> {
@@ -1936,6 +2072,7 @@ mod error_stub_tests {
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -1962,6 +2099,7 @@ mod error_stub_tests {
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -1994,6 +2132,7 @@ mod error_stub_tests {
             )),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -2025,6 +2164,7 @@ mod error_stub_tests {
             ))),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -2059,6 +2199,7 @@ mod error_stub_tests {
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
             )),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -2087,6 +2228,7 @@ mod error_stub_tests {
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
             )),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -2118,6 +2260,7 @@ mod error_stub_tests {
             find_result: Ok(None),
             batch_import_result: Ok(vec![1]),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -2149,6 +2292,7 @@ mod error_stub_tests {
             list_all_result: Err(ServiceError::TransactionFailed(
                 UsecaseError::CollectPersonFailed(DaoError::SelectError("valid dao".to_string())),
             )),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -2178,6 +2322,7 @@ mod error_stub_tests {
                 1,
                 PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
             )]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -2199,6 +2344,60 @@ mod error_stub_tests {
     }
 
     #[test]
+    fn test_cached_death() {
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            death_result: Err(ServiceError::TransactionFailed(
+                UsecaseError::SavePersonFailed(DaoError::UpdateError("valid dao".to_string())),
+            )),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Ok(()),
+            },
+        };
+        let result = service.cached_death(1, date(2030, 12, 31));
+        assert_eq!(
+            result,
+            Err(ServiceError::TransactionFailed(
+                UsecaseError::SavePersonFailed(DaoError::UpdateError("valid dao".to_string()))
+            ))
+        );
+
+        let mut service = TargetPersonService {
+            register_result: Ok((
+                1,
+                PersonLayout::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+            )),
+            find_result: Ok(None),
+            batch_import_result: Ok(vec![]),
+            list_all_result: Ok(vec![]),
+            death_result: Ok(()),
+            unregister_result: Ok(()),
+            usecase: RefCell::new(DummyPersonUsecase {
+                dao: DummyPersonDao,
+            }),
+            cao: StubPersonCao {
+                find_result: Ok(None),
+                load_result: Ok(()),
+                unload_result: Err(CaoError::Unavailable("valid cao".to_string())),
+            },
+        };
+        let result = service.cached_death(1, date(2030, 12, 31));
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
     fn test_cached_unregister() {
         let mut service = TargetPersonService {
             register_result: Ok((
@@ -2208,6 +2407,7 @@ mod error_stub_tests {
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Err(ServiceError::TransactionFailed(
                 UsecaseError::RemovePersonFailed(DaoError::DeleteError("valid dao".to_string())),
             )),
@@ -2236,6 +2436,7 @@ mod error_stub_tests {
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
+            death_result: Ok(()),
             unregister_result: Ok(()),
             usecase: RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
