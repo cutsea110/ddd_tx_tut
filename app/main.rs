@@ -141,9 +141,14 @@ fn main() {
 
     if let Some(p) = service.cached_find(id).expect("find person") {
         println!("cache hit:{:?}", p);
-        service
-            .cached_death(id, date(2011, 3, 11))
-            .expect("kill person");
+
+        let death_date = date(2011, 3, 11);
+        println!("death {} at:{:?}", id, death_date);
+        service.cached_death(id, death_date).expect("kill person");
+
+        if let Some(p) = service.cached_find(id).expect("find dead person") {
+            println!("dead person: {:?}", p);
+        }
     }
     service.cached_unregister(id).expect("delete person");
 
