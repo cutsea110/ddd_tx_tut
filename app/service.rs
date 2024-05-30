@@ -342,6 +342,22 @@ mod fake_tests {
 
             tx_rs::with_tx(move |&mut ()| Ok(result))
         }
+        fn death<'a>(
+            &'a mut self,
+            id: PersonId,
+            date: NaiveDate,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            let person = self.db.iter_mut().find(|(i, _)| *i == id);
+
+            if let Some((_, p)) = person {
+                p.death_date = Some(date);
+            }
+
+            tx_rs::with_tx(move |&mut ()| Ok(()))
+        }
         fn remove<'a>(
             &'a mut self,
             id: PersonId,
@@ -458,6 +474,32 @@ mod fake_tests {
             .collect::<Vec<_>>();
 
         assert_eq!(result, Ok(expected))
+    }
+    #[test]
+    fn test_death() {
+        let usecase = Rc::new(RefCell::new(FakePersonUsecase {
+            db: vec![(
+                1,
+                PersonLayout::new("Alice", date(2020, 5, 7), None, Some("Alice is sender")),
+            )],
+            dao: DummyPersonDao,
+        }));
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+        };
+
+        let _ = service.death(1, date(2100, 4, 7));
+        let expected = vec![(
+            1,
+            PersonLayout::new(
+                "Alice",
+                date(2020, 5, 7),
+                Some(date(2100, 4, 7)),
+                Some("Alice is sender"),
+            ),
+        )];
+
+        assert_eq!(usecase.borrow().db, expected);
     }
     #[test]
     fn test_unregister() {
@@ -610,6 +652,7 @@ mod spy_tests {
         find: RefCell<Vec<PersonId>>,
         entry_and_verify: RefCell<Vec<PersonLayout>>,
         collect: RefCell<i32>,
+        death: RefCell<Vec<(PersonId, NaiveDate)>>,
         remove: RefCell<Vec<PersonId>>,
     }
     impl HavePersonDao<()> for SpyPersonUsecase {
@@ -664,6 +707,19 @@ mod spy_tests {
 
             // 返り値に意味はない
             tx_rs::with_tx(|&mut ()| Ok(vec![]))
+        }
+        fn death<'a>(
+            &'a mut self,
+            id: PersonId,
+            date: NaiveDate,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            self.death.borrow_mut().push((id, date));
+
+            // 返り値に意味はない
+            tx_rs::with_tx(move |&mut ()| Ok(()))
         }
         fn remove<'a>(
             &'a mut self,
@@ -723,6 +779,7 @@ mod spy_tests {
             find: RefCell::new(vec![]),
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
+            death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
         let notifier = SpyNotifier {
@@ -742,6 +799,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 1);
         assert_eq!(*usecase.borrow().collect.borrow(), 0);
+        assert_eq!(usecase.borrow().death.borrow().len(), 0);
         assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
         // Service の引数が Usecase にそのまま渡されていることを検証
@@ -768,6 +826,7 @@ mod spy_tests {
             find: RefCell::new(vec![]),
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
+            death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
         let notifier = SpyNotifier {
@@ -792,6 +851,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
         assert_eq!(*usecase.borrow().collect.borrow(), 0);
+        assert_eq!(usecase.borrow().death.borrow().len(), 0);
         assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
         // Service の引数が Usecase にそのまま渡されていることを検証
@@ -828,6 +888,7 @@ mod spy_tests {
             find: RefCell::new(vec![]),
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
+            death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
         let notifier = SpyNotifier {
@@ -845,10 +906,54 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
         assert_eq!(*usecase.borrow().collect.borrow(), 1);
+        assert_eq!(usecase.borrow().death.borrow().len(), 0);
         assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
         // Notifier のメソッド呼び出しの記録の検証
         assert_eq!(service.get_notifier().notify.borrow().len(), 0);
+    }
+    #[test]
+    fn test_death() {
+        let usecase = Rc::new(RefCell::new(SpyPersonUsecase {
+            dao: DummyPersonDao,
+            entry: RefCell::new(vec![]),
+            find: RefCell::new(vec![]),
+            entry_and_verify: RefCell::new(vec![]),
+            collect: RefCell::new(0),
+            death: RefCell::new(vec![]),
+            remove: RefCell::new(vec![]),
+        }));
+        let notifier = SpyNotifier {
+            notify: RefCell::new(vec![]).into(),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
+        };
+
+        let _ = service.death(42, date(2020, 7, 19));
+
+        // Usecase のメソッドの呼び出し記録の検証
+        assert_eq!(usecase.borrow().entry.borrow().len(), 0);
+        assert_eq!(usecase.borrow().find.borrow().len(), 0);
+        assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
+        assert_eq!(*usecase.borrow().collect.borrow(), 0);
+        assert_eq!(usecase.borrow().remove.borrow().len(), 0);
+
+        // Service の引数が Usecase にそのまま渡されていることを検証
+        assert_eq!(usecase.borrow().death.borrow()[0], (42, date(2020, 7, 19)));
+
+        // Notifier のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_notifier().notify.borrow().len(), 1);
+
+        // Service の引数が Notifier にそのまま渡されていることを検証
+        assert_eq!(
+            service.get_notifier().notify.borrow()[0],
+            (
+                "death_person".to_string(),
+                r#"{ "person_id": 42, "death_date": 2020-07-19 }"#.to_string()
+            )
+        );
     }
     #[test]
     fn test_unregister() {
@@ -858,6 +963,7 @@ mod spy_tests {
             find: RefCell::new(vec![]),
             entry_and_verify: RefCell::new(vec![]),
             collect: RefCell::new(0),
+            death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
         let notifier = SpyNotifier {
@@ -875,6 +981,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().find.borrow().len(), 0);
         assert_eq!(usecase.borrow().entry_and_verify.borrow().len(), 0);
         assert_eq!(*usecase.borrow().collect.borrow(), 0);
+        assert_eq!(usecase.borrow().death.borrow().len(), 0);
         assert_eq!(usecase.borrow().remove.borrow().len(), 1);
 
         // Service の引数が Usecase にそのまま渡されていることを検証
@@ -993,6 +1100,7 @@ mod error_stub_tests {
         find_result: Result<Option<PersonLayout>, UsecaseError>,
         entry_and_verify_result: Result<(PersonId, PersonLayout), UsecaseError>,
         collect_result: Result<Vec<(PersonId, PersonLayout)>, UsecaseError>,
+        death_result: Result<(), UsecaseError>,
         remove_result: Result<(), UsecaseError>,
     }
     impl HavePersonDao<()> for StubPersonUsecase {
@@ -1036,6 +1144,16 @@ mod error_stub_tests {
         {
             tx_rs::with_tx(|&mut ()| self.collect_result.clone())
         }
+        fn death<'a>(
+            &'a mut self,
+            _id: PersonId,
+            _date: NaiveDate,
+        ) -> impl tx_rs::Tx<(), Item = (), Err = UsecaseError>
+        where
+            (): 'a,
+        {
+            tx_rs::with_tx(|&mut ()| self.death_result.clone())
+        }
         fn remove<'a>(
             &'a mut self,
             _id: PersonId,
@@ -1051,6 +1169,7 @@ mod error_stub_tests {
     struct StubNotifier {
         admin_result: Result<(), NotifierError>,
         entry_person_result: Result<(), NotifierError>,
+        death_person_result: Result<(), NotifierError>,
         unregister_person_result: Result<(), NotifierError>,
         otherwise_result: Result<(), NotifierError>,
     }
@@ -1058,6 +1177,7 @@ mod error_stub_tests {
         fn notify(&self, to: &str, _message: &str) -> Result<(), NotifierError> {
             match to {
                 "entry_person" => self.entry_person_result.clone(),
+                "death_person" => self.death_person_result.clone(),
                 "unregister_person" => self.unregister_person_result.clone(),
                 "admin" => self.admin_result.clone(),
                 _ => self.otherwise_result.clone(),
@@ -1096,11 +1216,13 @@ mod error_stub_tests {
                 DaoError::InsertError("valid dao".to_string()),
             )),
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),       // 使わない
             remove_result: Ok(()),      // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1130,11 +1252,13 @@ mod error_stub_tests {
                 PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             )),
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),       // 使わない
             remove_result: Ok(()),      // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
             entry_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1158,11 +1282,13 @@ mod error_stub_tests {
                 DaoError::InsertError("valid dao".to_string()),
             )),
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),       // 使わない
             remove_result: Ok(()),      // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1194,11 +1320,13 @@ mod error_stub_tests {
                 PersonLayout::new("Alice", date(2012, 11, 2), None, None),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1227,11 +1355,13 @@ mod error_stub_tests {
                 PersonLayout::new("Alice", date(2012, 11, 2), None, None),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
             entry_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1261,11 +1391,13 @@ mod error_stub_tests {
                 PersonLayout::new("Alice", date(2012, 11, 2), None, None),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1298,11 +1430,13 @@ mod error_stub_tests {
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
             ))),
+            death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1330,11 +1464,13 @@ mod error_stub_tests {
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
             ))),
+            death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
         let notifier = StubNotifier {
             admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1360,6 +1496,7 @@ mod error_stub_tests {
                 PersonLayout::new("Alice", date(2012, 11, 2), None, None),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),  // 使わない
             remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
                 "valid dao".to_string(),
             ))),
@@ -1367,6 +1504,7 @@ mod error_stub_tests {
         let notifier = StubNotifier {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
@@ -1382,6 +1520,71 @@ mod error_stub_tests {
     }
 
     #[test]
+    fn test_death_notify_for_unregister_person() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),
+            remove_result: Ok(()), // 使わない
+        }));
+        let notifier = StubNotifier {
+            admin_result: Ok(()),
+            entry_person_result: Ok(()),
+            death_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
+        };
+
+        let result = service.death(42, date(2020, 8, 30));
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_death_notify_for_admin() {
+        let usecase = Rc::new(RefCell::new(StubPersonUsecase {
+            dao: DummyPersonDao,
+            entry_result: Ok(1),   // 使わない
+            find_result: Ok(None), // 使わない
+            entry_and_verify_result: Ok((
+                42,
+                PersonLayout::new("Alice", date(2012, 11, 2), None, None),
+            )), // 使わない
+            collect_result: Ok(vec![]), // 使わない
+            death_result: Err(UsecaseError::SavePersonFailed(DaoError::UpdateError(
+                "valid dao".to_string(),
+            ))),
+            remove_result: Ok(()), // 使わない
+        }));
+        let notifier = StubNotifier {
+            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            entry_person_result: Ok(()),
+            death_person_result: Ok(()),
+            unregister_person_result: Ok(()),
+            otherwise_result: Ok(()),
+        };
+        let mut service = TargetPersonService {
+            usecase: usecase.clone(),
+            notifier,
+        };
+
+        let result = service.death(42, date(2020, 8, 30));
+        let expected = usecase.borrow().death_result.clone().unwrap_err();
+
+        assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
+    }
+
+    #[test]
     fn test_unregister_notify_for_unregister_person() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
@@ -1392,11 +1595,13 @@ mod error_stub_tests {
                 PersonLayout::new("Alice", date(2012, 11, 2), None, None),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),  // 使わない
             remove_result: Ok(()),
         }));
         let notifier = StubNotifier {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
             otherwise_result: Ok(()),
         };
@@ -1421,6 +1626,7 @@ mod error_stub_tests {
                 PersonLayout::new("Alice", date(2012, 11, 2), None, None),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
+            death_result: Ok(()),  // 使わない
             remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
                 "valid dao".to_string(),
             ))),
@@ -1428,6 +1634,7 @@ mod error_stub_tests {
         let notifier = StubNotifier {
             admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
+            death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
