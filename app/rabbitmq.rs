@@ -42,6 +42,7 @@ impl notifier::Notifier for Client {
                 error!("failed to create channel: {}", e);
                 notifier::NotifierError::Unavailable(e.to_string())
             })?;
+            trace!("channel created");
             chan.queue_declare(
                 to,
                 lapin::options::QueueDeclareOptions::default(),
@@ -52,6 +53,7 @@ impl notifier::Notifier for Client {
                 error!("failed to declare queue: {}", e);
                 notifier::NotifierError::Unavailable(e.to_string())
             })?;
+            trace!("queue declared: {}", to);
             chan.basic_publish(
                 "",
                 to,

@@ -33,7 +33,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         Ctx: 'a,
     {
         let dao = self.get_dao();
-        trace!("insert person: {:?}", person);
+        trace!("entry person: {:?}", person);
         dao.insert(person).map_err(UsecaseError::EntryPersonFailed)
     }
     fn find<'a>(

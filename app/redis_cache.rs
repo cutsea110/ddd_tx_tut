@@ -1,7 +1,6 @@
-use std::time::Duration;
-
 use log::trace;
 use redis::{self, Commands, FromRedisValue, ToRedisArgs};
+use std::time::Duration;
 
 use crate::cache::{CaoError, PersonCao};
 use crate::domain::PersonId;
@@ -60,12 +59,13 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
         &self,
         id: PersonId,
     ) -> impl tx_rs::Tx<redis::Connection, Item = Option<PersonLayout>, Err = CaoError> {
+        trace!("find person: {}", id);
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             let p: Option<PersonLayout> = conn
                 .get(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
-
+            trace!("found person in cache: {:?}", p);
             Ok(p.into())
         })
     }
@@ -74,20 +74,22 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
         id: PersonId,
         person: &PersonLayout,
     ) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
+        trace!("load person: {}", id);
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             conn.set(&key, &person)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
-
+            trace!("person loaded into cache: {:?}", person);
             Ok(())
         })
     }
     fn unload(&self, id: PersonId) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
+        trace!("unload person: {}", id);
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
             conn.del(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
-
+            trace!("person unloaded from cache: {}", id);
             Ok(())
         })
     }

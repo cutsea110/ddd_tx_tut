@@ -1,5 +1,6 @@
 use chrono::NaiveDate;
 use core::fmt;
+use log::{trace, warn};
 use thiserror::Error;
 
 pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
@@ -42,9 +43,11 @@ impl Person {
 
     pub fn dead_at(&mut self, date: NaiveDate) -> Result<(), PersonDomainError> {
         if self.death_date.is_some() {
+            warn!("person is already dead: {}", self);
             return Err(PersonDomainError::AlreadyDead);
         }
         if date < self.birth_date {
+            warn!("death date must be before birth date: {}", self);
             return Err(PersonDomainError::InvalidFieldValue(
                 "death_date".into(),
                 "must be after birth date".into(),
@@ -57,6 +60,7 @@ impl Person {
     }
 
     pub fn notify(&self, dto: &mut impl PersonNotification) {
+        trace!("notifying to dto: {}", self);
         dto.set_name(&self.name);
         dto.set_birth_date(self.birth_date);
         dto.set_death_date(self.death_date);
