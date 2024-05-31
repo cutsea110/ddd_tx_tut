@@ -11,6 +11,8 @@ type FieldName = String;
 pub enum PersonDomainError {
     #[error("invalid field value: {0}={1}")]
     InvalidFieldValue(FieldName, String),
+    #[error("already dead")]
+    AlreadyDead,
 }
 
 pub type PersonId = i32;
@@ -40,10 +42,7 @@ impl Person {
 
     pub fn dead_at(&mut self, date: NaiveDate) -> Result<(), PersonDomainError> {
         if self.death_date.is_some() {
-            return Err(PersonDomainError::InvalidFieldValue(
-                "death_date".into(),
-                "already dead".into(),
-            ));
+            return Err(PersonDomainError::AlreadyDead);
         }
         if date < self.birth_date {
             return Err(PersonDomainError::InvalidFieldValue(

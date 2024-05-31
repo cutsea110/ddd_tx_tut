@@ -3,7 +3,7 @@ use log::{trace, warn};
 use thiserror::Error;
 
 use crate::dao::{DaoError, HavePersonDao, PersonDao};
-use crate::domain::{Person, PersonId};
+use crate::domain::{Person, PersonDomainError, PersonId};
 use crate::dto::PersonLayout;
 use tx_rs::Tx;
 
@@ -21,6 +21,8 @@ pub enum UsecaseError {
     SavePersonFailed(DaoError),
     #[error("remove person failed: {0}")]
     RemovePersonFailed(DaoError),
+    #[error("remove person failed: {0}")]
+    DomainObjectChangeFailed(PersonDomainError),
 }
 pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn entry<'a>(
@@ -88,28 +90,28 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         let dao = self.get_dao();
         trace!("death person_id: {:?}", id);
         dao.fetch(id)
+            .map_err(UsecaseError::FindPersonFailed)
             .try_map(move |p| {
                 if let Some(person) = p {
                     trace!("find person (id={}): {:?}", id, person);
-                    let mut person: Person = person.into();
-                    match person.dead_at(date) {
+                    let mut p: Person = person.into();
+                    match p.dead_at(date) {
                         Ok(_) => {
-                            trace!("person dead: {:?}", person);
-                            return Ok(person.into());
+                            trace!("person dead: {:?}", p);
+                            return Ok(p.into());
                         }
                         Err(e) => {
                             warn!("can't dead the person: {id} {e}");
-                            return Err(DaoError::UpdateError(format!(
-                                "can't dead (id={id}): {e}"
-                            )));
+                            return Err(UsecaseError::DomainObjectChangeFailed(e));
                         }
                     }
                 }
 
                 warn!("can't find the person to dead: {}", id);
-                Err(DaoError::SelectError(format!("person not found: {id}")))
+                Err(UsecaseError::FindPersonFailed(DaoError::SelectError(
+                    format!("person not found: {id}"),
+                )))
             })
-            .map_err(UsecaseError::FindPersonFailed)
             .and_then(move |p| {
                 trace!("person dead: {:?}", p);
                 dao.save(id, p).map_err(UsecaseError::SavePersonFailed)
