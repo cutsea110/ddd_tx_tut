@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use log::trace;
 use std::str;
 
 use crate::dao::{DaoError, PersonDao};
@@ -12,6 +13,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         &self,
         person: PersonLayout,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = PersonId, Err = DaoError> {
+        trace!("inserting person: {:?}", person);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_one(
                 "INSERT INTO person (name, birth_date, death_date, data) VALUES ($1, $2, $3, $4) RETURNING id",
@@ -31,6 +33,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         id: PersonId,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Option<PersonLayout>, Err = DaoError>
     {
+        trace!("fetching person: {:?}", id);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_opt(
                 "SELECT name, birth_date, death_date, data FROM person WHERE id = $1",
@@ -53,6 +56,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         &self,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = Vec<(PersonId, PersonLayout)>, Err = DaoError>
     {
+        trace!("selecting all persons");
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
             tx.query(
                 "SELECT id, name, birth_date, death_date, data FROM person",
@@ -80,6 +84,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         id: PersonId,
         person: PersonLayout,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = (), Err = DaoError> {
+        trace!("saving person: {:?}", id);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.execute(
 		"UPDATE person SET name = $1, birth_date = $2, death_date = $3, data = $4 WHERE id = $5",
@@ -99,6 +104,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         &self,
         id: PersonId,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = (), Err = DaoError> {
+        trace!("deleting person: {:?}", id);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.execute("DELETE FROM person WHERE id = $1", &[&id])
                 .map(|_| ())
