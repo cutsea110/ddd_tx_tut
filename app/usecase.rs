@@ -95,16 +95,10 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                 if let Some(person) = p {
                     trace!("found person (id={}): {:?}", id, person);
                     let mut p: Person = person.into();
-                    match p.dead_at(date) {
-                        Ok(_) => {
-                            trace!("person dead: {:?}", p);
-                            return Ok(p.into());
-                        }
-                        Err(e) => {
-                            warn!("can't dead the person (id={id}): {e}");
-                            return Err(UsecaseError::DomainObjectChangeFailed(e));
-                        }
-                    }
+                    return p
+                        .dead_at(date)
+                        .map(|_| p.into())
+                        .map_err(UsecaseError::DomainObjectChangeFailed);
                 }
 
                 warn!("can't find the person to dead: {}", id);
