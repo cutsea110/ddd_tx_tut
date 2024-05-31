@@ -69,6 +69,13 @@ docker exec $(docker ps -f "name=rabbitmq" --format "{{.ID}}") \
        rabbitmqctl help
 ```
 
+For example, in the case you want to look at queue, do like this:
+
+```bash
+docker exec $(docker ps -f "name=rabbitmq" --format "{{.ID}}") \
+       rabbitmqctl list_queues
+```
+
 If you use rabbitmqadmin(administrator control cli), this command is in container too, do like this:
 
 ```
