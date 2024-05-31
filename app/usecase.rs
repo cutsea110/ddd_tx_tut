@@ -88,12 +88,12 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         Ctx: 'a,
     {
         let dao = self.get_dao();
-        trace!("death person_id: {:?}", id);
+        trace!("death person: id={} date={}", id, date);
         dao.fetch(id)
             .map_err(UsecaseError::FindPersonFailed)
             .try_map(move |p| {
                 if let Some(person) = p {
-                    trace!("find person (id={}): {:?}", id, person);
+                    trace!("found person (id={}): {:?}", id, person);
                     let mut p: Person = person.into();
                     match p.dead_at(date) {
                         Ok(_) => {
@@ -101,7 +101,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                             return Ok(p.into());
                         }
                         Err(e) => {
-                            warn!("can't dead the person: {id} {e}");
+                            warn!("can't dead the person (id={id}): {e}");
                             return Err(UsecaseError::DomainObjectChangeFailed(e));
                         }
                     }
@@ -113,7 +113,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                 )))
             })
             .and_then(move |p| {
-                trace!("person dead: {:?}", p);
+                trace!("save dead person (id={}): {:?}", id, p);
                 dao.save(id, p).map_err(UsecaseError::SavePersonFailed)
             })
     }
