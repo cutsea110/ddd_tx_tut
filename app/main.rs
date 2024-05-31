@@ -75,18 +75,13 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
             &mut postgres::Transaction<'a>,
         ) -> Result<T, UsecaseError>,
     {
-        let mut usecase = self.usecase.borrow_mut();
-        let mut ctx = match self.db_client.transaction() {
-            Ok(ctx) => {
-                trace!("transaction started");
-                ctx
-            }
-            Err(e) => {
-                error!("failed to start transaction: {}", e);
-                return Err(ServiceError::ServiceUnavailable(format!("{}", e)));
-            }
-        };
+        let mut ctx = self.db_client.transaction().map_err(|e| {
+            error!("failed to start transaction: {}", e);
+            ServiceError::ServiceUnavailable(format!("{}", e))
+        })?;
+        trace!("transaction started");
 
+        let mut usecase = self.usecase.borrow_mut();
         let res = f(&mut usecase, &mut ctx);
 
         match res {
