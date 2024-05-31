@@ -1,8 +1,16 @@
 use chrono::NaiveDate;
 use core::fmt;
+use thiserror::Error;
 
 pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month, day).expect("create date")
+}
+
+type FieldName = String;
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum PersonDomainError {
+    #[error("invalid field value: {0}={1}")]
+    InvalidFieldValue(FieldName, String),
 }
 
 pub type PersonId = i32;
@@ -30,13 +38,23 @@ impl Person {
         }
     }
 
-    pub fn dead_at(&mut self, date: NaiveDate) {
-        assert!(
-            date >= self.birth_date,
-            "death date must be after birth date"
-        );
+    pub fn dead_at(&mut self, date: NaiveDate) -> Result<(), PersonDomainError> {
+        if self.death_date.is_some() {
+            return Err(PersonDomainError::InvalidFieldValue(
+                "death_date".into(),
+                "already dead".into(),
+            ));
+        }
+        if date < self.birth_date {
+            return Err(PersonDomainError::InvalidFieldValue(
+                "death_date".into(),
+                "must be after birth date".into(),
+            ));
+        }
 
         self.death_date = Some(date);
+
+        Ok(())
     }
 
     pub fn notify(&self, dto: &mut impl PersonNotification) {

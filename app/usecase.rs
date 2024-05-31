@@ -90,7 +90,20 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
         dao.fetch(id)
             .try_map(move |p| {
                 if let Some(person) = p {
-                    return Ok(person);
+                    trace!("find person (id={}): {:?}", id, person);
+                    let mut person: Person = person.into();
+                    match person.dead_at(date) {
+                        Ok(_) => {
+                            trace!("person dead: {:?}", person);
+                            return Ok(person.into());
+                        }
+                        Err(e) => {
+                            warn!("can't dead the person: {id} {e}");
+                            return Err(DaoError::UpdateError(format!(
+                                "can't dead (id={id}): {e}"
+                            )));
+                        }
+                    }
                 }
 
                 warn!("can't find the person to dead: {}", id);
@@ -98,11 +111,8 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
             })
             .map_err(UsecaseError::FindPersonFailed)
             .and_then(move |p| {
-                let mut person: Person = p.into();
-                person.dead_at(date);
-                trace!("person dead: {:?}", person);
-                dao.save(id, person.into())
-                    .map_err(UsecaseError::SavePersonFailed)
+                trace!("person dead: {:?}", p);
+                dao.save(id, p).map_err(UsecaseError::SavePersonFailed)
             })
     }
     fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>
