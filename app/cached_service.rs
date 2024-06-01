@@ -619,7 +619,12 @@ mod fake_tests {
             db: RefCell::new(
                 vec![(
                     1,
-                    PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                    PersonDto::new(
+                        "poor man",
+                        date(2000, 1, 1),
+                        None,
+                        Some("poor man will be dead"),
+                    ),
                 )]
                 .into_iter()
                 .collect(),
@@ -2342,7 +2347,12 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonDto::new(
+                    "poor man",
+                    date(2000, 1, 1),
+                    None,
+                    Some("poor man will be dead"),
+                ),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
@@ -2371,7 +2381,12 @@ mod error_stub_tests {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
-                PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonDto::new(
+                    "poor man",
+                    date(2000, 1, 1),
+                    None,
+                    Some("poor man will be dead"),
+                ),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),

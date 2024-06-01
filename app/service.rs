@@ -475,7 +475,12 @@ mod fake_tests {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
             db: vec![(
                 1,
-                PersonDto::new("Alice", date(2020, 5, 7), None, Some("Alice is sender")),
+                PersonDto::new(
+                    "poor man",
+                    date(2020, 5, 7),
+                    None,
+                    Some("poor man will be dead"),
+                ),
             )],
             dao: DummyPersonDao,
         }));
@@ -487,10 +492,10 @@ mod fake_tests {
         let expected = vec![(
             1,
             PersonDto::new(
-                "Alice",
+                "poor man",
                 date(2020, 5, 7),
                 Some(date(2100, 4, 7)),
-                Some("Alice is sender"),
+                Some("poor man will be dead"),
             ),
         )];
 
