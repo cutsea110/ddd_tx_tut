@@ -23,7 +23,7 @@ use pg_db::PgPersonDao;
 use service::{PersonService, ServiceError};
 use usecase::{PersonUsecase, UsecaseError};
 
-use crate::dto::PersonLayout;
+use crate::dto::PersonDto;
 
 #[derive(Debug, Clone)]
 pub struct PersonUsecaseImpl {
@@ -172,7 +172,7 @@ fn main() {
     .into_iter()
     .map(|(name, life, desc)| {
         let (from, to) = (*life.start(), *life.end());
-        PersonLayout::new(name, from, Some(to), Some(desc))
+        PersonDto::new(name, from, Some(to), Some(desc))
     })
     .collect::<Vec<_>>();
 

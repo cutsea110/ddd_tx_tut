@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use crate::cache::{CaoError, PersonCao};
 use crate::domain::PersonId;
-use crate::dto::PersonLayout;
+use crate::dto::PersonDto;
 
-// this suppose PersonLayout is serde-ized
-impl ToRedisArgs for PersonLayout {
+// this suppose PersonDto is serde-ized
+impl ToRedisArgs for PersonDto {
     fn write_redis_args<W: ?Sized>(&self, out: &mut W)
     where
         W: redis::RedisWrite,
@@ -16,11 +16,11 @@ impl ToRedisArgs for PersonLayout {
         out.write_arg(s.as_bytes());
     }
 }
-// this suppose PersonLayout is serde-ized
-impl FromRedisValue for PersonLayout {
+// this suppose PersonDto is serde-ized
+impl FromRedisValue for PersonDto {
     fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
         let s: String = redis::from_redis_value(v)?;
-        let p: PersonLayout = serde_json::from_str(&s).expect("deserialize");
+        let p: PersonDto = serde_json::from_str(&s).expect("deserialize");
         Ok(p)
     }
 }
@@ -58,11 +58,11 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
     fn find(
         &self,
         id: PersonId,
-    ) -> impl tx_rs::Tx<redis::Connection, Item = Option<PersonLayout>, Err = CaoError> {
+    ) -> impl tx_rs::Tx<redis::Connection, Item = Option<PersonDto>, Err = CaoError> {
         trace!("find person: {}", id);
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
-            let p: Option<PersonLayout> = conn
+            let p: Option<PersonDto> = conn
                 .get(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
             trace!("found person in cache: {:?}", p);
@@ -72,7 +72,7 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
     fn load(
         &self,
         id: PersonId,
-        person: &PersonLayout,
+        person: &PersonDto,
     ) -> impl tx_rs::Tx<redis::Connection, Item = (), Err = CaoError> {
         trace!("load person: {}", id);
         tx_rs::with_tx(move |conn: &mut redis::Connection| {

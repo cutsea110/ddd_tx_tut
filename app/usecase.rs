@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::dao::{DaoError, HavePersonDao, PersonDao};
 use crate::domain::{Person, PersonDomainError, PersonId};
-use crate::dto::PersonLayout;
+use crate::dto::PersonDto;
 use tx_rs::Tx;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
@@ -27,7 +27,7 @@ pub enum UsecaseError {
 pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn entry<'a>(
         &'a mut self,
-        person: PersonLayout,
+        person: PersonDto,
     ) -> impl tx_rs::Tx<Ctx, Item = PersonId, Err = UsecaseError>
     where
         Ctx: 'a,
@@ -39,7 +39,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     fn find<'a>(
         &'a mut self,
         id: PersonId,
-    ) -> impl tx_rs::Tx<Ctx, Item = Option<PersonLayout>, Err = UsecaseError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Option<PersonDto>, Err = UsecaseError>
     where
         Ctx: 'a,
     {
@@ -49,8 +49,8 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     }
     fn entry_and_verify<'a>(
         &'a mut self,
-        person: PersonLayout,
-    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, PersonLayout), Err = UsecaseError>
+        person: PersonDto,
+    ) -> impl tx_rs::Tx<Ctx, Item = (PersonId, PersonDto), Err = UsecaseError>
     where
         Ctx: 'a,
     {
@@ -71,7 +71,7 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
     }
     fn collect<'a>(
         &'a mut self,
-    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, PersonLayout)>, Err = UsecaseError>
+    ) -> impl tx_rs::Tx<Ctx, Item = Vec<(PersonId, PersonDto)>, Err = UsecaseError>
     where
         Ctx: 'a,
     {
@@ -166,18 +166,15 @@ mod fake_tests {
 
     use super::*;
     use crate::domain::date;
-    use crate::dto::PersonLayout;
+    use crate::dto::PersonDto;
 
     struct FakePersonDao {
         last_id: RefCell<PersonId>,
-        data: RefCell<Vec<(PersonId, PersonLayout)>>,
+        data: RefCell<Vec<(PersonId, PersonDto)>>,
     }
     // Ctx 不要なので () にしている
     impl PersonDao<()> for FakePersonDao {
-        fn insert(
-            &self,
-            person: PersonLayout,
-        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(&self, person: PersonDto) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             *self.last_id.borrow_mut() += 1;
             let id = *self.last_id.borrow();
             self.data.borrow_mut().push((id, person));
@@ -187,15 +184,13 @@ mod fake_tests {
         fn fetch(
             &self,
             id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonDto>, Err = DaoError> {
             let data = self.data.borrow();
             let result = data.iter().find(|(i, _)| *i == id).map(|(_, p)| p.clone());
 
             tx_rs::with_tx(move |()| Ok(result))
         }
-        fn select(
-            &self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
+        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonDto)>, Err = DaoError> {
             let result = self.data.borrow().clone();
 
             tx_rs::with_tx(move |()| Ok(result))
@@ -203,7 +198,7 @@ mod fake_tests {
         fn save(
             &self,
             id: PersonId,
-            person: PersonLayout,
+            person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             self.data
                 .borrow_mut()
@@ -238,7 +233,7 @@ mod fake_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
+        let person = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone().into();
         let expected_id = 1;
 
@@ -254,15 +249,15 @@ mod fake_tests {
             data: RefCell::new(vec![
                 (
                     13,
-                    PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                    PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
                 ),
                 (
                     24,
-                    PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                    PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
                 ),
                 (
                     99,
-                    PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                    PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
                 ),
             ]),
         };
@@ -271,7 +266,7 @@ mod fake_tests {
         let result = usecase.find(13).run(&mut ());
         assert_eq!(
             result,
-            Ok(Some(PersonLayout::new(
+            Ok(Some(PersonDto::new(
                 "Alice",
                 date(2012, 11, 2),
                 None,
@@ -287,7 +282,7 @@ mod fake_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
+        let person = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone();
         let expected_id = 14;
 
@@ -299,15 +294,15 @@ mod fake_tests {
         let data = vec![
             (
                 13,
-                PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             ),
             (
                 24,
-                PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
             ),
             (
                 99,
-                PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
             ),
         ];
         let expected = data
@@ -324,7 +319,7 @@ mod fake_tests {
 
         let result = usecase.collect().run(&mut ());
         assert_eq!(
-            result.map(|mut v: Vec<(PersonId, PersonLayout)>| {
+            result.map(|mut v: Vec<(PersonId, PersonDto)>| {
                 v.sort_by_key(|(id, _)| *id);
                 v
             }),
@@ -337,7 +332,7 @@ mod fake_tests {
             last_id: RefCell::new(0), // 使わない
             data: RefCell::new(vec![(
                 13,
-                PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             )]),
         };
         let mut usecase = TargetPersonUsecase { dao };
@@ -348,7 +343,7 @@ mod fake_tests {
             *usecase.dao.data.borrow(),
             vec![(
                 13,
-                PersonLayout::new(
+                PersonDto::new(
                     "Alice",
                     date(2012, 11, 2),
                     Some(date(2020, 12, 30)),
@@ -362,25 +357,25 @@ mod fake_tests {
         let data = vec![
             (
                 13,
-                PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             ),
             (
                 24,
-                PersonLayout::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
             ),
             (
                 99,
-                PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
             ),
         ];
         let expected = vec![
             (
                 13,
-                PersonLayout::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
             ),
             (
                 99,
-                PersonLayout::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
             ),
         ];
 
@@ -450,23 +445,20 @@ mod spy_tests {
 
     use super::*;
     use crate::domain::date;
-    use crate::dto::PersonLayout;
+    use crate::dto::PersonDto;
 
     struct SpyPersonDao {
-        insert: RefCell<Vec<PersonLayout>>,
+        insert: RefCell<Vec<PersonDto>>,
         inserted_id: PersonId,
         fetch: RefCell<Vec<PersonId>>,
-        fetch_result: Result<Option<PersonLayout>, DaoError>,
+        fetch_result: Result<Option<PersonDto>, DaoError>,
         select: RefCell<i32>,
-        save: RefCell<Vec<(PersonId, PersonLayout)>>,
+        save: RefCell<Vec<(PersonId, PersonDto)>>,
         delete: RefCell<Vec<PersonId>>,
     }
     // Ctx 不要なので () にしている
     impl PersonDao<()> for SpyPersonDao {
-        fn insert(
-            &self,
-            person: PersonLayout,
-        ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
+        fn insert(&self, person: PersonDto) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             self.insert.borrow_mut().push(person);
 
             // 返り値には意味なし
@@ -475,14 +467,12 @@ mod spy_tests {
         fn fetch(
             &self,
             id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonDto>, Err = DaoError> {
             self.fetch.borrow_mut().push(id);
 
             tx_rs::with_tx(|()| self.fetch_result.clone())
         }
-        fn select(
-            &self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
+        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonDto)>, Err = DaoError> {
             *self.select.borrow_mut() += 1;
 
             // 返り値には意味なし
@@ -491,7 +481,7 @@ mod spy_tests {
         fn save(
             &self,
             id: PersonId,
-            person: PersonLayout,
+            person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             self.save.borrow_mut().push((id, person));
 
@@ -529,7 +519,7 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonDto::new("Alice", date(2012, 11, 2), None, None);
         let expected = person.clone().into();
 
         let _ = usecase.entry(person).run(&mut ()).unwrap();
@@ -586,7 +576,7 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonDto::new("Alice", date(2012, 11, 2), None, None);
         let expected = person.clone().into();
 
         let _ = usecase.entry_and_verify(person).run(&mut ());
@@ -632,12 +622,7 @@ mod spy_tests {
             insert: RefCell::new(vec![]),
             inserted_id: 0, // 使わない
             fetch: RefCell::new(vec![]),
-            fetch_result: Ok(Some(PersonLayout::new(
-                "Alice",
-                date(2020, 10, 1),
-                None,
-                None,
-            ))),
+            fetch_result: Ok(Some(PersonDto::new("Alice", date(2020, 10, 1), None, None))),
             select: RefCell::new(0),
             save: RefCell::new(vec![]),
             delete: RefCell::new(vec![]),
@@ -647,7 +632,7 @@ mod spy_tests {
         let id: PersonId = 42;
         let expected = (
             id,
-            PersonLayout::new("Alice", date(2020, 10, 1), Some(date(2100, 9, 8)), None).into(),
+            PersonDto::new("Alice", date(2020, 10, 1), Some(date(2100, 9, 8)), None).into(),
         );
         let _ = usecase.death(id, date(2100, 9, 8)).run(&mut ());
 
@@ -727,12 +712,12 @@ mod spy_tests {
 mod error_stub_tests {
     use super::*;
     use crate::domain::date;
-    use crate::dto::PersonLayout;
+    use crate::dto::PersonDto;
 
     struct StubPersonDao {
         insert_result: Result<PersonId, DaoError>,
-        fetch_result: Result<Option<PersonLayout>, DaoError>,
-        select_result: Result<Vec<(PersonId, PersonLayout)>, DaoError>,
+        fetch_result: Result<Option<PersonDto>, DaoError>,
+        select_result: Result<Vec<(PersonId, PersonDto)>, DaoError>,
         save_result: Result<(), DaoError>,
         delete_result: Result<(), DaoError>,
     }
@@ -740,25 +725,23 @@ mod error_stub_tests {
     impl PersonDao<()> for StubPersonDao {
         fn insert(
             &self,
-            _person: PersonLayout,
+            _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             tx_rs::with_tx(|()| self.insert_result.clone())
         }
         fn fetch(
             &self,
             _id: PersonId,
-        ) -> impl tx_rs::Tx<(), Item = Option<PersonLayout>, Err = DaoError> {
+        ) -> impl tx_rs::Tx<(), Item = Option<PersonDto>, Err = DaoError> {
             tx_rs::with_tx(|()| self.fetch_result.clone())
         }
-        fn select(
-            &self,
-        ) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonLayout)>, Err = DaoError> {
+        fn select(&self) -> impl tx_rs::Tx<(), Item = Vec<(PersonId, PersonDto)>, Err = DaoError> {
             tx_rs::with_tx(|()| self.select_result.clone())
         }
         fn save(
             &self,
             _id: PersonId,
-            _person: PersonLayout,
+            _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |()| self.save_result.clone())
         }
@@ -790,7 +773,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonDto::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry(person).run(&mut ());
 
         assert!(result.is_err());
@@ -831,7 +814,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonDto::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());
@@ -852,7 +835,7 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let person = PersonLayout::new("Alice", date(2012, 11, 2), None, None);
+        let person = PersonDto::new("Alice", date(2012, 11, 2), None, None);
         let result = usecase.entry_and_verify(person).run(&mut ());
 
         assert!(result.is_err());
@@ -881,12 +864,7 @@ mod error_stub_tests {
     fn test_death_save_error() {
         let dao = StubPersonDao {
             insert_result: Ok(42), // 使わない
-            fetch_result: Ok(Some(PersonLayout::new(
-                "Alice",
-                date(2020, 5, 5),
-                None,
-                None,
-            ))),
+            fetch_result: Ok(Some(PersonDto::new("Alice", date(2020, 5, 5), None, None))),
             select_result: Ok(vec![]), // 使わない
             save_result: Err(DaoError::UpdateError("valid dao".to_string())),
             delete_result: Ok(()), // 使わない

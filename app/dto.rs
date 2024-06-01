@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 use crate::domain::{Person, PersonNotification};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersonLayout {
+pub struct PersonDto {
     pub name: String,
     pub birth_date: NaiveDate,
     pub death_date: Option<NaiveDate>,
     pub data: Option<String>,
 }
-impl PersonLayout {
+impl PersonDto {
     pub fn new(
         name: &str,
         birth_date: NaiveDate,
@@ -27,7 +27,7 @@ impl PersonLayout {
     }
 }
 
-impl PersonNotification for PersonLayout {
+impl PersonNotification for PersonDto {
     fn set_name(&mut self, name: &str) {
         trace!("set_name: {}", name);
         self.name = name.to_string();
@@ -46,15 +46,15 @@ impl PersonNotification for PersonLayout {
     }
 }
 
-impl From<Person> for PersonLayout {
+impl From<Person> for PersonDto {
     fn from(person: Person) -> Self {
-        let mut layout = PersonLayout::default();
+        let mut layout = PersonDto::default();
         person.notify(&mut layout);
         layout
     }
 }
-impl From<PersonLayout> for Person {
-    fn from(person: PersonLayout) -> Self {
+impl From<PersonDto> for Person {
+    fn from(person: PersonDto) -> Self {
         Self::new(
             &person.name,
             person.birth_date,
@@ -78,10 +78,10 @@ mod tests {
             Some("data"),
         );
 
-        let mut layout = PersonLayout::from(person.clone());
+        let mut layout = PersonDto::from(person.clone());
         assert_eq!(
             layout,
-            PersonLayout::new(
+            PersonDto::new(
                 "name",
                 date(2000, 1, 1),
                 Some(date(2100, 12, 31)),
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_layout_person() {
-        let mut layout = PersonLayout::new(
+        let mut layout = PersonDto::new(
             "name",
             date(2000, 1, 1),
             Some(date(2100, 12, 31)),
