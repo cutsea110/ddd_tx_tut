@@ -48,9 +48,9 @@ impl PersonNotification for PersonDto {
 
 impl From<Person> for PersonDto {
     fn from(person: Person) -> Self {
-        let mut layout = PersonDto::default();
-        person.notify(&mut layout);
-        layout
+        let mut dto = PersonDto::default();
+        person.notify(&mut dto);
+        dto
     }
 }
 impl From<PersonDto> for Person {
@@ -70,7 +70,7 @@ mod tests {
     use crate::domain::date;
 
     #[test]
-    fn test_person_layout() {
+    fn test_person_dto() {
         let person = Person::new(
             "name",
             date(2000, 1, 1),
@@ -78,9 +78,9 @@ mod tests {
             Some("data"),
         );
 
-        let mut layout = PersonDto::from(person.clone());
+        let mut dto = PersonDto::from(person.clone());
         assert_eq!(
-            layout,
+            dto,
             PersonDto::new(
                 "name",
                 date(2000, 1, 1),
@@ -89,11 +89,11 @@ mod tests {
             )
         );
 
-        // Layout を変更しても Person には影響しない
-        layout.set_name("name2");
-        layout.set_birth_date(date(2000, 1, 2));
-        layout.set_death_date(None);
-        layout.set_data(None);
+        // DTO を変更しても Person には影響しない
+        dto.set_name("name2");
+        dto.set_birth_date(date(2000, 1, 2));
+        dto.set_death_date(None);
+        dto.set_data(None);
         assert_eq!(
             person,
             Person::new(
@@ -106,15 +106,15 @@ mod tests {
     }
 
     #[test]
-    fn test_layout_person() {
-        let mut layout = PersonDto::new(
+    fn test_dto_person() {
+        let mut dto = PersonDto::new(
             "name",
             date(2000, 1, 1),
             Some(date(2100, 12, 31)),
             Some("data"),
         );
 
-        let person = Person::from(layout.clone());
+        let person = Person::from(dto.clone());
         assert_eq!(
             person,
             Person::new(
@@ -125,11 +125,11 @@ mod tests {
             )
         );
 
-        // layout を変更しても person には影響しない
-        layout.set_name("name2");
-        layout.set_birth_date(date(2000, 1, 2));
-        layout.set_death_date(None);
-        layout.set_data(None);
+        // DTO を変更しても person には影響しない
+        dto.set_name("name2");
+        dto.set_birth_date(date(2000, 1, 2));
+        dto.set_death_date(None);
+        dto.set_data(None);
         assert_eq!(
             person,
             Person::new(
