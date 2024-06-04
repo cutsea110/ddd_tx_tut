@@ -200,18 +200,20 @@ mod fake_tests {
             id: PersonId,
             person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
-            self.data
+            let result = self
+                .data
                 .borrow_mut()
                 .iter_mut()
                 .find(|(i, _)| *i == id)
-                .map(|(_, p)| *p = person);
+                .map(|(_, p)| *p = person)
+                .ok_or(DaoError::UpdateError(format!("person not found: {id}")));
 
-            tx_rs::with_tx(move |()| Ok(()))
+            tx_rs::with_tx(move |()| result)
         }
         fn delete(&self, id: PersonId) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
-            let result = self.data.borrow_mut().retain(|(i, _)| *i != id);
+            let _ = self.data.borrow_mut().retain(|(i, _)| *i != id);
 
-            tx_rs::with_tx(move |()| Ok(result))
+            tx_rs::with_tx(move |()| Ok(()))
         }
     }
 
