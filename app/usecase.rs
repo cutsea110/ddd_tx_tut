@@ -266,15 +266,13 @@ mod fake_tests {
         let mut usecase = TargetPersonUsecase { dao };
 
         let result = usecase.find(13).run(&mut ());
-        assert_eq!(
-            result,
-            Ok(Some(PersonDto::new(
-                "Alice",
-                date(2012, 11, 2),
-                None,
-                Some("Alice is sender")
-            )))
-        );
+        let expected = Some(PersonDto::new(
+            "Alice",
+            date(2012, 11, 2),
+            None,
+            Some("Alice is sender"),
+        ));
+        assert_eq!(result, Ok(expected));
     }
     #[test]
     fn test_entry_and_verify() {
@@ -285,11 +283,10 @@ mod fake_tests {
         let mut usecase = TargetPersonUsecase { dao };
 
         let person = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
-        let expected = person.clone();
-        let expected_id = 13;
+        let expected = (13, person.clone());
 
         let result = usecase.entry_and_verify(person).run(&mut ());
-        assert_eq!(result, Ok((expected_id, expected)));
+        assert_eq!(result, Ok(expected));
     }
     #[test]
     fn test_collect() {
@@ -340,19 +337,17 @@ mod fake_tests {
         let mut usecase = TargetPersonUsecase { dao };
 
         let result = usecase.death(13, date(2020, 12, 30)).run(&mut ());
+        let expected = vec![(
+            13,
+            PersonDto::new(
+                "Alice",
+                date(2012, 11, 2),
+                Some(date(2020, 12, 30)),
+                Some("Alice is sender"),
+            ),
+        )];
         assert_eq!(result, Ok(()));
-        assert_eq!(
-            *usecase.dao.data.borrow(),
-            vec![(
-                13,
-                PersonDto::new(
-                    "Alice",
-                    date(2012, 11, 2),
-                    Some(date(2020, 12, 30)),
-                    Some("Alice is sender")
-                )
-            )]
-        );
+        assert_eq!(*usecase.dao.data.borrow(), expected);
     }
     #[test]
     fn test_remove() {
@@ -370,6 +365,14 @@ mod fake_tests {
                 PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
             ),
         ];
+
+        let dao = FakePersonDao {
+            next_id: RefCell::new(0), // 使わない
+            data: RefCell::new(data),
+        };
+        let mut usecase = TargetPersonUsecase { dao };
+
+        let result = usecase.remove(24).run(&mut ());
         let expected = vec![
             (
                 13,
@@ -380,14 +383,6 @@ mod fake_tests {
                 PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
             ),
         ];
-
-        let dao = FakePersonDao {
-            next_id: RefCell::new(0), // 使わない
-            data: RefCell::new(data),
-        };
-        let mut usecase = TargetPersonUsecase { dao };
-
-        let result = usecase.remove(24).run(&mut ());
         assert_eq!(result, Ok(()));
         assert_eq!(*usecase.dao.data.borrow(), expected);
     }
