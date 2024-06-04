@@ -169,14 +169,14 @@ mod fake_tests {
     use crate::dto::PersonDto;
 
     struct FakePersonDao {
-        last_id: RefCell<PersonId>,
+        next_id: RefCell<PersonId>,
         data: RefCell<Vec<(PersonId, PersonDto)>>,
     }
     // Ctx 不要なので () にしている
     impl PersonDao<()> for FakePersonDao {
         fn insert(&self, person: PersonDto) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            *self.last_id.borrow_mut() += 1;
-            let id = *self.last_id.borrow();
+            let id = *self.next_id.borrow();
+            *self.next_id.borrow_mut() += 1;
             self.data.borrow_mut().push((id, person));
 
             tx_rs::with_tx(move |()| Ok(id))
@@ -228,24 +228,24 @@ mod fake_tests {
     #[test]
     fn test_entry() {
         let dao = FakePersonDao {
-            last_id: RefCell::new(0),
+            next_id: RefCell::new(42),
             data: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
         let person = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone().into();
-        let expected_id = 1;
+        let expected_id = 42;
 
         let result = usecase.entry(person).run(&mut ());
         assert_eq!(result, Ok(expected_id));
-        assert_eq!(usecase.dao.data.borrow().len(), expected_id as usize);
+        assert_eq!(usecase.dao.data.borrow().len(), 1);
         assert_eq!(*usecase.dao.data.borrow(), vec![(expected_id, expected)]);
     }
     #[test]
     fn test_find() {
         let dao = FakePersonDao {
-            last_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(0), // 使わない
             data: RefCell::new(vec![
                 (
                     13,
@@ -277,14 +277,14 @@ mod fake_tests {
     #[test]
     fn test_entry_and_verify() {
         let dao = FakePersonDao {
-            last_id: RefCell::new(13),
+            next_id: RefCell::new(13),
             data: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
         let person = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice wonderland"));
         let expected = person.clone();
-        let expected_id = 14;
+        let expected_id = 13;
 
         let result = usecase.entry_and_verify(person).run(&mut ());
         assert_eq!(result, Ok((expected_id, expected)));
@@ -312,7 +312,7 @@ mod fake_tests {
             .collect::<Vec<_>>();
 
         let dao = FakePersonDao {
-            last_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(0), // 使わない
             data: RefCell::new(data),
         };
         let mut usecase = TargetPersonUsecase { dao };
@@ -329,7 +329,7 @@ mod fake_tests {
     #[test]
     fn test_death() {
         let dao = FakePersonDao {
-            last_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(0), // 使わない
             data: RefCell::new(vec![(
                 13,
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
@@ -380,7 +380,7 @@ mod fake_tests {
         ];
 
         let dao = FakePersonDao {
-            last_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(0), // 使わない
             data: RefCell::new(data),
         };
         let mut usecase = TargetPersonUsecase { dao };
