@@ -279,6 +279,7 @@ mod fake_tests {
     }
 
     struct FakePersonUsecase {
+        next_id: RefCell<PersonId>,
         db: Vec<(PersonId, PersonDto)>,
         dao: DummyPersonDao,
     }
@@ -295,10 +296,11 @@ mod fake_tests {
         where
             (): 'a,
         {
-            let next_id = self.db.len() as i32 + 1;
-            self.db.push((next_id, person));
+            let id = *self.next_id.borrow();
+            *self.next_id.borrow_mut() += 1;
+            self.db.push((id, person));
 
-            tx_rs::with_tx(move |&mut ()| Ok(next_id))
+            tx_rs::with_tx(move |&mut ()| Ok(id))
         }
         fn find<'a>(
             &'a mut self,
@@ -322,10 +324,11 @@ mod fake_tests {
         where
             (): 'a,
         {
-            let next_id = self.db.len() as i32 + 1;
-            self.db.push((next_id, person.clone()));
+            let id = *self.next_id.borrow();
+            *self.next_id.borrow_mut() += 1;
+            self.db.push((id, person.clone()));
 
-            tx_rs::with_tx(move |&mut ()| Ok((next_id, person)))
+            tx_rs::with_tx(move |&mut ()| Ok((id, person)))
         }
         fn collect<'a>(
             &'a mut self,
@@ -396,6 +399,7 @@ mod fake_tests {
     #[test]
     fn test_register() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
+            next_id: RefCell::new(1),
             db: vec![],
             dao: DummyPersonDao,
         }));
@@ -412,6 +416,7 @@ mod fake_tests {
     #[test]
     fn test_batch_import() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
+            next_id: RefCell::new(1),
             db: vec![],
             dao: DummyPersonDao,
         }));
@@ -440,6 +445,7 @@ mod fake_tests {
     #[test]
     fn test_list_all() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
+            next_id: RefCell::new(1),
             db: vec![
                 (
                     1,
@@ -473,6 +479,7 @@ mod fake_tests {
     #[test]
     fn test_death() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
+            next_id: RefCell::new(1),
             db: vec![(
                 1,
                 PersonDto::new(
@@ -504,6 +511,7 @@ mod fake_tests {
     #[test]
     fn test_unregister() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
+            next_id: RefCell::new(1),
             db: vec![
                 (
                     1,
