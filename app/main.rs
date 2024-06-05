@@ -121,6 +121,7 @@ fn main() {
     let cache_uri =
         env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
     let db_uri = env::var("DATABASE_URI").unwrap_or(
+        // connect_timeout is in seconds
         "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string(),
     );
     let mq_uri = env::var("AMQP_URI").unwrap_or(
