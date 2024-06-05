@@ -383,8 +383,7 @@ mod fake_tests {
             death_date: Option<NaiveDate>,
             data: &str,
         ) -> Result<(PersonId, PersonDto), ServiceError> {
-            let id = *self.next_id.borrow();
-            *self.next_id.borrow_mut() += 1;
+            let id = self.next_id.replace_with(|&mut id| id + 1);
 
             let person = PersonDto::new(name, birth_date, death_date, Some(data));
 
@@ -402,8 +401,7 @@ mod fake_tests {
         ) -> Result<Vec<PersonId>, ServiceError> {
             let mut ids = vec![];
             for person in persons {
-                let id = *self.next_id.borrow();
-                *self.next_id.borrow_mut() += 1;
+                let id = self.next_id.replace_with(|&mut id| id + 1);
 
                 self.db.borrow_mut().insert(id, person.clone());
                 ids.push(id);

@@ -296,8 +296,7 @@ mod fake_tests {
         where
             (): 'a,
         {
-            let id = *self.next_id.borrow();
-            *self.next_id.borrow_mut() += 1;
+            let id = self.next_id.replace_with(|&mut i| i + 1);
             self.db.push((id, person));
 
             tx_rs::with_tx(move |&mut ()| Ok(id))
@@ -324,8 +323,7 @@ mod fake_tests {
         where
             (): 'a,
         {
-            let id = *self.next_id.borrow();
-            *self.next_id.borrow_mut() += 1;
+            let id = self.next_id.replace_with(|&mut i| i + 1);
             self.db.push((id, person.clone()));
 
             tx_rs::with_tx(move |&mut ()| Ok((id, person)))

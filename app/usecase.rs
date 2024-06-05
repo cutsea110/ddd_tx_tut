@@ -175,8 +175,7 @@ mod fake_tests {
     // Ctx 不要なので () にしている
     impl PersonDao<()> for FakePersonDao {
         fn insert(&self, person: PersonDto) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            let id = *self.next_id.borrow();
-            *self.next_id.borrow_mut() += 1;
+            let id = self.next_id.replace_with(|&mut id| id + 1);
             self.data.borrow_mut().push((id, person));
 
             tx_rs::with_tx(move |()| Ok(id))
