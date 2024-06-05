@@ -171,10 +171,7 @@ fn main() {
         ),
     ]
     .into_iter()
-    .map(|(name, life, desc)| {
-        let (from, to) = (*life.start(), *life.end());
-        PersonDto::new(name, from, Some(to), Some(desc))
-    })
+    .map(|(name, life, desc)| PersonDto::new(name, *life.start(), Some(*life.end()), Some(desc)))
     .collect::<Vec<_>>();
 
     let ids = service
