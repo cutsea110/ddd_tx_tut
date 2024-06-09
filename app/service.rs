@@ -797,11 +797,22 @@ mod spy_tests {
         }
     }
 
-    struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
-        fn started(&self) {}
-        fn in_progress(&self, _progress: (u64, u64)) {}
-        fn completed(&self) {}
+    #[derive(Debug, Clone, Default)]
+    struct SpyPersonOutputBoundary {
+        started: RefCell<i32>,
+        in_progress: RefCell<Vec<(u64, u64)>>,
+        completed: RefCell<i32>,
+    }
+    impl PersonOutputBoundary<(u64, u64)> for SpyPersonOutputBoundary {
+        fn started(&self) {
+            *self.started.borrow_mut() += 1;
+        }
+        fn in_progress(&self, progress: (u64, u64)) {
+            self.in_progress.borrow_mut().push(progress);
+        }
+        fn completed(&self) {
+            *self.completed.borrow_mut() += 1;
+        }
     }
 
     #[test]
@@ -876,8 +887,9 @@ mod spy_tests {
             PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interseptor")),
         ];
         let expected = persons.clone();
+        let out_port = Rc::new(SpyPersonOutputBoundary::default());
 
-        let _ = service.batch_import(persons, Rc::new(DummyPersonOutputBoundary));
+        let _ = service.batch_import(persons, out_port.clone());
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 3);
@@ -911,6 +923,14 @@ mod spy_tests {
                 )
             ]
         );
+
+        // PersonOutputBoundary のメソッド呼び出しの記録の検証
+        assert_eq!(*out_port.started.borrow(), 1);
+        assert_eq!(out_port.in_progress.borrow().len(), 3);
+        assert_eq!(*out_port.completed.borrow(), 1);
+
+        // PersonOutputboundary の引数がそのまま渡されていることを検証
+        assert_eq!(*out_port.in_progress.borrow(), vec![(3, 1), (3, 2), (3, 3)]);
     }
 
     #[test]
