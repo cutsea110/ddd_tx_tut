@@ -35,7 +35,7 @@ pub trait PersonOutputBoundary<T> {
     fn started(&self);
     fn in_progress(&self, progress: T);
     fn completed(&self);
-    fn aborted(&self);
+    fn aborted(&self, msg: String);
 }
 
 pub trait PersonService<'a, Ctx> {
@@ -130,7 +130,7 @@ pub trait PersonService<'a, Ctx> {
                         if let Err(e) = notifier.notify("admin", &msg) {
                             error!("notification service not available: {}", e);
                         }
-                        out_port.aborted();
+                        out_port.aborted(format!("cannot entry person: {}", e));
                         return Err(e);
                     }
                 }
@@ -416,7 +416,7 @@ mod fake_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self) {}
+        fn aborted(&self, _msg: String) {}
     }
 
     #[test]
@@ -819,7 +819,7 @@ mod spy_tests {
         fn completed(&self) {
             *self.completed.borrow_mut() += 1;
         }
-        fn aborted(&self) {
+        fn aborted(&self, _msg: String) {
             *self.aborted.borrow_mut() += 1;
         }
     }
@@ -1272,7 +1272,7 @@ mod error_stub_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self) {}
+        fn aborted(&self, _msg: String) {}
     }
 
     #[test]

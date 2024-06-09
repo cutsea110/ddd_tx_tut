@@ -482,7 +482,7 @@ mod fake_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self) {}
+        fn aborted(&self, _msg: String) {}
     }
 
     #[test]
@@ -1028,7 +1028,7 @@ mod spy_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self) {}
+        fn aborted(&self, _msg: String) {}
     }
 
     #[test]
@@ -2125,7 +2125,7 @@ mod error_stub_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self) {}
+        fn aborted(&self, _msg: String) {}
     }
 
     #[test]
