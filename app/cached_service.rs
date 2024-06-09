@@ -406,6 +406,7 @@ mod fake_tests {
         fn batch_import(
             &'_ mut self,
             persons: Vec<PersonDto>,
+            _out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             let mut ids = vec![];
             for person in persons {
@@ -474,6 +475,13 @@ mod fake_tests {
         fn get_cao(&self) -> Self::C {
             self.cao.clone()
         }
+    }
+
+    struct DummyPersonOutputBoundary;
+    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+        fn started(&self) {}
+        fn in_progress(&self, _progress: (u64, u64)) {}
+        fn completed(&self) {}
     }
 
     #[test]
@@ -577,10 +585,13 @@ mod fake_tests {
             },
         };
 
-        let result = service.cached_batch_import(vec![
-            PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
-            PersonDto::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
-        ]);
+        let result = service.cached_batch_import(
+            vec![
+                PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here")),
+                PersonDto::new("Bob", date(2000, 1, 2), None, Some("Bob is here")),
+            ],
+            Rc::new(DummyPersonOutputBoundary),
+        );
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(vec![1, 2]));
@@ -936,6 +947,7 @@ mod spy_tests {
         fn batch_import(
             &'_ mut self,
             persons: Vec<PersonDto>,
+            _out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import.borrow_mut().push(persons);
             self.batch_import_result.clone()
@@ -1008,6 +1020,13 @@ mod spy_tests {
         fn get_cao(&self) -> Self::C {
             self.cao.clone()
         }
+    }
+
+    struct DummyPersonOutputBoundary;
+    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+        fn started(&self) {}
+        fn in_progress(&self, _progress: (u64, u64)) {}
+        fn completed(&self) {}
     }
 
     #[test]
@@ -1430,11 +1449,14 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_batch_import(vec![
-            PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
-            PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
-            PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
-        ]);
+        let _ = service.cached_batch_import(
+            vec![
+                PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+                PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+                PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+            ],
+            Rc::new(DummyPersonOutputBoundary),
+        );
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1505,11 +1527,14 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_batch_import(vec![
-            PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
-            PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
-            PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
-        ]);
+        let _ = service.cached_batch_import(
+            vec![
+                PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender")),
+                PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver")),
+                PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor")),
+            ],
+            Rc::new(DummyPersonOutputBoundary),
+        );
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -2034,6 +2059,7 @@ mod error_stub_tests {
         fn batch_import(
             &'_ mut self,
             _persons: Vec<PersonDto>,
+            _out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import_result.clone()
         }
@@ -2090,6 +2116,13 @@ mod error_stub_tests {
         fn get_cao(&self) -> Self::C {
             self.cao.clone()
         }
+    }
+
+    struct DummyPersonOutputBoundary;
+    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+        fn started(&self) {}
+        fn in_progress(&self, _progress: (u64, u64)) {}
+        fn completed(&self) {}
     }
 
     #[test]
@@ -2239,7 +2272,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(vec![]);
+        let result = service.cached_batch_import(vec![], Rc::new(DummyPersonOutputBoundary));
         assert_eq!(
             result,
             Err(ServiceError::InvalidRequest(
@@ -2268,12 +2301,15 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(vec![PersonDto::new(
-            "Alice",
-            date(2000, 1, 1),
-            None,
-            Some("Alice is here"),
-        )]);
+        let result = service.cached_batch_import(
+            vec![PersonDto::new(
+                "Alice",
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here"),
+            )],
+            Rc::new(DummyPersonOutputBoundary),
+        );
         assert_eq!(
             result,
             Err(ServiceError::TransactionFailed(
@@ -2300,12 +2336,15 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(vec![PersonDto::new(
-            "Alice",
-            date(2000, 1, 1),
-            None,
-            Some("Alice is here"),
-        )]);
+        let result = service.cached_batch_import(
+            vec![PersonDto::new(
+                "Alice",
+                date(2000, 1, 1),
+                None,
+                Some("Alice is here"),
+            )],
+            Rc::new(DummyPersonOutputBoundary),
+        );
         assert_eq!(result, Ok(vec![1]));
     }
 

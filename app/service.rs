@@ -409,6 +409,13 @@ mod fake_tests {
         }
     }
 
+    struct DummyPersonOutputBoundary;
+    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+        fn started(&self) {}
+        fn in_progress(&self, _progress: (u64, u64)) {}
+        fn completed(&self) {}
+    }
+
     #[test]
     fn test_register() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
@@ -443,7 +450,7 @@ mod fake_tests {
         ];
         let expected = persons.clone();
 
-        let _ = service.batch_import(persons);
+        let _ = service.batch_import(persons, Rc::new(DummyPersonOutputBoundary));
         assert_eq!(
             usecase
                 .borrow()
@@ -790,6 +797,13 @@ mod spy_tests {
         }
     }
 
+    struct DummyPersonOutputBoundary;
+    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+        fn started(&self) {}
+        fn in_progress(&self, _progress: (u64, u64)) {}
+        fn completed(&self) {}
+    }
+
     #[test]
     fn test_register() {
         let usecase = Rc::new(RefCell::new(SpyPersonUsecase {
@@ -863,7 +877,7 @@ mod spy_tests {
         ];
         let expected = persons.clone();
 
-        let _ = service.batch_import(persons);
+        let _ = service.batch_import(persons, Rc::new(DummyPersonOutputBoundary));
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 3);
@@ -1223,6 +1237,13 @@ mod error_stub_tests {
         }
     }
 
+    struct DummyPersonOutputBoundary;
+    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+        fn started(&self) {}
+        fn in_progress(&self, _progress: (u64, u64)) {}
+        fn completed(&self) {}
+    }
+
     #[test]
     fn test_register_entry_and_verify_error() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
@@ -1352,10 +1373,13 @@ mod error_stub_tests {
             notifier,
         };
 
-        let result = service.batch_import(vec![
-            PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
-        ]);
+        let result = service.batch_import(
+            vec![
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            ],
+            Rc::new(DummyPersonOutputBoundary),
+        );
         let expected = usecase.borrow().entry_result.clone().unwrap_err();
 
         assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
@@ -1387,10 +1411,13 @@ mod error_stub_tests {
             notifier,
         };
 
-        let result = service.batch_import(vec![
-            PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
-        ]);
+        let result = service.batch_import(
+            vec![
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            ],
+            Rc::new(DummyPersonOutputBoundary),
+        );
 
         assert!(result.is_ok());
     }
@@ -1423,10 +1450,13 @@ mod error_stub_tests {
             notifier,
         };
 
-        let result = service.batch_import(vec![
-            PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
-        ]);
+        let result = service.batch_import(
+            vec![
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+            ],
+            Rc::new(DummyPersonOutputBoundary),
+        );
         let expected = Err(ServiceError::TransactionFailed(
             usecase.borrow().entry_result.clone().unwrap_err(),
         ));
