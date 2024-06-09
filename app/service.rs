@@ -618,8 +618,10 @@ mod fake_tests {
 //      この構造体はスパイなので、Service の間接的な出力のみを記録する
 //   3. スパイの Notifier 構造体を用意する
 //   4. Service をここまでに用意したスパイで構築する
+//     4a. batch_import のみ Output Boundary への出力を記録する Spy Output Boundary を渡している
 //   5. Service のメソッドを呼び出す
 //   6. Usecase 構造体と Notifier 構造体の記録を検証する
+//     6a. batch_import のみ Output Boundary 構造体の記録を検証する
 //
 // ## 注意
 //
