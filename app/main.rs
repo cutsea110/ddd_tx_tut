@@ -2,6 +2,7 @@ use log::{error, trace};
 use postgres::NoTls;
 use std::cell::RefCell;
 use std::env;
+use std::rc::Rc;
 use std::time::Duration;
 
 mod cache;
@@ -20,7 +21,7 @@ use cached_service::PersonCachedService;
 use dao::HavePersonDao;
 use domain::date;
 use pg_db::PgPersonDao;
-use service::{PersonService, ServiceError};
+use service::{PersonOutputBoundary, PersonService, ServiceError};
 use usecase::{PersonUsecase, UsecaseError};
 
 use crate::dto::PersonDto;
@@ -112,6 +113,20 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
     }
 }
 
+// a crude presenter
+struct PersonBatchImportPresenterImpl;
+impl PersonOutputBoundary<(u64, u64)> for PersonBatchImportPresenterImpl {
+    fn started(&self) {
+        println!("service started");
+    }
+    fn in_progress(&self, progress: (u64, u64)) {
+        println!("{} of {} done", progress.0, progress.1);
+    }
+    fn completed(&self) {
+        println!("service completed");
+    }
+}
+
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
@@ -186,7 +201,7 @@ fn main() {
         .collect::<Vec<_>>();
 
         let ids = service
-            .cached_batch_import(persons.clone())
+            .cached_batch_import(persons.clone(), Rc::new(PersonBatchImportPresenterImpl))
             .expect("batch import");
         println!("batch import done");
 

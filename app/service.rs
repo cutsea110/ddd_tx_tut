@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use log::{error, trace};
 use std::fmt;
+use std::rc::Rc;
 use thiserror::Error;
 
 use crate::domain::PersonId;
@@ -28,6 +29,12 @@ impl fmt::Display for InvalidErrorKind {
             InvalidErrorKind::EmptyArgument => write!(f, "empty argument"),
         }
     }
+}
+
+pub trait PersonOutputBoundary<T> {
+    fn started(&self);
+    fn in_progress(&self, progress: T);
+    fn completed(&self);
 }
 
 pub trait PersonService<'a, Ctx> {
@@ -94,11 +101,17 @@ pub trait PersonService<'a, Ctx> {
             })
     }
 
-    fn batch_import(&'a mut self, persons: Vec<PersonDto>) -> Result<Vec<PersonId>, ServiceError> {
+    fn batch_import(
+        &'a mut self,
+        persons: Vec<PersonDto>,
+        out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
+    ) -> Result<Vec<PersonId>, ServiceError> {
         trace!("batch import persons: {:?}", persons);
+        out_port.started();
         let notifier = self.get_notifier();
 
         let mut ids = vec![];
+        let total = persons.len() as u64;
         self.run_tx(move |usecase, ctx| {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
@@ -119,7 +132,9 @@ pub trait PersonService<'a, Ctx> {
                         return Err(e);
                     }
                 }
+                out_port.in_progress((total, ids.len() as u64));
             }
+            out_port.completed();
             Ok(ids)
         })
     }

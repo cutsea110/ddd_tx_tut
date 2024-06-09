@@ -1,11 +1,12 @@
 use chrono::NaiveDate;
 use log::{error, trace, warn};
+use std::rc::Rc;
 
 use crate::cache::PersonCao;
 use crate::domain::PersonId;
 use crate::dto::PersonDto;
 use crate::notifier::Notifier;
-use crate::service::{InvalidErrorKind, PersonService, ServiceError};
+use crate::service::{InvalidErrorKind, PersonOutputBoundary, PersonService, ServiceError};
 
 pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     type C: PersonCao<Conn>;
@@ -81,6 +82,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_batch_import(
         &'a mut self,
         persons: Vec<PersonDto>,
+        out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
     ) -> Result<Vec<PersonId>, ServiceError> {
         if persons.is_empty() {
             return Err(ServiceError::InvalidRequest(
@@ -92,7 +94,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let cao = self.get_cao();
         let notifier = self.get_notifier();
 
-        let ids = self.batch_import(persons.clone())?;
+        let ids = self.batch_import(persons.clone(), out_port.clone())?;
 
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
