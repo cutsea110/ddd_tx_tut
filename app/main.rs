@@ -125,8 +125,8 @@ impl PersonOutputBoundary<(u64, u64)> for PersonBatchImportPresenterImpl {
     fn completed(&self) {
         println!("service completed");
     }
-    fn aborted(&self, msg: String) {
-        println!("service aborted: {}", msg);
+    fn aborted(&self, err: ServiceError) {
+        println!("service aborted: {}", err);
     }
 }
 

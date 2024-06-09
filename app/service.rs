@@ -35,7 +35,7 @@ pub trait PersonOutputBoundary<T> {
     fn started(&self);
     fn in_progress(&self, progress: T);
     fn completed(&self);
-    fn aborted(&self, msg: String);
+    fn aborted(&self, err: ServiceError);
 }
 
 pub trait PersonService<'a, Ctx> {
@@ -126,11 +126,12 @@ pub trait PersonService<'a, Ctx> {
                         }
                     }
                     Err(e) => {
+                        out_port.aborted(ServiceError::TransactionFailed(e.clone()));
+
                         let msg = format!("cannot entry person: {:?}", e);
                         if let Err(e) = notifier.notify("admin", &msg) {
                             error!("notification service not available: {}", e);
                         }
-                        out_port.aborted(format!("cannot entry person: {}", e));
                         return Err(e);
                     }
                 }
@@ -416,7 +417,7 @@ mod fake_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self, _msg: String) {}
+        fn aborted(&self, _err: ServiceError) {}
     }
 
     #[test]
@@ -807,7 +808,7 @@ mod spy_tests {
         started: RefCell<i32>,
         in_progress: RefCell<Vec<(u64, u64)>>,
         completed: RefCell<i32>,
-        aborted: RefCell<Vec<String>>,
+        aborted: RefCell<Vec<ServiceError>>,
     }
     impl PersonOutputBoundary<(u64, u64)> for SpyPersonOutputBoundary {
         fn started(&self) {
@@ -819,8 +820,8 @@ mod spy_tests {
         fn completed(&self) {
             *self.completed.borrow_mut() += 1;
         }
-        fn aborted(&self, msg: String) {
-            self.aborted.borrow_mut().push(msg);
+        fn aborted(&self, err: ServiceError) {
+            self.aborted.borrow_mut().push(err);
         }
     }
 
@@ -1272,7 +1273,7 @@ mod error_stub_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self, _msg: String) {}
+        fn aborted(&self, _err: ServiceError) {}
     }
 
     #[test]
