@@ -807,7 +807,7 @@ mod spy_tests {
         started: RefCell<i32>,
         in_progress: RefCell<Vec<(u64, u64)>>,
         completed: RefCell<i32>,
-        aborted: RefCell<i32>,
+        aborted: RefCell<Vec<String>>,
     }
     impl PersonOutputBoundary<(u64, u64)> for SpyPersonOutputBoundary {
         fn started(&self) {
@@ -819,8 +819,8 @@ mod spy_tests {
         fn completed(&self) {
             *self.completed.borrow_mut() += 1;
         }
-        fn aborted(&self, _msg: String) {
-            *self.aborted.borrow_mut() += 1;
+        fn aborted(&self, msg: String) {
+            self.aborted.borrow_mut().push(msg);
         }
     }
 
@@ -937,7 +937,7 @@ mod spy_tests {
         assert_eq!(*out_port.started.borrow(), 1);
         assert_eq!(out_port.in_progress.borrow().len(), 3);
         assert_eq!(*out_port.completed.borrow(), 1);
-        assert_eq!(*out_port.aborted.borrow(), 0);
+        assert_eq!(out_port.aborted.borrow().len(), 0);
 
         // PersonOutputboundary の引数がそのまま渡されていることを検証
         assert_eq!(*out_port.in_progress.borrow(), vec![(3, 1), (3, 2), (3, 3)]);
