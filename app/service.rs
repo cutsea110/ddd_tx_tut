@@ -35,6 +35,7 @@ pub trait PersonOutputBoundary<T> {
     fn started(&self);
     fn in_progress(&self, progress: T);
     fn completed(&self);
+    fn aborted(&self);
 }
 
 pub trait PersonService<'a, Ctx> {
@@ -129,6 +130,7 @@ pub trait PersonService<'a, Ctx> {
                         if let Err(e) = notifier.notify("admin", &msg) {
                             error!("notification service not available: {}", e);
                         }
+                        out_port.aborted();
                         return Err(e);
                     }
                 }
@@ -414,6 +416,7 @@ mod fake_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
+        fn aborted(&self) {}
     }
 
     #[test]
@@ -804,6 +807,7 @@ mod spy_tests {
         started: RefCell<i32>,
         in_progress: RefCell<Vec<(u64, u64)>>,
         completed: RefCell<i32>,
+        aborted: RefCell<i32>,
     }
     impl PersonOutputBoundary<(u64, u64)> for SpyPersonOutputBoundary {
         fn started(&self) {
@@ -814,6 +818,9 @@ mod spy_tests {
         }
         fn completed(&self) {
             *self.completed.borrow_mut() += 1;
+        }
+        fn aborted(&self) {
+            *self.aborted.borrow_mut() += 1;
         }
     }
 
@@ -930,6 +937,7 @@ mod spy_tests {
         assert_eq!(*out_port.started.borrow(), 1);
         assert_eq!(out_port.in_progress.borrow().len(), 3);
         assert_eq!(*out_port.completed.borrow(), 1);
+        assert_eq!(*out_port.aborted.borrow(), 0);
 
         // PersonOutputboundary の引数がそのまま渡されていることを検証
         assert_eq!(*out_port.in_progress.borrow(), vec![(3, 1), (3, 2), (3, 3)]);
@@ -1264,6 +1272,7 @@ mod error_stub_tests {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
+        fn aborted(&self) {}
     }
 
     #[test]
