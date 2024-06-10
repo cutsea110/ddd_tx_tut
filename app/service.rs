@@ -31,11 +31,11 @@ impl fmt::Display for InvalidErrorKind {
     }
 }
 
-pub trait PersonOutputBoundary<T> {
+pub trait PersonOutputBoundary<T, E> {
     fn started(&self);
     fn in_progress(&self, progress: T);
     fn completed(&self);
-    fn aborted(&self, err: ServiceError);
+    fn aborted(&self, err: E);
 }
 
 pub trait PersonService<'a, Ctx> {
@@ -105,7 +105,7 @@ pub trait PersonService<'a, Ctx> {
     fn batch_import(
         &'a mut self,
         persons: Vec<PersonDto>,
-        out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
+        out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
     ) -> Result<Vec<PersonId>, ServiceError> {
         trace!("batch import persons: {:?}", persons);
         out_port.started();
@@ -413,7 +413,7 @@ mod fake_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
@@ -810,7 +810,7 @@ mod spy_tests {
         completed: RefCell<i32>,
         aborted: RefCell<Vec<ServiceError>>,
     }
-    impl PersonOutputBoundary<(u64, u64)> for SpyPersonOutputBoundary {
+    impl PersonOutputBoundary<(u64, u64), ServiceError> for SpyPersonOutputBoundary {
         fn started(&self) {
             *self.started.borrow_mut() += 1;
         }
@@ -1269,7 +1269,7 @@ mod error_stub_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}

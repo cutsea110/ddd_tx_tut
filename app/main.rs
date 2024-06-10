@@ -115,7 +115,7 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
 
 // a crude presenter
 struct PersonBatchImportPresenterImpl;
-impl PersonOutputBoundary<(u64, u64)> for PersonBatchImportPresenterImpl {
+impl PersonOutputBoundary<(u64, u64), ServiceError> for PersonBatchImportPresenterImpl {
     fn started(&self) {
         println!("service started");
     }

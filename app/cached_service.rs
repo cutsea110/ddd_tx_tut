@@ -82,7 +82,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_batch_import(
         &'a mut self,
         persons: Vec<PersonDto>,
-        out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
+        out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
     ) -> Result<Vec<PersonId>, ServiceError> {
         if persons.is_empty() {
             return Err(ServiceError::InvalidRequest(
@@ -406,7 +406,7 @@ mod fake_tests {
         fn batch_import(
             &'_ mut self,
             persons: Vec<PersonDto>,
-            _out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
+            _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             let mut ids = vec![];
             for person in persons {
@@ -478,7 +478,7 @@ mod fake_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
@@ -948,7 +948,7 @@ mod spy_tests {
         fn batch_import(
             &'_ mut self,
             persons: Vec<PersonDto>,
-            _out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
+            _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import.borrow_mut().push(persons);
             self.batch_import_result.clone()
@@ -1024,7 +1024,7 @@ mod spy_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
@@ -2061,7 +2061,7 @@ mod error_stub_tests {
         fn batch_import(
             &'_ mut self,
             _persons: Vec<PersonDto>,
-            _out_port: Rc<impl PersonOutputBoundary<(u64, u64)>>,
+            _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import_result.clone()
         }
@@ -2121,7 +2121,7 @@ mod error_stub_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64)> for DummyPersonOutputBoundary {
+    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
