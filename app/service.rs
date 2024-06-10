@@ -126,6 +126,7 @@ pub trait PersonService<'a, Ctx> {
                         }
                     }
                     Err(e) => {
+                        trace!("batch import aborted: {:?}", e);
                         out_port.aborted(ServiceError::TransactionFailed(e.clone()));
 
                         let msg = format!("cannot entry person: {:?}", e);
@@ -135,8 +136,10 @@ pub trait PersonService<'a, Ctx> {
                         return Err(e);
                     }
                 }
+                trace!("batch import in_progress: {:?}", ids.len());
                 out_port.in_progress((total, ids.len() as u64));
             }
+            trace!("batch import completed: {:?}", ids.len());
             out_port.completed();
             Ok(ids)
         })
