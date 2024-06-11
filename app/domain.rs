@@ -3,6 +3,8 @@ use core::fmt;
 use log::{trace, warn};
 use thiserror::Error;
 
+use crate::dto::PersonDto;
+
 pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month, day).expect("create date")
 }
@@ -17,6 +19,7 @@ pub enum PersonDomainError {
 }
 
 pub type PersonId = i32;
+pub type Revision = i32;
 /// Person entity (as domain object)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Person {
@@ -24,6 +27,8 @@ pub struct Person {
     birth_date: NaiveDate,
     death_date: Option<NaiveDate>,
     data: Option<String>,
+
+    revision: Revision,
 }
 
 impl Person {
@@ -38,6 +43,8 @@ impl Person {
             birth_date,
             death_date,
             data: data.map(|d| d.to_string()),
+
+            revision: 0,
         }
     }
 
@@ -65,6 +72,18 @@ impl Person {
         dto.set_birth_date(self.birth_date);
         dto.set_death_date(self.death_date);
         dto.set_data(self.data.as_deref());
+        dto.set_revision(self.revision);
+    }
+}
+impl From<PersonDto> for Person {
+    fn from(person: PersonDto) -> Self {
+        Self {
+            name: person.name,
+            birth_date: person.birth_date,
+            death_date: person.death_date,
+            data: person.data,
+            revision: person.revision,
+        }
     }
 }
 
@@ -84,4 +103,5 @@ pub trait PersonNotification {
     fn set_birth_date(&mut self, birth_date: NaiveDate);
     fn set_death_date(&mut self, death_date: Option<NaiveDate>);
     fn set_data(&mut self, data: Option<&str>);
+    fn set_revision(&mut self, revision: Revision);
 }
