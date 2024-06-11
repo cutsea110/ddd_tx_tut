@@ -106,9 +106,10 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                     format!("person not found: {id}"),
                 )))
             })
-            .and_then(move |p| {
+            .and_then(move |p: PersonDto| {
                 trace!("save dead person (id={}): {:?}", id, p);
-                dao.save(id, p).map_err(UsecaseError::SavePersonFailed)
+                dao.save(id, p.revision, p)
+                    .map_err(UsecaseError::SavePersonFailed)
             })
     }
     fn remove<'a>(&'a mut self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = UsecaseError>

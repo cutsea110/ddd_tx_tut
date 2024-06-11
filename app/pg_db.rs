@@ -3,7 +3,7 @@ use log::trace;
 use std::str;
 
 use crate::dao::{DaoError, PersonDao};
-use crate::domain::PersonId;
+use crate::domain::{PersonId, Revision};
 use crate::dto::PersonDto;
 
 #[derive(Debug, Clone)]
@@ -81,18 +81,20 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     fn save(
         &self,
         id: PersonId,
+        revision: Revision,
         person: PersonDto,
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = (), Err = DaoError> {
         trace!("saving person: {:?}", id);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.execute(
-		"UPDATE person SET name = $1, birth_date = $2, death_date = $3, data = $4 WHERE id = $5",
+		"UPDATE person SET name = $1, birth_date = $2, death_date = $3, data = $4 WHERE id = $5 AND revision = $6",
 		&[
 		    &person.name,
 		    &person.birth_date,
 		    &person.death_date,
 		    &person.data.map(|d| d.as_str().as_bytes().to_vec()),
 		    &id,
+		    &revision,
 		],
 	    )
             .map(|_| ())

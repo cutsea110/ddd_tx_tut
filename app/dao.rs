@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::domain::PersonId;
+use crate::domain::{PersonId, Revision};
 use crate::dto::PersonDto;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
@@ -21,6 +21,7 @@ pub trait PersonDao<Ctx> {
     fn save(
         &self,
         id: PersonId,
+        revision: Revision,
         person: PersonDto,
     ) -> impl tx_rs::Tx<Ctx, Item = (), Err = DaoError>;
     fn delete(&self, id: PersonId) -> impl tx_rs::Tx<Ctx, Item = (), Err = DaoError>;
