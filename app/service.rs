@@ -66,7 +66,7 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| {
             usecase
-                .entry_and_verify(PersonDto::new(name, birth_date, death_date, Some(data)))
+                .entry_and_verify(PersonDto::new(name, birth_date, death_date, Some(data), 0))
                 .run(ctx)
         })
         .and_then(|(id, p)| {

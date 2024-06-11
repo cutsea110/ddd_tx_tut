@@ -16,12 +16,13 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         trace!("inserting person: {:?}", person);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_one(
-                "INSERT INTO person (name, birth_date, death_date, data) VALUES ($1, $2, $3, $4) RETURNING id",
+                "INSERT INTO person (name, birth_date, death_date, data, revision) VALUES ($1, $2, $3, $4, $5) RETURNING id",
                 &[
                     &person.name,
                     &person.birth_date,
 		    &person.death_date,
                     &person.data.map(|d| d.as_str().as_bytes().to_vec()),
+                    &person.revision,
                 ],
             )
             .map(|row| row.get::<usize, PersonId>(0))
@@ -35,7 +36,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         trace!("fetching person: {:?}", id);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.query_opt(
-                "SELECT name, birth_date, death_date, data FROM person WHERE id = $1",
+                "SELECT name, birth_date, death_date, data, revision FROM person WHERE id = $1",
                 &[&id],
             )
             .map(|row| {
@@ -44,8 +45,9 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                     let birth_date = row.get::<usize, NaiveDate>(1);
                     let death_date = row.get::<usize, Option<NaiveDate>>(2);
                     let data = str::from_utf8(row.get::<usize, &[u8]>(3)).ok();
+                    let revision = row.get::<usize, Revision>(4);
 
-                    PersonDto::new(name, birth_date, death_date, data)
+                    PersonDto::new(name, birth_date, death_date, data, revision)
                 })
             })
             .map_err(|e| DaoError::SelectError(e.to_string()))
@@ -58,7 +60,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         trace!("selecting all persons");
         tx_rs::with_tx(|tx: &mut postgres::Transaction<'_>| {
             tx.query(
-                "SELECT id, name, birth_date, death_date, data FROM person",
+                "SELECT id, name, birth_date, death_date, data, revision FROM person",
                 &[],
             )
             .map(|rows| {
@@ -69,7 +71,8 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                         let birth_date = row.get::<usize, NaiveDate>(2);
                         let death_date = row.get::<usize, Option<NaiveDate>>(3);
                         let data = str::from_utf8(row.get::<usize, &[u8]>(4)).ok();
-                        let person = PersonDto::new(name, birth_date, death_date, data);
+                        let revision = row.get::<usize, Revision>(5);
+                        let person = PersonDto::new(name, birth_date, death_date, data, revision);
 
                         (id, person)
                     })
@@ -87,12 +90,13 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
         trace!("saving person: {:?}", id);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
             tx.execute(
-		"UPDATE person SET name = $1, birth_date = $2, death_date = $3, data = $4 WHERE id = $5 AND revision = $6",
+		"UPDATE person SET name = $1, birth_date = $2, death_date = $3, data = $4, revision = $5 WHERE id = $6 AND revision = $7",
 		&[
 		    &person.name,
 		    &person.birth_date,
 		    &person.death_date,
 		    &person.data.map(|d| d.as_str().as_bytes().to_vec()),
+		    &person.revision,
 		    &id,
 		    &revision,
 		],

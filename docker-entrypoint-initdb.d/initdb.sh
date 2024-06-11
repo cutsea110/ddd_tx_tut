@@ -5,6 +5,8 @@ CREATE TABLE person (
   name         TEXT NOT NULL,
   birth_date   DATE NOT NULL,
   death_date   DATE,
-  data         BYTEA
+  data         BYTEA,
+
+  revision     INT NOT NULL
 );
 EOSQL

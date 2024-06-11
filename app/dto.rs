@@ -19,13 +19,14 @@ impl PersonDto {
         birth_date: NaiveDate,
         death_date: Option<NaiveDate>,
         data: Option<&str>,
+        revision: Revision,
     ) -> Self {
         Self {
             name: name.to_string(),
             birth_date,
             death_date,
             data: data.map(|d| d.to_string()),
-            revision: 0,
+            revision,
         }
     }
 }

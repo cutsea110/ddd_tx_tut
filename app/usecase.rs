@@ -106,9 +106,12 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
                     format!("person not found: {id}"),
                 )))
             })
-            .and_then(move |p: PersonDto| {
+            .and_then(move |mut p: PersonDto| {
                 trace!("save dead person (id={}): {:?}", id, p);
-                dao.save(id, p.revision, p)
+                // 最新版の管理はユースケースの責務
+                let orig_revision = p.revision;
+                p.revision += 1;
+                dao.save(id, orig_revision, p)
                     .map_err(UsecaseError::SavePersonFailed)
             })
     }

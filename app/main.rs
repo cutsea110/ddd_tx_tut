@@ -199,7 +199,7 @@ fn main() {
         ]
         .into_iter()
         .map(|(name, life, desc)| {
-            PersonDto::new(name, *life.start(), Some(*life.end()), Some(desc))
+            PersonDto::new(name, *life.start(), Some(*life.end()), Some(desc), 0)
         })
         .collect::<Vec<_>>();
 
