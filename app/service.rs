@@ -66,7 +66,7 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| {
             usecase
-                .entry_and_verify(PersonDto::new(name, birth_date, death_date, Some(data)))
+                .entry_and_verify(PersonDto::new(name, birth_date, death_date, Some(data), 0))
                 .run(ctx)
         })
         .and_then(|(id, p)| {
@@ -264,7 +264,7 @@ mod fake_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::date,
+        domain::{date, Revision},
         dto::PersonDto,
         notifier::NotifierError,
         HavePersonDao,
@@ -290,6 +290,7 @@ mod fake_tests {
         fn save(
             &self,
             _id: PersonId,
+            _revision: Revision,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(()))
@@ -434,7 +435,7 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
         let expected_id = 1;
-        let expected = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
+        let expected = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0);
 
         let res = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
         assert_eq!(res, Ok((expected_id, expected)));
@@ -451,9 +452,15 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
         let persons = vec![
-            PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
-            PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+            PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
+            PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
+            PersonDto::new(
+                "Eve",
+                date(1996, 12, 15),
+                None,
+                Some("Eve is interceptor"),
+                7,
+            ),
         ];
         let expected = persons.clone();
 
@@ -476,15 +483,21 @@ mod fake_tests {
             db: vec![
                 (
                     1,
-                    PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                    PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
                 ),
                 (
                     2,
-                    PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                    PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
                 ),
                 (
                     3,
-                    PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                    PersonDto::new(
+                        "Eve",
+                        date(1996, 12, 15),
+                        None,
+                        Some("Eve is interceptor"),
+                        7,
+                    ),
                 ),
             ],
             dao: DummyPersonDao,
@@ -514,6 +527,7 @@ mod fake_tests {
                     date(2020, 5, 7),
                     None,
                     Some("poor man will be dead"),
+                    0,
                 ),
             )],
             dao: DummyPersonDao,
@@ -530,6 +544,7 @@ mod fake_tests {
                 date(2020, 5, 7),
                 Some(date(2100, 4, 7)),
                 Some("poor man will be dead"),
+                0,
             ),
         )];
 
@@ -542,15 +557,21 @@ mod fake_tests {
             db: vec![
                 (
                     1,
-                    PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                    PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
                 ),
                 (
                     2,
-                    PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                    PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
                 ),
                 (
                     3,
-                    PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                    PersonDto::new(
+                        "Eve",
+                        date(1996, 12, 15),
+                        None,
+                        Some("Eve is interceptor"),
+                        7,
+                    ),
                 ),
             ],
             dao: DummyPersonDao,
@@ -563,11 +584,17 @@ mod fake_tests {
         let expected = vec![
             (
                 1,
-                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
             ),
             (
                 3,
-                PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interceptor")),
+                PersonDto::new(
+                    "Eve",
+                    date(1996, 12, 15),
+                    None,
+                    Some("Eve is interceptor"),
+                    7,
+                ),
             ),
         ];
 
@@ -646,7 +673,7 @@ mod spy_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::date,
+        domain::{date, Revision},
         dto::PersonDto,
         notifier::NotifierError,
         HavePersonDao,
@@ -672,6 +699,7 @@ mod spy_tests {
         fn save(
             &self,
             _id: PersonId,
+            _revision: Revision,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(()))
@@ -847,7 +875,7 @@ mod spy_tests {
             notifier,
         };
 
-        let expected = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"));
+        let expected = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0);
 
         let _ = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
 
@@ -895,9 +923,15 @@ mod spy_tests {
         };
 
         let persons = vec![
-            PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-            PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
-            PersonDto::new("Eve", date(1996, 12, 15), None, Some("Eve is interseptor")),
+            PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
+            PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
+            PersonDto::new(
+                "Eve",
+                date(1996, 12, 15),
+                None,
+                Some("Eve is interseptor"),
+                7,
+            ),
         ];
         let expected = persons.clone();
         let out_port = Rc::new(SpyPersonOutputBoundary::default());
@@ -1124,7 +1158,7 @@ mod error_stub_tests {
     use super::*;
     use crate::{
         dao::{DaoError, PersonDao},
-        domain::date,
+        domain::{date, Revision},
         dto::PersonDto,
         notifier::NotifierError,
         HavePersonDao,
@@ -1150,6 +1184,7 @@ mod error_stub_tests {
         fn save(
             &self,
             _id: PersonId,
+            _revision: Revision,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = (), Err = DaoError> {
             tx_rs::with_tx(move |&mut ()| Ok(()))
@@ -1322,7 +1357,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 1,
-                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
             )),
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),       // 使わない
@@ -1390,7 +1425,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),  // 使わない
@@ -1410,8 +1445,8 @@ mod error_stub_tests {
 
         let result = service.batch_import(
             vec![
-                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 0),
             ],
             Rc::new(DummyPersonOutputBoundary),
         );
@@ -1428,7 +1463,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),  // 使わない
@@ -1448,8 +1483,8 @@ mod error_stub_tests {
 
         let result = service.batch_import(
             vec![
-                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 0),
             ],
             Rc::new(DummyPersonOutputBoundary),
         );
@@ -1467,7 +1502,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),  // 使わない
@@ -1487,8 +1522,8 @@ mod error_stub_tests {
 
         let result = service.batch_import(
             vec![
-                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender")),
-                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver")),
+                PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
+                PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 0),
             ],
             Rc::new(DummyPersonOutputBoundary),
         );
@@ -1507,7 +1542,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
@@ -1541,7 +1576,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
                 "valid dao".to_string(),
@@ -1575,7 +1610,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),  // 使わない
@@ -1609,7 +1644,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),
@@ -1640,7 +1675,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Err(UsecaseError::SavePersonFailed(DaoError::UpdateError(
@@ -1674,7 +1709,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),  // 使わない
@@ -1705,7 +1740,7 @@ mod error_stub_tests {
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
                 42,
-                PersonDto::new("Alice", date(2012, 11, 2), None, None),
+                PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
             death_result: Ok(()),  // 使わない

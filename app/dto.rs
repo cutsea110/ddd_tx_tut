@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use log::trace;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{Person, PersonNotification};
+use crate::domain::{Person, PersonNotification, Revision};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonDto {
@@ -10,6 +10,8 @@ pub struct PersonDto {
     pub birth_date: NaiveDate,
     pub death_date: Option<NaiveDate>,
     pub data: Option<String>,
+
+    pub revision: Revision,
 }
 impl PersonDto {
     pub fn new(
@@ -17,12 +19,14 @@ impl PersonDto {
         birth_date: NaiveDate,
         death_date: Option<NaiveDate>,
         data: Option<&str>,
+        revision: Revision,
     ) -> Self {
         Self {
             name: name.to_string(),
             birth_date,
             death_date,
             data: data.map(|d| d.to_string()),
+            revision,
         }
     }
 }
@@ -44,6 +48,10 @@ impl PersonNotification for PersonDto {
         trace!("set_data: {:?}", data);
         self.data = data.map(|d| d.to_string());
     }
+    fn set_revision(&mut self, revision: Revision) {
+        trace!("set_revision: {}", revision);
+        self.revision = revision;
+    }
 }
 
 impl From<Person> for PersonDto {
@@ -51,16 +59,6 @@ impl From<Person> for PersonDto {
         let mut dto = PersonDto::default();
         person.notify(&mut dto);
         dto
-    }
-}
-impl From<PersonDto> for Person {
-    fn from(person: PersonDto) -> Self {
-        Self::new(
-            &person.name,
-            person.birth_date,
-            person.death_date,
-            person.data.as_deref(),
-        )
     }
 }
 
@@ -85,7 +83,8 @@ mod tests {
                 "name",
                 date(2000, 1, 1),
                 Some(date(2100, 12, 31)),
-                Some("data")
+                Some("data"),
+                0
             )
         );
 
@@ -112,6 +111,7 @@ mod tests {
             date(2000, 1, 1),
             Some(date(2100, 12, 31)),
             Some("data"),
+            0,
         );
 
         let person = Person::from(dto.clone());
