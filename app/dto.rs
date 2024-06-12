@@ -83,7 +83,8 @@ mod tests {
                 "name",
                 date(2000, 1, 1),
                 Some(date(2100, 12, 31)),
-                Some("data")
+                Some("data"),
+                0
             )
         );
 
@@ -110,6 +111,7 @@ mod tests {
             date(2000, 1, 1),
             Some(date(2100, 12, 31)),
             Some("data"),
+            0,
         );
 
         let person = Person::from(dto.clone());
