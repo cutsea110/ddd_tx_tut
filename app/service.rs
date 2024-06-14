@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use log::{error, trace};
 use std::fmt;
+use std::iter::Iterator;
 use std::rc::Rc;
 use thiserror::Error;
 
@@ -104,15 +105,16 @@ pub trait PersonService<'a, Ctx> {
 
     fn batch_import(
         &'a mut self,
-        persons: Vec<PersonDto>,
+        persons: impl Iterator<Item = PersonDto>,
         out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
     ) -> Result<Vec<PersonId>, ServiceError> {
-        trace!("batch import persons: {:?}", persons);
+        trace!("batch import persons");
         out_port.started();
         let notifier = self.get_notifier();
 
         let mut ids = vec![];
-        let total = persons.len() as u64;
+        let (lower_bound, upper_bound) = persons.size_hint();
+        let total = upper_bound.unwrap_or(lower_bound) as u64;
         self.run_tx(move |usecase, ctx| {
             for person in persons {
                 let res = usecase.entry(person).run(ctx);
@@ -464,7 +466,7 @@ mod fake_tests {
         ];
         let expected = persons.clone();
 
-        let _ = service.batch_import(persons, Rc::new(DummyPersonOutputBoundary));
+        let _ = service.batch_import(persons.into_iter(), Rc::new(DummyPersonOutputBoundary));
         assert_eq!(
             usecase
                 .borrow()
@@ -936,7 +938,7 @@ mod spy_tests {
         let expected = persons.clone();
         let out_port = Rc::new(SpyPersonOutputBoundary::default());
 
-        let _ = service.batch_import(persons, out_port.clone());
+        let _ = service.batch_import(persons.into_iter(), out_port.clone());
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 3);
@@ -1447,7 +1449,8 @@ mod error_stub_tests {
             vec![
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
                 PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 0),
-            ],
+            ]
+            .into_iter(),
             Rc::new(DummyPersonOutputBoundary),
         );
         let expected = usecase.borrow().entry_result.clone().unwrap_err();
@@ -1485,7 +1488,8 @@ mod error_stub_tests {
             vec![
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
                 PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 0),
-            ],
+            ]
+            .into_iter(),
             Rc::new(DummyPersonOutputBoundary),
         );
 
@@ -1524,7 +1528,8 @@ mod error_stub_tests {
             vec![
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
                 PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 0),
-            ],
+            ]
+            .into_iter(),
             Rc::new(DummyPersonOutputBoundary),
         );
         let expected = Err(ServiceError::TransactionFailed(

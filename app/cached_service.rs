@@ -94,7 +94,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let cao = self.get_cao();
         let notifier = self.get_notifier();
 
-        let ids = self.batch_import(persons.clone(), out_port.clone())?;
+        let ids = self.batch_import(persons.clone().into_iter(), out_port.clone())?;
 
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
@@ -406,7 +406,7 @@ mod fake_tests {
 
         fn batch_import(
             &'_ mut self,
-            persons: Vec<PersonDto>,
+            persons: impl Iterator<Item = PersonDto>,
             _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             let mut ids = vec![];
@@ -950,10 +950,10 @@ mod spy_tests {
 
         fn batch_import(
             &'_ mut self,
-            persons: Vec<PersonDto>,
+            persons: impl Iterator<Item = PersonDto>,
             _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
-            self.batch_import.borrow_mut().push(persons);
+            self.batch_import.borrow_mut().push(persons.collect());
             self.batch_import_result.clone()
         }
 
@@ -2068,7 +2068,7 @@ mod error_stub_tests {
 
         fn batch_import(
             &'_ mut self,
-            _persons: Vec<PersonDto>,
+            _persons: impl Iterator<Item = PersonDto>,
             _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
         ) -> Result<Vec<PersonId>, ServiceError> {
             self.batch_import_result.clone()
