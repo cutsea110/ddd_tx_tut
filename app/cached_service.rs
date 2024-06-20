@@ -38,7 +38,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = reporter.send_report("admin", "cache service not available") {
-                    error!("notification service not available: {}", e);
+                    error!("reporter service not available: {}", e);
                 }
             }
 
@@ -69,7 +69,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = reporter.send_report("admin", "cache service not available") {
-                    error!("notification service not available: {}", e);
+                    error!("reporter service not available: {}", e);
                 }
             } else {
                 trace!("load person to cache: {:?}", person);
@@ -102,7 +102,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = reporter.send_report("admin", "cache service not available") {
-                    error!("notification service not available: {}", e);
+                    error!("reporter service not available: {}", e);
                 }
                 return Ok(ids);
             }
@@ -125,7 +125,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 warn!("failed to load person to cache: {}", e);
                 if let Err(e) = reporter.send_report("admin", "cache service not available") {
-                    error!("notification service not available: {}", e);
+                    error!("reporter service not available: {}", e);
                 }
                 return Ok(result);
             }
@@ -148,7 +148,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             // ここはエラーを返す必要はない
             warn!("failed to unload person from cache: {}", e);
             if let Err(e) = reporter.send_report("admin", "cache service not available") {
-                error!("notification service not available: {}", e);
+                error!("reporter service not available: {}", e);
             }
         } else {
             trace!("unload from cache: {}", id);
@@ -167,7 +167,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             // ここはエラーを返す必要はない
             warn!("failed to unload person from cache: {}", e);
             if let Err(e) = reporter.send_report("admin", "cache service not available") {
-                error!("notification service not available: {}", e);
+                error!("reporter service not available: {}", e);
             }
         } else {
             trace!("unload from cache: {}", id);
@@ -709,8 +709,8 @@ mod fake_tests {
 //
 // ## 方針
 //
-//   スパイ Service と スパイ Cache, スパイ Notifer は呼び出されるたびに、それらを全て記録する
-//   ただし、 Service の返り値が Cache や Notifer に使われたりその逆があるため、
+//   スパイ Service と スパイ Cache, スパイ Reporter は呼び出されるたびに、それらを全て記録する
+//   ただし、 Service の返り値が Cache や Reporter に使われたりその逆があるため、
 //   各スパイは返り値も制御する必要がある
 //   よってスタブを兼ねる必要があるため、それぞれをモックとして実装する
 //   各メソッドの呼び出された記録をテストの最後で確認する
@@ -878,11 +878,11 @@ mod spy_tests {
 
     #[derive(Debug, Clone)]
     struct SpyReporter {
-        notify: Rc<RefCell<Vec<(String, String)>>>,
+        report: Rc<RefCell<Vec<(String, String)>>>,
     }
     impl Reporter for SpyReporter {
         fn send_report(&self, to: &str, message: &str) -> Result<(), ReporterError> {
-            self.notify
+            self.report
                 .borrow_mut()
                 .push((to.to_string(), message.to_string()));
 
@@ -1064,7 +1064,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1100,7 +1100,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1132,7 +1132,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1168,7 +1168,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1209,7 +1209,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1230,7 +1230,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1265,7 +1265,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1293,7 +1293,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1328,7 +1328,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1356,7 +1356,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1391,7 +1391,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1419,7 +1419,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1454,7 +1454,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1503,7 +1503,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1532,7 +1532,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1573,7 +1573,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1621,7 +1621,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1658,7 +1658,7 @@ mod spy_tests {
             ]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.reporter.notify.borrow(), vec![]);
+        assert_eq!(*service.reporter.report.borrow(), vec![]);
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
@@ -1698,7 +1698,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1726,7 +1726,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1761,7 +1761,7 @@ mod spy_tests {
                 unload_result: Ok(()), // 使われない
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1785,7 +1785,7 @@ mod spy_tests {
             vec![] as Vec<(PersonId, PersonDto)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
-        assert_eq!(*service.reporter.notify.borrow(), vec![]);
+        assert_eq!(*service.reporter.report.borrow(), vec![]);
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
@@ -1812,7 +1812,7 @@ mod spy_tests {
                 unload_result: Err(CaoError::Unavailable("cao valid".to_string())),
             },
             reporter: SpyReporter {
-                notify: RefCell::new(vec![]).into(),
+                report: RefCell::new(vec![]).into(),
             },
         };
 
@@ -1837,7 +1837,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
         assert_eq!(
-            *service.reporter.notify.borrow(),
+            *service.reporter.report.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()

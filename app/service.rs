@@ -802,11 +802,11 @@ mod spy_tests {
 
     #[derive(Debug, Clone)]
     struct SpyReporter {
-        notify: Rc<RefCell<Vec<(String, String)>>>,
+        report: Rc<RefCell<Vec<(String, String)>>>,
     }
     impl Reporter for SpyReporter {
         fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
-            self.notify
+            self.report
                 .borrow_mut()
                 .push((_to.to_string(), _message.to_string()));
 
@@ -870,7 +870,7 @@ mod spy_tests {
             remove: RefCell::new(vec![]),
         }));
         let reporter = SpyReporter {
-            notify: RefCell::new(vec![]).into(),
+            report: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -893,11 +893,11 @@ mod spy_tests {
         assert_eq!(usecase.borrow().entry_and_verify.borrow()[0], expected);
 
         // Reporter のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_reporter().notify.borrow().len(), 1);
+        assert_eq!(service.get_reporter().report.borrow().len(), 1);
 
         // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            service.get_reporter().notify.borrow()[0],
+            service.get_reporter().report.borrow()[0],
             (
                 "entry_person".to_string(),
                 r#"{ "person_id": 42 }"#.to_string()
@@ -917,7 +917,7 @@ mod spy_tests {
             remove: RefCell::new(vec![]),
         }));
         let reporter = SpyReporter {
-            notify: RefCell::new(vec![]).into(),
+            report: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -952,11 +952,11 @@ mod spy_tests {
         assert_eq!(usecase.borrow().entry.borrow().clone(), expected);
 
         // Reporter のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_reporter().notify.borrow().len(), 3);
+        assert_eq!(service.get_reporter().report.borrow().len(), 3);
 
         // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            *service.get_reporter().notify.borrow(),
+            *service.get_reporter().report.borrow(),
             vec![
                 (
                     "entry_person".to_string(),
@@ -995,7 +995,7 @@ mod spy_tests {
             remove: RefCell::new(vec![]),
         }));
         let reporter = SpyReporter {
-            notify: RefCell::new(vec![]).into(),
+            report: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -1013,7 +1013,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
         // Reporter のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_reporter().notify.borrow().len(), 0);
+        assert_eq!(service.get_reporter().report.borrow().len(), 0);
     }
     #[test]
     fn test_death() {
@@ -1027,7 +1027,7 @@ mod spy_tests {
             remove: RefCell::new(vec![]),
         }));
         let reporter = SpyReporter {
-            notify: RefCell::new(vec![]).into(),
+            report: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -1047,11 +1047,11 @@ mod spy_tests {
         assert_eq!(usecase.borrow().death.borrow()[0], (42, date(2020, 7, 19)));
 
         // Reporter のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_reporter().notify.borrow().len(), 1);
+        assert_eq!(service.get_reporter().report.borrow().len(), 1);
 
         // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            service.get_reporter().notify.borrow()[0],
+            service.get_reporter().report.borrow()[0],
             (
                 "death_person".to_string(),
                 r#"{ "person_id": 42, "death_date": 2020-07-19 }"#.to_string()
@@ -1070,7 +1070,7 @@ mod spy_tests {
             remove: RefCell::new(vec![]),
         }));
         let reporter = SpyReporter {
-            notify: RefCell::new(vec![]).into(),
+            report: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
@@ -1091,11 +1091,11 @@ mod spy_tests {
         assert_eq!(usecase.borrow().remove.borrow()[0], 42);
 
         // Reporter のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_reporter().notify.borrow().len(), 1);
+        assert_eq!(service.get_reporter().report.borrow().len(), 1);
 
         // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            *service.get_reporter().notify.borrow(),
+            *service.get_reporter().report.borrow(),
             vec![(
                 "unregister_person".to_string(),
                 r#"{ "person_id": 42 }"#.to_string()
@@ -1352,7 +1352,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_register_entry_and_verify_notify_error_for_entry_person() {
+    fn test_register_entry_and_verify_repoter_error_for_entry_person() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
@@ -1383,7 +1383,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_register_entry_and_verify_notify_error_for_admin() {
+    fn test_register_entry_and_verify_reporter_error_for_admin() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
@@ -1459,7 +1459,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_batch_import_notify_error_for_entry_person() {
+    fn test_batch_import_reporter_error_for_entry_person() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(42),
@@ -1497,7 +1497,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_batch_import_notify_error_for_admin() {
+    fn test_batch_import_reporter_error_for_admin() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Err(UsecaseError::EntryPersonFailed(DaoError::InsertError(
@@ -1574,7 +1574,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_list_all_notify_for_admin() {
+    fn test_list_all_reporter_for_admin() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
@@ -1642,7 +1642,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_death_notify_for_unregister_person() {
+    fn test_death_reporter_for_unregister_person() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
@@ -1673,7 +1673,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_death_notify_for_admin() {
+    fn test_death_reporter_for_admin() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
@@ -1707,7 +1707,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_unregister_notify_for_unregister_person() {
+    fn test_unregister_reporter_for_unregister_person() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
@@ -1738,7 +1738,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_unregister_notify_for_admin() {
+    fn test_unregister_reporter_for_admin() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Ok(1),   // 使わない
