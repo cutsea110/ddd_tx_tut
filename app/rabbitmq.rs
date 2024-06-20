@@ -1,7 +1,7 @@
 pub use log::{error, trace};
 pub use std::rc::Rc;
 
-use crate::notifier;
+use crate::reporter;
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -9,7 +9,7 @@ pub struct Client {
     conn: Rc<lapin::Connection>,
 }
 impl Client {
-    pub fn open(addr: &str) -> Result<Self, notifier::NotifierError> {
+    pub fn open(addr: &str) -> Result<Self, reporter::ReporterError> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -21,7 +21,7 @@ impl Client {
                 .await
                 .map_err(|e| {
                     error!("failed to connect to rabbitmq: {}", e);
-                    notifier::NotifierError::Unavailable(e.to_string())
+                    reporter::ReporterError::Unavailable(e.to_string())
                 })
         })?;
         trace!("connected to rabbitmq with {:?}", conn.configuration());
@@ -33,14 +33,14 @@ impl Client {
     }
 }
 
-impl notifier::Notifier for Client {
+impl reporter::Reporter for Client {
     // to: queue name
     // message: message to send
-    fn notify(&self, to: &str, message: &str) -> Result<(), notifier::NotifierError> {
+    fn send_report(&self, to: &str, message: &str) -> Result<(), reporter::ReporterError> {
         self.async_runtime.block_on(async {
             let chan = self.conn.create_channel().await.map_err(|e| {
                 error!("failed to create channel: {}", e);
-                notifier::NotifierError::Unavailable(e.to_string())
+                reporter::ReporterError::Unavailable(e.to_string())
             })?;
             trace!("channel created");
             chan.queue_declare(
@@ -51,7 +51,7 @@ impl notifier::Notifier for Client {
             .await
             .map_err(|e| {
                 error!("failed to declare queue: {}", e);
-                notifier::NotifierError::Unavailable(e.to_string())
+                reporter::ReporterError::Unavailable(e.to_string())
             })?;
             trace!("queue declared: {}", to);
             chan.basic_publish(
@@ -64,7 +64,7 @@ impl notifier::Notifier for Client {
             .await
             .map_err(|e| {
                 error!("failed to publish message: {}", e);
-                notifier::NotifierError::Unavailable(e.to_string())
+                reporter::ReporterError::Unavailable(e.to_string())
             })?;
             trace!("published: {} to {}", message, to);
 

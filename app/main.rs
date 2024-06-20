@@ -10,10 +10,10 @@ mod cached_service;
 mod dao;
 mod domain;
 mod dto;
-mod notifier;
 mod pg_db;
 mod rabbitmq;
 mod redis_cache;
+mod reporter;
 mod service;
 mod usecase;
 
@@ -99,7 +99,7 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
         }
     }
 
-    fn get_notifier(&self) -> Self::N {
+    fn get_reporter(&self) -> Self::N {
         self.mq_client.clone()
     }
 }

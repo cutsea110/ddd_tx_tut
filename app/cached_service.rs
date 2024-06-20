@@ -5,7 +5,7 @@ use std::rc::Rc;
 use crate::cache::PersonCao;
 use crate::domain::PersonId;
 use crate::dto::PersonDto;
-use crate::notifier::Notifier;
+use crate::reporter::Reporter;
 use crate::service::{InvalidErrorKind, PersonOutputBoundary, PersonService, ServiceError};
 
 pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
@@ -28,7 +28,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             data
         );
         let cao = self.get_cao();
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         let result = self.register(name, birth_date, death_date, data);
         trace!("register person to db: {:?}", result);
@@ -37,7 +37,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report("admin", "cache service not available") {
                     error!("notification service not available: {}", e);
                 }
             }
@@ -51,7 +51,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_find(&'a mut self, id: PersonId) -> Result<Option<PersonDto>, ServiceError> {
         trace!("cached find: {}", id);
         let cao = self.get_cao();
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         // if the person is found in the cache, return it
         if let Ok(Some(p)) = cao.run_tx(cao.find(id)) {
@@ -68,7 +68,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             if let Err(e) = cao.run_tx(cao.load(id, &person)) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report("admin", "cache service not available") {
                     error!("notification service not available: {}", e);
                 }
             } else {
@@ -92,7 +92,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
         trace!("cached batch import: {:?}", persons);
         let cao = self.get_cao();
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         let ids = self.batch_import(persons.clone().into_iter(), out_port.clone())?;
 
@@ -101,7 +101,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             // ここはエラーを返す必要はない
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report("admin", "cache service not available") {
                     error!("notification service not available: {}", e);
                 }
                 return Ok(ids);
@@ -115,7 +115,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_list_all(&'a mut self) -> Result<Vec<(PersonId, PersonDto)>, ServiceError> {
         trace!("cached list all");
         let cao = self.get_cao();
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         let result = self.list_all()?;
 
@@ -124,7 +124,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             // ここはエラーを返す必要はない
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = notifier.notify("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report("admin", "cache service not available") {
                     error!("notification service not available: {}", e);
                 }
                 return Ok(result);
@@ -138,7 +138,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_death(&'a mut self, id: PersonId, death_date: NaiveDate) -> Result<(), ServiceError> {
         trace!("cached death: {} {}", id, death_date);
         let cao = self.get_cao();
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         let _ = self.death(id, death_date)?;
         trace!("update death date in db: {} {}", id, death_date);
@@ -147,7 +147,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         if let Err(e) = cao.run_tx(cao.unload(id)) {
             // ここはエラーを返す必要はない
             warn!("failed to unload person from cache: {}", e);
-            if let Err(e) = notifier.notify("admin", "cache service not available") {
+            if let Err(e) = reporter.send_report("admin", "cache service not available") {
                 error!("notification service not available: {}", e);
             }
         } else {
@@ -160,13 +160,13 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
     fn cached_unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
         trace!("cached unregister: {}", id);
         let cao = self.get_cao();
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         // even if delete from db failed below, this cache clear is not a matter.
         if let Err(e) = cao.run_tx(cao.unload(id)) {
             // ここはエラーを返す必要はない
             warn!("failed to unload person from cache: {}", e);
-            if let Err(e) = notifier.notify("admin", "cache service not available") {
+            if let Err(e) = reporter.send_report("admin", "cache service not available") {
                 error!("notification service not available: {}", e);
             }
         } else {
@@ -216,7 +216,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 //                            ||  +----------------+
 //                            ||   Test Double
 //                            ||  +----------------+
-//                            ||  | Fake Notifier  |
+//                            ||  | Fake Reporter  |
 //                            ||  | ============== |
 //                            ||  |                |
 //                            |+->| ---+ fake logic|
@@ -230,7 +230,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 //      この Service 実装はフェイクなので、間接的な入力と間接的な出力が整合するようにする
 //   3. CachedService のメソッド呼び出しに対して、期待される結果を返す Cache 構造体を用意する
 //      この Cache 構造体はフェイクなので、間接的な入力と間接的な出力が整合するようにする
-//   4. ダミーの Notifier 構造体を用意する
+//   4. ダミーの Reporter 構造体を用意する
 //   5. CachedService をここまでに用意したフェイクとダミーで構築する
 //   6. Service のメソッドを呼び出す
 //   7. Service からの戻り値を検証する
@@ -253,7 +253,7 @@ mod fake_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        notifier::NotifierError,
+        reporter::ReporterError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
 
@@ -352,9 +352,9 @@ mod fake_tests {
         }
     }
 
-    struct DummyNotifier;
-    impl Notifier for DummyNotifier {
-        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+    struct DummyReporter;
+    impl Reporter for DummyReporter {
+        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
             Ok(())
         }
     }
@@ -371,7 +371,7 @@ mod fake_tests {
     // フェイクのサービス実装です。ユースケースより先はダミーです。
     impl PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
-        type N = DummyNotifier;
+        type N = DummyReporter;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -381,8 +381,8 @@ mod fake_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> Self::N {
-            DummyNotifier
+        fn get_reporter(&self) -> Self::N {
+            DummyReporter
         }
 
         fn register(
@@ -700,11 +700,11 @@ mod fake_tests {
 //
 // ## 目的
 //
-//   CachedService の各メソッドが、 Cache, Notifier と Service のメソッドを適切に呼び出していることを保障する
+//   CachedService の各メソッドが、 Cache, Reporter と Service のメソッドを適切に呼び出していることを保障する
 //   つまり、
 //    1. 必要なメソッドを必要回数だけ呼び出していること
 //    2. 不必要なメソッドを呼び出していないこと
-//    3. CachedService に渡った引数が適切に Cache, Notifier や Service のメソッドに渡されていること
+//    3. CachedService に渡った引数が適切に Cache, Reporter や Service のメソッドに渡されていること
 //   を保障する
 //
 // ## 方針
@@ -740,7 +740,7 @@ mod fake_tests {
 //                             |            +-- ここを確認する
 //                             |     Test Double
 //                             |    +------------------+
-//                             |    | Spy Notifier     |
+//                             |    | Spy Reporter     |
 //                             |    | ============     |
 //                             |    |                  |
 //                             +-c->| --> [ c ] request|
@@ -754,16 +754,16 @@ mod fake_tests {
 //      この構造体は実質使われないが、 Service に必要なので用意する
 //   2. メソッド呼び出しを記録しつつ、設定された返り値を返すモック Service を実装する
 //   3. メソッド呼び出しを記録しつつ、設定された返り値を返すモック Cache を実装する
-//   4. メソッド呼び出しを記録するスパイ Notifier を実装する
+//   4. メソッド呼び出しを記録するスパイ Reporter を実装する
 //   5. CachedService をここまでに用意したモック、スパイとダミーで構築する
 //   6. CachedService のメソッドを呼び出す
-//   7. Cache, Notifier と Service の記録を検証する
+//   7. Cache, Reporter と Service の記録を検証する
 //
 // ## 注意
 //
-//   1. このテストは CachedService の実装を保障するものであって、Service や Cache, Notifier の実装を保障するものではない
-//   2. このテストは CachedService のメソッドが不適切な Cache メソッドや Notifier メソッド あるいは Service メソッド呼び出しをしていないことを保障するものであって Cache, Notifier や Service の不適切な処理をしていないことを保障するものではない
-//   3. このテストでは Cache, Notifier と Service のメソッド呼び出し順序については検証しない (将来的に検証することを拒否しない)
+//   1. このテストは CachedService の実装を保障するものであって、Service や Cache, Reporter の実装を保障するものではない
+//   2. このテストは CachedService のメソッドが不適切な Cache メソッドや Reporter メソッド あるいは Service メソッド呼び出しをしていないことを保障するものであって Cache, Reporter や Service の不適切な処理をしていないことを保障するものではない
+//   3. このテストでは Cache, Reporter と Service のメソッド呼び出し順序については検証しない (将来的に検証することを拒否しない)
 //   4. CachedService とスパイとなる Spy Service とは構造体としては同一になっている
 //
 #[cfg(test)]
@@ -777,7 +777,7 @@ mod spy_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        notifier::NotifierError,
+        reporter::ReporterError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
 
@@ -877,11 +877,11 @@ mod spy_tests {
     }
 
     #[derive(Debug, Clone)]
-    struct SpyNotifier {
+    struct SpyReporter {
         notify: Rc<RefCell<Vec<(String, String)>>>,
     }
-    impl Notifier for SpyNotifier {
-        fn notify(&self, to: &str, message: &str) -> Result<(), NotifierError> {
+    impl Reporter for SpyReporter {
+        fn send_report(&self, to: &str, message: &str) -> Result<(), ReporterError> {
             self.notify
                 .borrow_mut()
                 .push((to.to_string(), message.to_string()));
@@ -908,12 +908,12 @@ mod spy_tests {
 
         usecase: RefCell<DummyPersonUsecase>,
         cao: MockPersonCao,
-        notifier: SpyNotifier,
+        reporter: SpyReporter,
     }
     // スパイサービス実装です。ユースケースより先はダミーです。
     impl PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
-        type N = SpyNotifier;
+        type N = SpyReporter;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -923,8 +923,8 @@ mod spy_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> Self::N {
-            self.notifier.clone()
+        fn get_reporter(&self) -> Self::N {
+            self.reporter.clone()
         }
 
         fn register(
@@ -1063,7 +1063,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1100,7 +1100,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1131,7 +1131,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1168,7 +1168,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1208,7 +1208,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1230,7 +1230,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1264,7 +1264,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1293,7 +1293,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1327,7 +1327,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1356,7 +1356,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1390,7 +1390,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1419,7 +1419,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1453,7 +1453,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1503,7 +1503,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![] as Vec<(String, String)>
         );
 
@@ -1531,7 +1531,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1573,7 +1573,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1620,7 +1620,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1658,7 +1658,7 @@ mod spy_tests {
             ]
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
-        assert_eq!(*service.notifier.notify.borrow(), vec![]);
+        assert_eq!(*service.reporter.notify.borrow(), vec![]);
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
@@ -1697,7 +1697,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1726,7 +1726,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1760,7 +1760,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Ok(()), // 使われない
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1785,7 +1785,7 @@ mod spy_tests {
             vec![] as Vec<(PersonId, PersonDto)>
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
-        assert_eq!(*service.notifier.notify.borrow(), vec![]);
+        assert_eq!(*service.reporter.notify.borrow(), vec![]);
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
@@ -1811,7 +1811,7 @@ mod spy_tests {
                 unload: Rc::new(RefCell::new(vec![])),
                 unload_result: Err(CaoError::Unavailable("cao valid".to_string())),
             },
-            notifier: SpyNotifier {
+            reporter: SpyReporter {
                 notify: RefCell::new(vec![]).into(),
             },
         };
@@ -1837,7 +1837,7 @@ mod spy_tests {
         );
         assert_eq!(*service.cao.unload.borrow(), vec![3]);
         assert_eq!(
-            *service.notifier.notify.borrow(),
+            *service.reporter.notify.borrow(),
             vec![(
                 "admin".to_string(),
                 "cache service not available".to_string()
@@ -1850,12 +1850,12 @@ mod spy_tests {
 //
 // ## 目的
 //
-//   Cache, Notifier や Service がエラーを返した場合の CachedService の挙動を保障する
+//   Cache, Reporter や Service がエラーを返した場合の CachedService の挙動を保障する
 //
 // ## 方針
 //
-//   スタブ Cache, スタブ Notifier や Service はメソッドが呼び出されると、事前に設定された任意のエラー値を返す
-//   CachedService のメソッドを呼び出して Cache, Notifier あるいは Service からエラーを受け取ったときの CachedService の返り値を確認する
+//   スタブ Cache, スタブ Reporter や Service はメソッドが呼び出されると、事前に設定された任意のエラー値を返す
+//   CachedService のメソッドを呼び出して Cache, Reporter あるいは Service からエラーを受け取ったときの CachedService の返り値を確認する
 //
 // ## 実装
 //
@@ -1879,7 +1879,7 @@ mod spy_tests {
 //     |           |          ||  +---------------+
 //     |           |          ||   Test Double
 //     |           |          ||  +---------------+
-//     |           |          ||  | Stub Notifier |
+//     |           |          ||  | Stub Reporter |
 //     |           |          ||  | ============= |
 //     |           |          ||  |               |
 //     |           |          |+->| --->          |
@@ -1897,8 +1897,8 @@ mod spy_tests {
 //      この Service 構造体はスタブであり、CachedService への間接的な入力のみ制御する
 //   3. Cache のメソッドが任意の結果を返せる種類の Cache 構造体を用意する
 //      この Cache 構造体はスタブであり、CachedService への間接的な入力のみ制御する
-//   4. Notifier のメソッドが任意の結果を返せる種類の Notifier 構造体を用意する
-//      この Notifier 構造体はスタブであり、CachedService への間接的な入力のみ制御する
+//   4. Reporter のメソッドが任意の結果を返せる種類の Reporter 構造体を用意する
+//      この Reporter 構造体はスタブであり、CachedService への間接的な入力のみ制御する
 //   5. その構造体を CachedService にプラグインする
 //   6. CachedService のメソッドを呼び出す
 //   7. CachedService のメソッドからの戻り値を確認する
@@ -1917,7 +1917,7 @@ mod error_stub_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        notifier::NotifierError,
+        reporter::ReporterError,
         HavePersonDao, PersonUsecase, UsecaseError,
     };
 
@@ -2016,9 +2016,9 @@ mod error_stub_tests {
         }
     }
 
-    struct DummyNotifier;
-    impl Notifier for DummyNotifier {
-        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+    struct DummyReporter;
+    impl Reporter for DummyReporter {
+        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
             Ok(())
         }
     }
@@ -2038,7 +2038,7 @@ mod error_stub_tests {
     // スタブサービス実装です。ユースケースより先はダミーです。
     impl PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
-        type N = DummyNotifier;
+        type N = DummyReporter;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -2048,8 +2048,8 @@ mod error_stub_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> Self::N {
-            DummyNotifier
+        fn get_reporter(&self) -> Self::N {
+            DummyReporter
         }
 
         fn register(

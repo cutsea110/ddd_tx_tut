@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::domain::PersonId;
 use crate::dto::PersonDto;
-use crate::notifier::Notifier;
+use crate::reporter::Reporter;
 use crate::usecase::{PersonUsecase, UsecaseError};
 use tx_rs::Tx;
 
@@ -41,13 +41,13 @@ pub trait PersonOutputBoundary<T, E> {
 
 pub trait PersonService<'a, Ctx> {
     type U: PersonUsecase<Ctx>;
-    type N: Notifier;
+    type N: Reporter;
 
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
     where
         F: FnOnce(&mut Self::U, &mut Ctx) -> Result<T, UsecaseError>;
 
-    fn get_notifier(&self) -> Self::N;
+    fn get_reporter(&self) -> Self::N;
 
     fn register(
         &'a mut self,
@@ -63,7 +63,7 @@ pub trait PersonService<'a, Ctx> {
             death_date,
             data
         );
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         self.run_tx(move |usecase, ctx| {
             usecase
@@ -72,8 +72,8 @@ pub trait PersonService<'a, Ctx> {
         })
         .and_then(|(id, p)| {
             let msg = format!(r#"{{ "person_id": {} }}"#, id);
-            if let Err(e) = notifier.notify("entry_person", &msg) {
-                error!("notification service not available: {}", e);
+            if let Err(e) = reporter.send_report("entry_person", &msg) {
+                error!("reporter service not available: {}", e);
             }
             return Ok((id, p));
         })
@@ -82,8 +82,8 @@ pub trait PersonService<'a, Ctx> {
                 "cannot register person: name={}, birth_date={}, death_date={:?}, data={}",
                 name, birth_date, death_date, data
             );
-            if let Err(e) = notifier.notify("admin", &msg) {
-                error!("notification service not available: {}", e);
+            if let Err(e) = reporter.send_report("admin", &msg) {
+                error!("reporter service not available: {}", e);
             }
             return e;
         })
@@ -91,13 +91,13 @@ pub trait PersonService<'a, Ctx> {
 
     fn find(&'a mut self, id: PersonId) -> Result<Option<PersonDto>, ServiceError> {
         trace!("find person: id={}", id);
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         self.run_tx(move |usecase, ctx| usecase.find(id).run(ctx))
             .map_err(|e| {
                 let msg = format!("cannot find person: id={}", id);
-                if let Err(e) = notifier.notify("admin", &msg) {
-                    error!("notification service not available: {}", e);
+                if let Err(e) = reporter.send_report("admin", &msg) {
+                    error!("reporter service not available: {}", e);
                 }
                 return e;
             })
@@ -110,7 +110,7 @@ pub trait PersonService<'a, Ctx> {
     ) -> Result<Vec<PersonId>, ServiceError> {
         trace!("batch import persons");
         out_port.started();
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         let mut ids = vec![];
         let (lower_bound, upper_bound) = persons.size_hint();
@@ -123,8 +123,8 @@ pub trait PersonService<'a, Ctx> {
                         ids.push(id);
 
                         let msg = format!(r#"{{ "person_id": {} }}"#, id);
-                        if let Err(e) = notifier.notify("entry_person", &msg) {
-                            error!("notification service not available: {}", e);
+                        if let Err(e) = reporter.send_report("entry_person", &msg) {
+                            error!("reporter service not available: {}", e);
                         }
                     }
                     Err(e) => {
@@ -132,8 +132,8 @@ pub trait PersonService<'a, Ctx> {
                         out_port.aborted(ServiceError::TransactionFailed(e.clone()));
 
                         let msg = format!("cannot entry person: {:?}", e);
-                        if let Err(e) = notifier.notify("admin", &msg) {
-                            error!("notification service not available: {}", e);
+                        if let Err(e) = reporter.send_report("admin", &msg) {
+                            error!("reporter service not available: {}", e);
                         }
                         return Err(e);
                     }
@@ -149,12 +149,12 @@ pub trait PersonService<'a, Ctx> {
 
     fn list_all(&'a mut self) -> Result<Vec<(PersonId, PersonDto)>, ServiceError> {
         trace!("list all persons");
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         self.run_tx(move |usecase, ctx| usecase.collect().run(ctx))
             .map_err(|e| {
-                if let Err(e) = notifier.notify("admin", "cannot list all persons") {
-                    error!("notification service not available: {}", e);
+                if let Err(e) = reporter.send_report("admin", "cannot list all persons") {
+                    error!("reporter service not available: {}", e);
                 }
                 return e;
             })
@@ -162,20 +162,20 @@ pub trait PersonService<'a, Ctx> {
 
     fn death(&'a mut self, id: PersonId, death_date: NaiveDate) -> Result<(), ServiceError> {
         trace!("death person: id={}, death_date={}", id, death_date);
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         self.run_tx(move |usecase, ctx| usecase.death(id, death_date).run(ctx))
             .and_then(|_| {
                 let msg = format!(r#"{{ "person_id": {}, "death_date": {} }}"#, id, death_date);
-                if let Err(e) = notifier.notify("death_person", &msg) {
-                    error!("notification service not available: {}", e);
+                if let Err(e) = reporter.send_report("death_person", &msg) {
+                    error!("reporter service not available: {}", e);
                 }
                 return Ok(());
             })
             .map_err(|e| {
                 let msg = format!("cannot death person: id={}, death_date={}", id, death_date);
-                if let Err(e) = notifier.notify("admin", &msg) {
-                    error!("notification service not available: {}", e);
+                if let Err(e) = reporter.send_report("admin", &msg) {
+                    error!("reporter service not available: {}", e);
                 }
                 return e;
             })
@@ -183,20 +183,20 @@ pub trait PersonService<'a, Ctx> {
 
     fn unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
         trace!("unregister person: id={}", id);
-        let notifier = self.get_notifier();
+        let reporter = self.get_reporter();
 
         self.run_tx(move |usecase, ctx| usecase.remove(id).run(ctx))
             .and_then(|_| {
                 let msg = format!(r#"{{ "person_id": {} }}"#, id);
-                if let Err(e) = notifier.notify("unregister_person", &msg) {
-                    error!("notification service not available: {}", e);
+                if let Err(e) = reporter.send_report("unregister_person", &msg) {
+                    error!("reporter service not available: {}", e);
                 }
                 return Ok(());
             })
             .map_err(|e| {
                 let msg = format!("cannot remove person: id={}", id);
-                if let Err(e) = notifier.notify("admin", &msg) {
-                    error!("notification service not available: {}", e);
+                if let Err(e) = reporter.send_report("admin", &msg) {
+                    error!("reporter service not available: {}", e);
                 }
                 return e;
             })
@@ -229,7 +229,7 @@ pub trait PersonService<'a, Ctx> {
 //     |  +----|----+  ||  +----------------+	  +-----------+
 //     |       |       ||
 //     |       |       ||  +----------------+
-//     |       |       ||  | Dummy Notifier |
+//     |       |       ||  | Dummy Reporter |
 //     |       |       ||  | ============== |
 //     |       |       ||  |                |
 //     |       |       |+->| --->           |
@@ -246,7 +246,7 @@ pub trait PersonService<'a, Ctx> {
 //   2. Usecase のメソッド呼び出しに対して、期待される結果を返す Usecase 構造体を用意する
 //      この Usecase 構造体はフェイクなので、間接的な入力と間接的な出力が整合するようにする
 //   3. Usecase にダミーの DAO 構造体をプラグインする
-//   4. ダミーの Notifier 構造体を用意する
+//   4. ダミーの Reporter 構造体を用意する
 //   5. Service をここまでに用意したフェイクとダミーで構築する
 //   6. Service のメソッドを呼び出す
 //   7. Service からの戻り値を検証する
@@ -268,7 +268,7 @@ mod fake_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        notifier::NotifierError,
+        reporter::ReporterError,
         HavePersonDao,
     };
 
@@ -391,9 +391,9 @@ mod fake_tests {
         }
     }
 
-    struct DummyNotifier;
-    impl Notifier for DummyNotifier {
-        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+    struct DummyReporter;
+    impl Reporter for DummyReporter {
+        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
             Ok(())
         }
     }
@@ -403,7 +403,7 @@ mod fake_tests {
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = FakePersonUsecase;
-        type N = DummyNotifier;
+        type N = DummyReporter;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -413,8 +413,8 @@ mod fake_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> Self::N {
-            DummyNotifier
+        fn get_reporter(&self) -> Self::N {
+            DummyReporter
         }
     }
 
@@ -636,7 +636,7 @@ mod fake_tests {
 //                      |
 //                      |     Test Double
 //                      |    +------------------+
-//                      |    | Spy Notifier     |
+//                      |    | Spy Reporter     |
 //                      |    | =============    |
 //                      |    |                  |
 //                      +-c->| --> [ c ] request|
@@ -652,21 +652,21 @@ mod fake_tests {
 //      この構造体は実質使われないが、 Usecase の構成で必要になるため用意する
 //   2. Usecase のメソッド呼び出しを記録する Usecase 構造体を用意する
 //      この構造体はスパイなので、Service の間接的な出力のみを記録する
-//   3. スパイの Notifier 構造体を用意する
+//   3. スパイの Reporter 構造体を用意する
 //   4. Service をここまでに用意したスパイで構築する
 //     4a. batch_import のみ Output Boundary への出力を記録する Spy Output Boundary を渡している
 //   5. Service のメソッドを呼び出す
-//   6. Usecase 構造体と Notifier 構造体の記録を検証する
+//   6. Usecase 構造体と Reporter 構造体の記録を検証する
 //     6a. batch_import のみ Output Boundary 構造体の記録を検証する
 //
 // ## 注意
 //
 //   1. このテストは Service の実装を保障するものであって、Usecase の実装を保障するものではない
-//   2. このテストは Service のメソッドが Usecase のメソッドと Notifier のメソッドとを適切に呼び出していることを保障するものであって、
-//      Usecase や Notifier のメソッドが適切な処理を行っていることを保障するものではない
-//   3. このテストは Service のメソッドが Usecase や Notifier のメソッドを不適切に呼び出していないことを保障するものであって、
-//      Usecase のメソッドや Notifier のメソッドが不適切な処理をしていないことを保障するものではない
-//   4. このテストでは Usecase のメソッドや Notifier のメソッドの呼び出し順序については検証しない (将来的には検証することは拒否しない)
+//   2. このテストは Service のメソッドが Usecase のメソッドと Reporter のメソッドとを適切に呼び出していることを保障するものであって、
+//      Usecase や Reporter のメソッドが適切な処理を行っていることを保障するものではない
+//   3. このテストは Service のメソッドが Usecase や Reporter のメソッドを不適切に呼び出していないことを保障するものであって、
+//      Usecase のメソッドや Reporter のメソッドが不適切な処理をしていないことを保障するものではない
+//   4. このテストでは Usecase のメソッドや Reporter のメソッドの呼び出し順序については検証しない (将来的には検証することは拒否しない)
 #[cfg(test)]
 mod spy_tests {
     use std::cell::RefCell;
@@ -677,7 +677,7 @@ mod spy_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        notifier::NotifierError,
+        reporter::ReporterError,
         HavePersonDao,
     };
 
@@ -801,11 +801,11 @@ mod spy_tests {
     }
 
     #[derive(Debug, Clone)]
-    struct SpyNotifier {
+    struct SpyReporter {
         notify: Rc<RefCell<Vec<(String, String)>>>,
     }
-    impl Notifier for SpyNotifier {
-        fn notify(&self, _to: &str, _message: &str) -> Result<(), NotifierError> {
+    impl Reporter for SpyReporter {
+        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
             self.notify
                 .borrow_mut()
                 .push((_to.to_string(), _message.to_string()));
@@ -817,11 +817,11 @@ mod spy_tests {
 
     struct TargetPersonService {
         usecase: Rc<RefCell<SpyPersonUsecase>>,
-        notifier: SpyNotifier,
+        reporter: SpyReporter,
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = SpyPersonUsecase;
-        type N = SpyNotifier;
+        type N = SpyReporter;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -831,8 +831,8 @@ mod spy_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> Self::N {
-            self.notifier.clone()
+        fn get_reporter(&self) -> Self::N {
+            self.reporter.clone()
         }
     }
 
@@ -869,12 +869,12 @@ mod spy_tests {
             death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
-        let notifier = SpyNotifier {
+        let reporter = SpyReporter {
             notify: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let expected = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0);
@@ -892,12 +892,12 @@ mod spy_tests {
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().entry_and_verify.borrow()[0], expected);
 
-        // Notifier のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_notifier().notify.borrow().len(), 1);
+        // Reporter のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_reporter().notify.borrow().len(), 1);
 
-        // Service の引数が Notifier にそのまま渡されていることを検証
+        // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            service.get_notifier().notify.borrow()[0],
+            service.get_reporter().notify.borrow()[0],
             (
                 "entry_person".to_string(),
                 r#"{ "person_id": 42 }"#.to_string()
@@ -916,12 +916,12 @@ mod spy_tests {
             death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
-        let notifier = SpyNotifier {
+        let reporter = SpyReporter {
             notify: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let persons = vec![
@@ -951,12 +951,12 @@ mod spy_tests {
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().entry.borrow().clone(), expected);
 
-        // Notifier のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_notifier().notify.borrow().len(), 3);
+        // Reporter のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_reporter().notify.borrow().len(), 3);
 
-        // Service の引数が Notifier にそのまま渡されていることを検証
+        // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            *service.get_notifier().notify.borrow(),
+            *service.get_reporter().notify.borrow(),
             vec![
                 (
                     "entry_person".to_string(),
@@ -994,12 +994,12 @@ mod spy_tests {
             death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
-        let notifier = SpyNotifier {
+        let reporter = SpyReporter {
             notify: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let _ = service.list_all();
@@ -1012,8 +1012,8 @@ mod spy_tests {
         assert_eq!(usecase.borrow().death.borrow().len(), 0);
         assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
-        // Notifier のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_notifier().notify.borrow().len(), 0);
+        // Reporter のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_reporter().notify.borrow().len(), 0);
     }
     #[test]
     fn test_death() {
@@ -1026,12 +1026,12 @@ mod spy_tests {
             death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
-        let notifier = SpyNotifier {
+        let reporter = SpyReporter {
             notify: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let _ = service.death(42, date(2020, 7, 19));
@@ -1046,12 +1046,12 @@ mod spy_tests {
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().death.borrow()[0], (42, date(2020, 7, 19)));
 
-        // Notifier のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_notifier().notify.borrow().len(), 1);
+        // Reporter のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_reporter().notify.borrow().len(), 1);
 
-        // Service の引数が Notifier にそのまま渡されていることを検証
+        // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            service.get_notifier().notify.borrow()[0],
+            service.get_reporter().notify.borrow()[0],
             (
                 "death_person".to_string(),
                 r#"{ "person_id": 42, "death_date": 2020-07-19 }"#.to_string()
@@ -1069,12 +1069,12 @@ mod spy_tests {
             death: RefCell::new(vec![]),
             remove: RefCell::new(vec![]),
         }));
-        let notifier = SpyNotifier {
+        let reporter = SpyReporter {
             notify: RefCell::new(vec![]).into(),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let _ = service.unregister(42);
@@ -1090,12 +1090,12 @@ mod spy_tests {
         // Service の引数が Usecase にそのまま渡されていることを検証
         assert_eq!(usecase.borrow().remove.borrow()[0], 42);
 
-        // Notifier のメソッド呼び出しの記録の検証
-        assert_eq!(service.get_notifier().notify.borrow().len(), 1);
+        // Reporter のメソッド呼び出しの記録の検証
+        assert_eq!(service.get_reporter().notify.borrow().len(), 1);
 
-        // Service の引数が Notifier にそのまま渡されていることを検証
+        // Service の引数が Reporter にそのまま渡されていることを検証
         assert_eq!(
-            *service.get_notifier().notify.borrow(),
+            *service.get_reporter().notify.borrow(),
             vec![(
                 "unregister_person".to_string(),
                 r#"{ "person_id": 42 }"#.to_string()
@@ -1128,7 +1128,7 @@ mod spy_tests {
 //     |  +----|----+   |  +---------------+     +-----------+
 //     |       |        |
 //     |       |        |  +---------------+
-//     |       |        |  | Stub Notifier |
+//     |       |        |  | Stub Reporter |
 //     |       | 	|  | ============= |
 //     |       |        |  |               |
 //     |       |        |  | --->          |
@@ -1144,8 +1144,8 @@ mod spy_tests {
 //      この構造体は実質使われないが、 Usecase の構成で必要になるため用意する
 //   2. Usecase のメソッドが任意の結果を返せる種類の Usecase 構造体を用意する
 //      この Usecase 構造体はスタブであり、Service への間接的な入力のみ制御する
-//   3. Notifier のメソッドが任意の結果を返せる種類の Notifier 構造体を用意する
-//      この Notifier 構造体はスタブであり、Service への間接的な入力のみ制御する
+//   3. Reporter のメソッドが任意の結果を返せる種類の Reporter 構造体を用意する
+//      この Reporter 構造体はスタブであり、Service への間接的な入力のみ制御する
 //   4. Service をここまでに用意したスタブで構築する
 //   5. Service のメソッドを呼び出す
 //   6. Service のメソッドからの戻り値を確認する
@@ -1162,7 +1162,7 @@ mod error_stub_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        notifier::NotifierError,
+        reporter::ReporterError,
         HavePersonDao,
     };
 
@@ -1268,15 +1268,15 @@ mod error_stub_tests {
     }
 
     #[derive(Debug, Clone)]
-    struct StubNotifier {
-        admin_result: Result<(), NotifierError>,
-        entry_person_result: Result<(), NotifierError>,
-        death_person_result: Result<(), NotifierError>,
-        unregister_person_result: Result<(), NotifierError>,
-        otherwise_result: Result<(), NotifierError>,
+    struct StubReporter {
+        admin_result: Result<(), ReporterError>,
+        entry_person_result: Result<(), ReporterError>,
+        death_person_result: Result<(), ReporterError>,
+        unregister_person_result: Result<(), ReporterError>,
+        otherwise_result: Result<(), ReporterError>,
     }
-    impl Notifier for StubNotifier {
-        fn notify(&self, to: &str, _message: &str) -> Result<(), NotifierError> {
+    impl Reporter for StubReporter {
+        fn send_report(&self, to: &str, _message: &str) -> Result<(), ReporterError> {
             match to {
                 "entry_person" => self.entry_person_result.clone(),
                 "death_person" => self.death_person_result.clone(),
@@ -1289,11 +1289,11 @@ mod error_stub_tests {
 
     struct TargetPersonService {
         usecase: Rc<RefCell<StubPersonUsecase>>,
-        notifier: StubNotifier,
+        reporter: StubReporter,
     }
     impl PersonService<'_, ()> for TargetPersonService {
         type U = StubPersonUsecase;
-        type N = StubNotifier;
+        type N = StubReporter;
 
         fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
         where
@@ -1303,8 +1303,8 @@ mod error_stub_tests {
             f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
         }
 
-        fn get_notifier(&self) -> Self::N {
-            self.notifier.clone()
+        fn get_reporter(&self) -> Self::N {
+            self.reporter.clone()
         }
     }
 
@@ -1329,7 +1329,7 @@ mod error_stub_tests {
             death_result: Ok(()),       // 使わない
             remove_result: Ok(()),      // 使わない
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
@@ -1338,7 +1338,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
@@ -1365,16 +1365,16 @@ mod error_stub_tests {
             death_result: Ok(()),       // 使わない
             remove_result: Ok(()),      // 使わない
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
-            entry_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            entry_person_result: Err(ReporterError::Unavailable("valid req".to_string())),
             death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
@@ -1395,8 +1395,8 @@ mod error_stub_tests {
             death_result: Ok(()),       // 使わない
             remove_result: Ok(()),      // 使わない
         }));
-        let notifier = StubNotifier {
-            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+        let reporter = StubReporter {
+            admin_result: Err(ReporterError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
             unregister_person_result: Ok(()),
@@ -1404,7 +1404,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
@@ -1433,7 +1433,7 @@ mod error_stub_tests {
             death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
@@ -1442,7 +1442,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.batch_import(
@@ -1472,16 +1472,16 @@ mod error_stub_tests {
             death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
-            entry_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            entry_person_result: Err(ReporterError::Unavailable("valid req".to_string())),
             death_person_result: Ok(()),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.batch_import(
@@ -1512,8 +1512,8 @@ mod error_stub_tests {
             death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
-        let notifier = StubNotifier {
-            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+        let reporter = StubReporter {
+            admin_result: Err(ReporterError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
             unregister_person_result: Ok(()),
@@ -1521,7 +1521,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.batch_import(
@@ -1555,7 +1555,7 @@ mod error_stub_tests {
             death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
@@ -1564,7 +1564,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.list_all();
@@ -1589,8 +1589,8 @@ mod error_stub_tests {
             death_result: Ok(()),  // 使わない
             remove_result: Ok(()), // 使わない
         }));
-        let notifier = StubNotifier {
-            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+        let reporter = StubReporter {
+            admin_result: Err(ReporterError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
             unregister_person_result: Ok(()),
@@ -1598,7 +1598,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.list_all();
@@ -1623,7 +1623,7 @@ mod error_stub_tests {
                 "valid dao".to_string(),
             ))),
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
@@ -1632,7 +1632,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.unregister(42);
@@ -1655,16 +1655,16 @@ mod error_stub_tests {
             death_result: Ok(()),
             remove_result: Ok(()), // 使わない
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
-            death_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            death_person_result: Err(ReporterError::Unavailable("valid req".to_string())),
             unregister_person_result: Ok(()),
             otherwise_result: Ok(()),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.death(42, date(2020, 8, 30));
@@ -1688,8 +1688,8 @@ mod error_stub_tests {
             ))),
             remove_result: Ok(()), // 使わない
         }));
-        let notifier = StubNotifier {
-            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+        let reporter = StubReporter {
+            admin_result: Err(ReporterError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
             unregister_person_result: Ok(()),
@@ -1697,7 +1697,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.death(42, date(2020, 8, 30));
@@ -1720,16 +1720,16 @@ mod error_stub_tests {
             death_result: Ok(()),  // 使わない
             remove_result: Ok(()),
         }));
-        let notifier = StubNotifier {
+        let reporter = StubReporter {
             admin_result: Ok(()),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
-            unregister_person_result: Err(NotifierError::Unavailable("valid req".to_string())),
+            unregister_person_result: Err(ReporterError::Unavailable("valid req".to_string())),
             otherwise_result: Ok(()),
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.unregister(42);
@@ -1753,8 +1753,8 @@ mod error_stub_tests {
                 "valid dao".to_string(),
             ))),
         }));
-        let notifier = StubNotifier {
-            admin_result: Err(NotifierError::Unavailable("valid req".to_string())),
+        let reporter = StubReporter {
+            admin_result: Err(ReporterError::Unavailable("valid req".to_string())),
             entry_person_result: Ok(()),
             death_person_result: Ok(()),
             unregister_person_result: Ok(()),
@@ -1762,7 +1762,7 @@ mod error_stub_tests {
         };
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
-            notifier,
+            reporter,
         };
 
         let result = service.unregister(42);
