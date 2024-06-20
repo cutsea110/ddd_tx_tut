@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::domain::PersonId;
 use crate::dto::PersonDto;
-use crate::reporter::Reporter;
+use crate::reporter::{Level, Reporter};
 use crate::usecase::{PersonUsecase, UsecaseError};
 use tx_rs::Tx;
 
@@ -72,7 +72,7 @@ pub trait PersonService<'a, Ctx> {
         })
         .and_then(|(id, p)| {
             let msg = format!(r#"{{ "person_id": {} }}"#, id);
-            if let Err(e) = reporter.send_report("entry_person", &msg) {
+            if let Err(e) = reporter.send_report(Level::Info, "entry_person", &msg, location!()) {
                 error!("reporter service not available: {}", e);
             }
             return Ok((id, p));
@@ -82,7 +82,7 @@ pub trait PersonService<'a, Ctx> {
                 "cannot register person: name={}, birth_date={}, death_date={:?}, data={}",
                 name, birth_date, death_date, data
             );
-            if let Err(e) = reporter.send_report("admin", &msg) {
+            if let Err(e) = reporter.send_report(Level::Error, "admin", &msg, location!()) {
                 error!("reporter service not available: {}", e);
             }
             return e;
@@ -96,7 +96,7 @@ pub trait PersonService<'a, Ctx> {
         self.run_tx(move |usecase, ctx| usecase.find(id).run(ctx))
             .map_err(|e| {
                 let msg = format!("cannot find person: id={}", id);
-                if let Err(e) = reporter.send_report("admin", &msg) {
+                if let Err(e) = reporter.send_report(Level::Error, "admin", &msg, location!()) {
                     error!("reporter service not available: {}", e);
                 }
                 return e;
@@ -123,7 +123,9 @@ pub trait PersonService<'a, Ctx> {
                         ids.push(id);
 
                         let msg = format!(r#"{{ "person_id": {} }}"#, id);
-                        if let Err(e) = reporter.send_report("entry_person", &msg) {
+                        if let Err(e) =
+                            reporter.send_report(Level::Info, "entry_person", &msg, location!())
+                        {
                             error!("reporter service not available: {}", e);
                         }
                     }
@@ -132,7 +134,9 @@ pub trait PersonService<'a, Ctx> {
                         out_port.aborted(ServiceError::TransactionFailed(e.clone()));
 
                         let msg = format!("cannot entry person: {:?}", e);
-                        if let Err(e) = reporter.send_report("admin", &msg) {
+                        if let Err(e) =
+                            reporter.send_report(Level::Error, "admin", &msg, location!())
+                        {
                             error!("reporter service not available: {}", e);
                         }
                         return Err(e);
@@ -153,7 +157,12 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| usecase.collect().run(ctx))
             .map_err(|e| {
-                if let Err(e) = reporter.send_report("admin", "cannot list all persons") {
+                if let Err(e) = reporter.send_report(
+                    Level::Error,
+                    "admin",
+                    "cannot list all persons",
+                    location!(),
+                ) {
                     error!("reporter service not available: {}", e);
                 }
                 return e;
@@ -167,14 +176,15 @@ pub trait PersonService<'a, Ctx> {
         self.run_tx(move |usecase, ctx| usecase.death(id, death_date).run(ctx))
             .and_then(|_| {
                 let msg = format!(r#"{{ "person_id": {}, "death_date": {} }}"#, id, death_date);
-                if let Err(e) = reporter.send_report("death_person", &msg) {
+                if let Err(e) = reporter.send_report(Level::Info, "death_person", &msg, location!())
+                {
                     error!("reporter service not available: {}", e);
                 }
                 return Ok(());
             })
             .map_err(|e| {
                 let msg = format!("cannot death person: id={}, death_date={}", id, death_date);
-                if let Err(e) = reporter.send_report("admin", &msg) {
+                if let Err(e) = reporter.send_report(Level::Error, "admin", &msg, location!()) {
                     error!("reporter service not available: {}", e);
                 }
                 return e;
@@ -188,14 +198,16 @@ pub trait PersonService<'a, Ctx> {
         self.run_tx(move |usecase, ctx| usecase.remove(id).run(ctx))
             .and_then(|_| {
                 let msg = format!(r#"{{ "person_id": {} }}"#, id);
-                if let Err(e) = reporter.send_report("unregister_person", &msg) {
+                if let Err(e) =
+                    reporter.send_report(Level::Info, "unregister_person", &msg, location!())
+                {
                     error!("reporter service not available: {}", e);
                 }
                 return Ok(());
             })
             .map_err(|e| {
                 let msg = format!("cannot remove person: id={}", id);
-                if let Err(e) = reporter.send_report("admin", &msg) {
+                if let Err(e) = reporter.send_report(Level::Error, "admin", &msg, location!()) {
                     error!("reporter service not available: {}", e);
                 }
                 return e;
@@ -268,7 +280,7 @@ mod fake_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        reporter::ReporterError,
+        reporter::{Location, ReporterError},
         HavePersonDao,
     };
 
@@ -393,7 +405,13 @@ mod fake_tests {
 
     struct DummyReporter;
     impl Reporter for DummyReporter {
-        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
+        fn send_report(
+            &self,
+            _level: Level,
+            _to: &str,
+            _message: &str,
+            _loc: Location,
+        ) -> Result<(), ReporterError> {
             Ok(())
         }
     }
@@ -677,7 +695,7 @@ mod spy_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        reporter::ReporterError,
+        reporter::{Location, ReporterError},
         HavePersonDao,
     };
 
@@ -805,7 +823,13 @@ mod spy_tests {
         report: Rc<RefCell<Vec<(String, String)>>>,
     }
     impl Reporter for SpyReporter {
-        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
+        fn send_report(
+            &self,
+            _level: Level,
+            _to: &str,
+            _message: &str,
+            _loc: Location,
+        ) -> Result<(), ReporterError> {
             self.report
                 .borrow_mut()
                 .push((_to.to_string(), _message.to_string()));
@@ -1162,7 +1186,7 @@ mod error_stub_tests {
         dao::{DaoError, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
-        reporter::ReporterError,
+        reporter::{Location, ReporterError},
         HavePersonDao,
     };
 
@@ -1276,7 +1300,13 @@ mod error_stub_tests {
         otherwise_result: Result<(), ReporterError>,
     }
     impl Reporter for StubReporter {
-        fn send_report(&self, to: &str, _message: &str) -> Result<(), ReporterError> {
+        fn send_report(
+            &self,
+            _level: Level,
+            to: &str,
+            _message: &str,
+            _loc: Location,
+        ) -> Result<(), ReporterError> {
             match to {
                 "entry_person" => self.entry_person_result.clone(),
                 "death_person" => self.death_person_result.clone(),

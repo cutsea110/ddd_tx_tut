@@ -5,7 +5,8 @@ use std::rc::Rc;
 use crate::cache::PersonCao;
 use crate::domain::PersonId;
 use crate::dto::PersonDto;
-use crate::reporter::Reporter;
+use crate::location;
+use crate::reporter::{Level, Reporter};
 use crate::service::{InvalidErrorKind, PersonOutputBoundary, PersonService, ServiceError};
 
 pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
@@ -37,7 +38,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = reporter.send_report("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report(
+                    Level::Error,
+                    "admin",
+                    "cache service not available",
+                    location!(),
+                ) {
                     error!("reporter service not available: {}", e);
                 }
             }
@@ -68,7 +74,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             if let Err(e) = cao.run_tx(cao.load(id, &person)) {
                 // ここはエラーを返す必要はない
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = reporter.send_report("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report(
+                    Level::Error,
+                    "admin",
+                    "cache service not available",
+                    location!(),
+                ) {
                     error!("reporter service not available: {}", e);
                 }
             } else {
@@ -101,7 +112,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             // ここはエラーを返す必要はない
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = reporter.send_report("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report(
+                    Level::Error,
+                    "admin",
+                    "cache service not available",
+                    location!(),
+                ) {
                     error!("reporter service not available: {}", e);
                 }
                 return Ok(ids);
@@ -124,7 +140,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             // ここはエラーを返す必要はない
             if let Err(e) = cao.run_tx(cao.load(*id, &person)) {
                 warn!("failed to load person to cache: {}", e);
-                if let Err(e) = reporter.send_report("admin", "cache service not available") {
+                if let Err(e) = reporter.send_report(
+                    Level::Error,
+                    "admin",
+                    "cache service not available",
+                    location!(),
+                ) {
                     error!("reporter service not available: {}", e);
                 }
                 return Ok(result);
@@ -147,7 +168,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         if let Err(e) = cao.run_tx(cao.unload(id)) {
             // ここはエラーを返す必要はない
             warn!("failed to unload person from cache: {}", e);
-            if let Err(e) = reporter.send_report("admin", "cache service not available") {
+            if let Err(e) = reporter.send_report(
+                Level::Error,
+                "admin",
+                "cache service not available",
+                location!(),
+            ) {
                 error!("reporter service not available: {}", e);
             }
         } else {
@@ -166,7 +192,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         if let Err(e) = cao.run_tx(cao.unload(id)) {
             // ここはエラーを返す必要はない
             warn!("failed to unload person from cache: {}", e);
-            if let Err(e) = reporter.send_report("admin", "cache service not available") {
+            if let Err(e) = reporter.send_report(
+                Level::Error,
+                "admin",
+                "cache service not available",
+                location!(),
+            ) {
                 error!("reporter service not available: {}", e);
             }
         } else {
@@ -246,6 +277,8 @@ mod fake_tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::rc::Rc;
+
+    use self::location::Location;
 
     use super::*;
     use crate::{
@@ -354,7 +387,13 @@ mod fake_tests {
 
     struct DummyReporter;
     impl Reporter for DummyReporter {
-        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
+        fn send_report(
+            &self,
+            _level: Level,
+            _to: &str,
+            _message: &str,
+            _loc: Location,
+        ) -> Result<(), ReporterError> {
             Ok(())
         }
     }
@@ -771,6 +810,8 @@ mod spy_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use self::location::Location;
+
     use super::*;
     use crate::{
         cache::CaoError,
@@ -878,13 +919,19 @@ mod spy_tests {
 
     #[derive(Debug, Clone)]
     struct SpyReporter {
-        report: Rc<RefCell<Vec<(String, String)>>>,
+        report: Rc<RefCell<Vec<(Level, String, String)>>>,
     }
     impl Reporter for SpyReporter {
-        fn send_report(&self, to: &str, message: &str) -> Result<(), ReporterError> {
+        fn send_report(
+            &self,
+            level: Level,
+            to: &str,
+            message: &str,
+            _loc: Location,
+        ) -> Result<(), ReporterError> {
             self.report
                 .borrow_mut()
-                .push((to.to_string(), message.to_string()));
+                .push((level, to.to_string(), message.to_string()));
 
             // 返り値に意味はない
             Ok(())
@@ -1101,7 +1148,7 @@ mod spy_tests {
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.reporter.report.borrow(),
-            vec![] as Vec<(String, String)>
+            vec![] as Vec<(Level, String, String)>
         );
 
         let mut service = TargetPersonService {
@@ -1170,6 +1217,7 @@ mod spy_tests {
         assert_eq!(
             *service.reporter.report.borrow(),
             vec![(
+                Level::Error,
                 "admin".to_string(),
                 "cache service not available".to_string()
             )],
@@ -1231,7 +1279,7 @@ mod spy_tests {
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.reporter.report.borrow(),
-            vec![] as Vec<(String, String)>
+            vec![] as Vec<(Level, String, String)>
         );
 
         let mut service = TargetPersonService {
@@ -1294,7 +1342,7 @@ mod spy_tests {
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.reporter.report.borrow(),
-            vec![] as Vec<(String, String)>
+            vec![] as Vec<(Level, String, String)>
         );
 
         let mut service = TargetPersonService {
@@ -1357,7 +1405,7 @@ mod spy_tests {
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.reporter.report.borrow(),
-            vec![] as Vec<(String, String)>
+            vec![] as Vec<(Level, String, String)>
         );
 
         let mut service = TargetPersonService {
@@ -1421,6 +1469,7 @@ mod spy_tests {
         assert_eq!(
             *service.reporter.report.borrow(),
             vec![(
+                Level::Error,
                 "admin".to_string(),
                 "cache service not available".to_string()
             )],
@@ -1504,7 +1553,7 @@ mod spy_tests {
         assert_eq!(*service.cao.unload.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.reporter.report.borrow(),
-            vec![] as Vec<(String, String)>
+            vec![] as Vec<(Level, String, String)>
         );
 
         let mut service = TargetPersonService {
@@ -1575,6 +1624,7 @@ mod spy_tests {
         assert_eq!(
             *service.reporter.report.borrow(),
             vec![(
+                Level::Error,
                 "admin".to_string(),
                 "cache service not available".to_string()
             )]
@@ -1728,6 +1778,7 @@ mod spy_tests {
         assert_eq!(
             *service.reporter.report.borrow(),
             vec![(
+                Level::Error,
                 "admin".to_string(),
                 "cache service not available".to_string()
             )]
@@ -1839,6 +1890,7 @@ mod spy_tests {
         assert_eq!(
             *service.reporter.report.borrow(),
             vec![(
+                Level::Error,
                 "admin".to_string(),
                 "cache service not available".to_string()
             )]
@@ -1910,6 +1962,8 @@ mod spy_tests {
 #[cfg(test)]
 mod error_stub_tests {
     use std::cell::RefCell;
+
+    use self::location::Location;
 
     use super::*;
     use crate::{
@@ -2018,7 +2072,13 @@ mod error_stub_tests {
 
     struct DummyReporter;
     impl Reporter for DummyReporter {
-        fn send_report(&self, _to: &str, _message: &str) -> Result<(), ReporterError> {
+        fn send_report(
+            &self,
+            _level: Level,
+            _to: &str,
+            _message: &str,
+            _loc: Location,
+        ) -> Result<(), ReporterError> {
             Ok(())
         }
     }

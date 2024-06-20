@@ -1,7 +1,7 @@
 pub use log::{error, trace};
 pub use std::rc::Rc;
 
-use crate::reporter;
+use crate::reporter::{self, Level, Location};
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -36,7 +36,13 @@ impl Client {
 impl reporter::Reporter for Client {
     // to: queue name
     // message: message to send
-    fn send_report(&self, to: &str, message: &str) -> Result<(), reporter::ReporterError> {
+    fn send_report(
+        &self,
+        _level: Level, // TODO: use level
+        to: &str,
+        message: &str,
+        _loc: Location, // TODO: use loc
+    ) -> Result<(), reporter::ReporterError> {
         self.async_runtime.block_on(async {
             let chan = self.conn.create_channel().await.map_err(|e| {
                 error!("failed to create channel: {}", e);
