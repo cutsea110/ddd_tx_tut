@@ -1,4 +1,5 @@
 pub use log::{error, trace};
+use serde::{Deserialize, Serialize};
 pub use std::rc::Rc;
 
 use crate::reporter::{self, Level, Location};
@@ -33,15 +34,22 @@ impl Client {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Payload<'a> {
+    level: Level,
+    message: &'a str,
+    location: Location<'a>,
+}
+
 impl reporter::Reporter for Client {
     // to: queue name
     // message: message to send
     fn send_report(
         &self,
-        _level: Level, // TODO: use level
+        level: Level,
         to: &str,
         message: &str,
-        _loc: Location, // TODO: use loc
+        loc: Location,
     ) -> Result<(), reporter::ReporterError> {
         self.async_runtime.block_on(async {
             let chan = self.conn.create_channel().await.map_err(|e| {
@@ -60,11 +68,17 @@ impl reporter::Reporter for Client {
                 reporter::ReporterError::Unavailable(e.to_string())
             })?;
             trace!("queue declared: {}", to);
+            let payload = serde_json::to_string(&Payload {
+                level,
+                message,
+                location: loc,
+            })
+            .unwrap_or_default();
             chan.basic_publish(
                 "",
                 to,
                 lapin::options::BasicPublishOptions::default(),
-                message.as_bytes(),
+                payload.as_bytes(),
                 lapin::BasicProperties::default(),
             )
             .await
