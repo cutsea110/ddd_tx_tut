@@ -71,7 +71,7 @@ pub trait PersonService<'a, Ctx> {
                 .run(ctx)
         })
         .and_then(|(id, p)| {
-            let msg = format!(r#"{{ "person_id": {} }}"#, id);
+            let msg = format!("registered person_id: {}", id);
             if let Err(e) = reporter.send_report(Level::Info, "entry_person", &msg, location!()) {
                 error!("reporter service not available: {}", e);
             }
@@ -122,7 +122,7 @@ pub trait PersonService<'a, Ctx> {
                     Ok(id) => {
                         ids.push(id);
 
-                        let msg = format!(r#"{{ "person_id": {} }}"#, id);
+                        let msg = format!("registered person_id: {}", id);
                         if let Err(e) =
                             reporter.send_report(Level::Info, "entry_person", &msg, location!())
                         {
@@ -175,7 +175,7 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| usecase.death(id, death_date).run(ctx))
             .and_then(|_| {
-                let msg = format!(r#"{{ "person_id": {}, "death_date": {} }}"#, id, death_date);
+                let msg = format!("death person_id: {}, death_date: {}", id, death_date);
                 if let Err(e) = reporter.send_report(Level::Info, "death_person", &msg, location!())
                 {
                     error!("reporter service not available: {}", e);
@@ -197,7 +197,7 @@ pub trait PersonService<'a, Ctx> {
 
         self.run_tx(move |usecase, ctx| usecase.remove(id).run(ctx))
             .and_then(|_| {
-                let msg = format!(r#"{{ "person_id": {} }}"#, id);
+                let msg = format!("unregistered person_id: {}", id);
                 if let Err(e) =
                     reporter.send_report(Level::Info, "unregister_person", &msg, location!())
                 {
@@ -924,7 +924,7 @@ mod spy_tests {
             service.get_reporter().report.borrow()[0],
             (
                 "entry_person".to_string(),
-                r#"{ "person_id": 42 }"#.to_string()
+                "registered person_id: 42".to_string()
             )
         );
     }
@@ -984,15 +984,15 @@ mod spy_tests {
             vec![
                 (
                     "entry_person".to_string(),
-                    r#"{ "person_id": 42 }"#.to_string()
+                    "registered person_id: 42".to_string()
                 ),
                 (
                     "entry_person".to_string(),
-                    r#"{ "person_id": 42 }"#.to_string()
+                    "registered person_id: 42".to_string()
                 ),
                 (
                     "entry_person".to_string(),
-                    r#"{ "person_id": 42 }"#.to_string()
+                    "registered person_id: 42".to_string()
                 )
             ]
         );
@@ -1078,7 +1078,7 @@ mod spy_tests {
             service.get_reporter().report.borrow()[0],
             (
                 "death_person".to_string(),
-                r#"{ "person_id": 42, "death_date": 2020-07-19 }"#.to_string()
+                "death person_id: 42, death_date: 2020-07-19".to_string()
             )
         );
     }
@@ -1122,7 +1122,7 @@ mod spy_tests {
             *service.get_reporter().report.borrow(),
             vec![(
                 "unregister_person".to_string(),
-                r#"{ "person_id": 42 }"#.to_string()
+                "unregistered person_id: 42".to_string()
             )]
         );
     }
