@@ -2,7 +2,7 @@ pub use log::{error, trace};
 use serde::{Deserialize, Serialize};
 pub use std::rc::Rc;
 
-use crate::reporter::{self, Level, Location};
+use crate::reporter::{self, Level, Location, Observer};
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -41,10 +41,10 @@ struct Payload<'a> {
     location: Location<'a>,
 }
 
-impl reporter::Reporter for Client {
+impl Observer for Client {
     // to: queue name
     // message: message to send
-    fn send_report(
+    fn notify(
         &self,
         level: Level,
         to: &str,
