@@ -41,7 +41,7 @@ pub trait PersonOutputBoundary<T, E> {
 
 pub trait PersonService<'a, Ctx> {
     type U: PersonUsecase<Ctx>;
-    type N: Reporter;
+    type N: Reporter<'a>;
 
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
     where

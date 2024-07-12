@@ -24,6 +24,7 @@ use cached_service::PersonCachedService;
 use dao::HavePersonDao;
 use domain::date;
 use pg_db::PgPersonDao;
+use reporter::{DefaultReporter, Reporter};
 use service::{PersonOutputBoundary, PersonService, ServiceError};
 use usecase::{PersonUsecase, UsecaseError};
 
@@ -48,7 +49,7 @@ impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
 pub struct PersonServiceImpl {
     db_client: postgres::Client,
     cache_client: redis::Client,
-    mq_client: rabbitmq::Client,
+    reporter: DefaultReporter<'static>,
     usecase: RefCell<PersonUsecaseImpl>,
 }
 impl PersonServiceImpl {
@@ -56,20 +57,22 @@ impl PersonServiceImpl {
         let db_client = postgres::Client::connect(db_uri, NoTls).expect("create db client");
         let cache_client = redis::Client::open(cache_uri).expect("create cache client");
         let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
+        let mut reporter = DefaultReporter::new();
+        reporter.register(mq_client).expect("register observer");
 
         let usecase = RefCell::new(PersonUsecaseImpl::new(PgPersonDao));
 
         Self {
             db_client,
             cache_client,
-            mq_client,
+            reporter,
             usecase,
         }
     }
 }
 impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     type U = PersonUsecaseImpl;
-    type N = rabbitmq::Client;
+    type N = DefaultReporter<'a>;
 
     // service is responsible for transaction management
     fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
@@ -103,7 +106,7 @@ impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
     }
 
     fn get_reporter(&self) -> Self::N {
-        self.mq_client.clone()
+        self.reporter.clone()
     }
 }
 impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
