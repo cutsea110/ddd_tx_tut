@@ -404,7 +404,16 @@ mod fake_tests {
     }
 
     struct DummyReporter;
-    impl Reporter for DummyReporter {
+    impl Reporter<'_> for DummyReporter {
+        fn register(
+            &mut self,
+            _observer: impl crate::reporter::Observer,
+        ) -> Result<(), ReporterError> {
+            Ok(())
+        }
+        fn get_observers(&self) -> Vec<&dyn crate::reporter::Observer> {
+            vec![]
+        }
         fn send_report(
             &self,
             _level: Level,
@@ -822,7 +831,16 @@ mod spy_tests {
     struct SpyReporter {
         report: Rc<RefCell<Vec<(String, String)>>>,
     }
-    impl Reporter for SpyReporter {
+    impl Reporter<'_> for SpyReporter {
+        fn register(
+            &mut self,
+            _observer: impl crate::reporter::Observer,
+        ) -> Result<(), ReporterError> {
+            Ok(())
+        }
+        fn get_observers(&self) -> Vec<&dyn crate::reporter::Observer> {
+            vec![]
+        }
         fn send_report(
             &self,
             _level: Level,
@@ -1299,7 +1317,16 @@ mod error_stub_tests {
         unregister_person_result: Result<(), ReporterError>,
         otherwise_result: Result<(), ReporterError>,
     }
-    impl Reporter for StubReporter {
+    impl Reporter<'_> for StubReporter {
+        fn register(
+            &mut self,
+            _observer: impl crate::reporter::Observer,
+        ) -> Result<(), ReporterError> {
+            Ok(())
+        }
+        fn get_observers(&self) -> Vec<&dyn crate::reporter::Observer> {
+            vec![]
+        }
         fn send_report(
             &self,
             _level: Level,
