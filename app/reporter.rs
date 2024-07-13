@@ -70,3 +70,69 @@ impl<'a> Reporter<'a> for DefaultReporter<'a> {
         self.observers.iter().map(|o| o.as_ref()).collect()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::location::Location;
+    use std::cell::RefCell;
+
+    #[derive(Debug, Clone)]
+    struct MockObserver {
+        messages: Rc<RefCell<Vec<(Level, String, String)>>>,
+    }
+    impl Observer for MockObserver {
+        fn notify(
+            &self,
+            level: Level,
+            to: &str,
+            message: &str,
+            _loc: Location,
+        ) -> Result<(), ReporterError> {
+            self.messages
+                .borrow_mut()
+                .push((level, to.to_string(), message.to_string()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_reporter_for_single_observer() {
+        let observer = MockObserver {
+            messages: Rc::new(RefCell::new(Vec::new())),
+        };
+        let mut reporter = DefaultReporter::new();
+        reporter.register(observer.clone()).unwrap();
+        reporter
+            .send_report(Level::Info, "to", "message", location!())
+            .unwrap();
+        assert_eq!(
+            observer.messages.borrow().as_slice(),
+            &[(Level::Info, "to".to_string(), "message".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_reporter_for_multi_observers() {
+        let observer1 = MockObserver {
+            messages: Rc::new(RefCell::new(Vec::new())),
+        };
+        let observer2 = MockObserver {
+            messages: Rc::new(RefCell::new(Vec::new())),
+        };
+        let mut reporter = DefaultReporter::new();
+        reporter.register(observer1.clone()).unwrap();
+        reporter.register(observer2.clone()).unwrap();
+        reporter
+            .send_report(Level::Info, "to", "message", location!())
+            .unwrap();
+        assert_eq!(
+            observer1.messages.borrow().as_slice(),
+            &[(Level::Info, "to".to_string(), "message".to_string())]
+        );
+        assert_eq!(
+            observer2.messages.borrow().as_slice(),
+            &[(Level::Info, "to".to_string(), "message".to_string())]
+        );
+    }
+}
