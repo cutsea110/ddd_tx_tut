@@ -44,7 +44,7 @@ struct Payload<'a> {
 impl Observer for Client {
     // to: queue name
     // message: message to send
-    fn notify(
+    fn handle_notification(
         &self,
         level: Level,
         to: &str,

@@ -19,7 +19,7 @@ pub enum Level {
 }
 
 pub trait Observer {
-    fn notify(
+    fn handle_notification(
         &self,
         level: Level,
         to: &str,
@@ -40,7 +40,7 @@ pub trait Reporter<'a> {
     ) -> Result<(), ReporterError> {
         for observer in self.get_observers() {
             observer
-                .notify(level.clone(), to, message, loc.clone())
+                .handle_notification(level.clone(), to, message, loc.clone())
                 .or_else(|e| {
                     eprintln!("reporter error: {}", e);
                     Ok(())
@@ -82,7 +82,7 @@ mod test {
         messages: Rc<RefCell<Vec<(Level, String, String)>>>,
     }
     impl Observer for MockObserver {
-        fn notify(
+        fn handle_notification(
             &self,
             level: Level,
             to: &str,
