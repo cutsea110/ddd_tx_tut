@@ -5,7 +5,7 @@
 ## Usage
 
 ```bash
-docker-compose up -d
+docker compose up -d
 export DATABASE_URI="postgres://admin:adminpass@localhost:15432/sampledb"
 export CACHE_URI="redis://:adminpass@localhost:16379"
 export AMQP_URI="amqp://admin:adminpass@localhost:5672/%2f"
@@ -27,7 +27,7 @@ psql (16.2 (Debian 16.2-1)、サーバー 15.5)
 sampledb=#
 ```
 
-The postgres db's named volumes are empty in `docker-compose.yml`, so you lost permanent data after `docker-compose down -v`.
+The postgres db's named volumes are empty in `docker-compose.yml`, so you lost permanent data after `docker compose down -v`.
 
 
 If you check nosql(dynamodb-local), do like this:
@@ -83,7 +83,7 @@ docker exec $(docker ps -f "name=rabbitmq" --format "{{.ID}}") \
        rabbitmqadmin help subcommands
 ```
 
-The redis cache's named volumes are empty in `docker-compose.yml`, so you lost cache data after `docker-compose down -v`.
+The redis cache's named volumes are empty in `docker-compose.yml`, so you lost cache data after `docker compose down -v`.
 
 ## Run
 
