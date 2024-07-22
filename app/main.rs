@@ -10,9 +10,8 @@ mod cached_service;
 mod dao;
 mod domain;
 mod dto;
-mod location;
 #[macro_use]
-mod macros;
+mod location;
 mod pg_db;
 mod rabbitmq;
 mod redis_cache;

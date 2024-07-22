@@ -7,3 +7,14 @@ pub struct Location<'a> {
     pub line: u32,
     pub column: u32,
 }
+
+#[macro_export]
+macro_rules! location {
+    () => {
+        crate::location::Location {
+            file: file!(),
+            line: line!(),
+            column: column!(),
+        }
+    };
+}
