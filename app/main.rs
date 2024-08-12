@@ -137,7 +137,9 @@ impl PersonOutputBoundary<(u64, u64), ServiceError> for PersonBatchImportPresent
 
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
+        unsafe {
+            std::env::set_var("RUST_LOG", "info");
+        };
     }
     env_logger::init();
 
