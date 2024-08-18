@@ -1,7 +1,7 @@
 version: '3'
 services:
   db:
-    image: postgres:16.3-alpine
+    image: postgres:16.4-alpine
     container_name: postgres
     ports:
       - 15432:5432
@@ -14,14 +14,14 @@ services:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
   cache:
-    image: redis:7.2-alpine
+    image: redis:7.4-alpine
     container_name: redis
     ports:
       - 16379:6379
     command: redis-server --save 20 1 --loglevel warning --requirepass adminpass
 
   mq:
-    image: rabbitmq:3.13.2-management-alpine
+    image: rabbitmq:3.13.6-management-alpine
     container_name: rabbitmq
     ports:
       - 5672:5672
