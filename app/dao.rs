@@ -28,5 +28,5 @@ pub trait PersonDao<Ctx> {
 }
 
 pub trait HavePersonDao<Ctx> {
-    fn get_dao(&self) -> Box<&impl PersonDao<Ctx>>;
+    fn get_dao(&self) -> &impl PersonDao<Ctx>;
 }

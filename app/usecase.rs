@@ -225,8 +225,8 @@ mod fake_tests {
         dao: FakePersonDao,
     }
     impl HavePersonDao<()> for TargetPersonUsecase {
-        fn get_dao(&self) -> Box<&impl PersonDao<()>> {
-            Box::new(&self.dao)
+        fn get_dao(&self) -> &impl PersonDao<()> {
+            &self.dao
         }
     }
     impl PersonUsecase<()> for TargetPersonUsecase {}
@@ -540,8 +540,8 @@ mod spy_tests {
         dao: SpyPersonDao,
     }
     impl HavePersonDao<()> for TargetPersonUsecase {
-        fn get_dao(&self) -> Box<&impl PersonDao<()>> {
-            Box::new(&self.dao)
+        fn get_dao(&self) -> &impl PersonDao<()> {
+            &self.dao
         }
     }
     impl PersonUsecase<()> for TargetPersonUsecase {}
@@ -810,8 +810,8 @@ mod error_stub_tests {
         dao: StubPersonDao,
     }
     impl HavePersonDao<()> for TargetPersonUsecase {
-        fn get_dao(&self) -> Box<&impl PersonDao<()>> {
-            Box::new(&self.dao)
+        fn get_dao(&self) -> &impl PersonDao<()> {
+            &self.dao
         }
     }
     impl PersonUsecase<()> for TargetPersonUsecase {}

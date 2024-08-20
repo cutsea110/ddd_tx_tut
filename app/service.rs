@@ -320,8 +320,8 @@ mod fake_tests {
         dao: DummyPersonDao,
     }
     impl HavePersonDao<()> for FakePersonUsecase {
-        fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
-            Box::new(&self.dao)
+        fn get_dao(&self) -> &impl PersonDao<()> {
+            &self.dao
         }
     }
     impl PersonUsecase<()> for FakePersonUsecase {
@@ -748,8 +748,8 @@ mod spy_tests {
         remove: RefCell<Vec<PersonId>>,
     }
     impl HavePersonDao<()> for SpyPersonUsecase {
-        fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
-            Box::new(&self.dao)
+        fn get_dao(&self) -> &impl PersonDao<()> {
+            &self.dao
         }
     }
     impl PersonUsecase<()> for SpyPersonUsecase {
@@ -1248,8 +1248,8 @@ mod error_stub_tests {
         remove_result: Result<(), UsecaseError>,
     }
     impl HavePersonDao<()> for StubPersonUsecase {
-        fn get_dao<'b>(&'b self) -> Box<&impl PersonDao<()>> {
-            Box::new(&self.dao)
+        fn get_dao(&self) -> &impl PersonDao<()> {
+            &self.dao
         }
     }
     impl PersonUsecase<()> for StubPersonUsecase {

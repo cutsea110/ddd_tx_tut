@@ -40,8 +40,8 @@ impl PersonUsecaseImpl {
 }
 impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
 impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
-    fn get_dao<'b>(&'b self) -> Box<&impl dao::PersonDao<postgres::Transaction<'a>>> {
-        Box::new(&self.dao)
+    fn get_dao(&self) -> &impl dao::PersonDao<postgres::Transaction<'a>> {
+        &self.dao
     }
 }
 
