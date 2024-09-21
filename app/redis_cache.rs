@@ -77,7 +77,10 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
         trace!("load person: {}", id);
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
-            conn.set(&key, &person)
+            // NOTE: this is current workaround for: https://github.com/rust-lang/rust/issues/123748
+            // reference: https://github.com/redis-rs/redis-rs/issues/1322
+            let _: () = conn
+                .set(&key, &person)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
             trace!("person loaded into cache: {:?}", person);
             Ok(())
@@ -87,7 +90,10 @@ impl PersonCao<redis::Connection> for RedisPersonCao {
         trace!("unload person: {}", id);
         tx_rs::with_tx(move |conn: &mut redis::Connection| {
             let key = format!("person:{}", id);
-            conn.del(&key)
+            // NOTE: this is current workaround for: https://github.com/rust-lang/rust/issues/123748
+            // reference: https://github.com/redis-rs/redis-rs/issues/1322
+            let _: () = conn
+                .del(&key)
                 .map_err(|e| CaoError::Unavailable(e.to_string()))?;
             trace!("person unloaded from cache: {}", id);
             Ok(())
