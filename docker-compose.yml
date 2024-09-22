@@ -21,7 +21,7 @@ services:
     command: redis-server --save 20 1 --loglevel warning --requirepass adminpass
 
   mq:
-    image: rabbitmq:3.13.6-management-alpine
+    image: rabbitmq:3.13.7-management-alpine
     container_name: rabbitmq
     ports:
       - 5672:5672
