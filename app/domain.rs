@@ -32,22 +32,6 @@ pub struct Person {
 }
 
 impl Person {
-    pub fn new(
-        name: &str,
-        birth_date: NaiveDate,
-        death_date: Option<NaiveDate>,
-        data: Option<&str>,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            birth_date,
-            death_date,
-            data: data.map(|d| d.to_string()),
-
-            revision: 0,
-        }
-    }
-
     pub fn dead_at(&mut self, date: NaiveDate) -> Result<(), PersonDomainError> {
         if self.death_date.is_some() {
             warn!("person is already dead: {}", self);
@@ -73,6 +57,24 @@ impl Person {
         dto.set_death_date(self.death_date);
         dto.set_data(self.data.as_deref());
         dto.set_revision(self.revision);
+    }
+}
+#[cfg(test)]
+impl Person {
+    pub fn new(
+        name: &str,
+        birth_date: NaiveDate,
+        death_date: Option<NaiveDate>,
+        data: Option<&str>,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            birth_date,
+            death_date,
+            data: data.map(|d| d.to_string()),
+
+            revision: 0,
+        }
     }
 }
 impl From<PersonDto> for Person {
