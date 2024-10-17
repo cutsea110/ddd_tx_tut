@@ -1,11 +1,11 @@
 use chrono::NaiveDate;
 use log::{trace, warn};
 use thiserror::Error;
+use tx_rs::Tx;
 
 use crate::dao::{DaoError, HavePersonDao, PersonDao};
 use crate::domain::{Person, PersonDomainError, PersonId};
 use crate::dto::PersonDto;
-use tx_rs::Tx;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum UsecaseError {

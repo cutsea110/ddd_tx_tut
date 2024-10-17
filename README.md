@@ -1,4 +1,4 @@
-# tx-rs
+# DDD with tx-rs tutorial
 
 [![Rust](https://github.com/cutsea110/tx-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/cutsea110/tx-rs/actions/workflows/rust.yml)
 

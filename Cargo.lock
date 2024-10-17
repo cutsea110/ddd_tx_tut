@@ -2115,7 +2115,13 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tx-rs 0.1.0 (git+https://github.com/cutsea110/fragments.git?branch=main)",
 ]
+
+[[package]]
+name = "tx-rs"
+version = "0.1.0"
+source = "git+https://github.com/cutsea110/fragments.git?branch=main#ad253f2fb6cd7fa4ba8abe0f1bdd61e84fafa57c"
 
 [[package]]
 name = "typenum"
