@@ -278,7 +278,7 @@ dependencies = [
  "futures-lite 2.4.0",
  "parking",
  "polling 3.7.3",
- "rustix 0.38.38",
+ "rustix 0.38.39",
  "slab",
  "tracing",
  "windows-sys 0.59.0",
@@ -444,9 +444,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.34"
+version = "1.1.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67b9470d453346108f93a59222a9a1a5724db32d0a4727b7ab7ace4b4d822dc9"
+checksum = "baee610e9452a8f6f0a1b6194ec09ff9e2d85dea54432acdae41aa0761c95d70"
 dependencies = [
  "shlex",
 ]
@@ -1524,7 +1524,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi 0.4.0",
  "pin-project-lite",
- "rustix 0.38.38",
+ "rustix 0.38.39",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -1757,9 +1757,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.38"
+version = "0.38.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa260229e6538e52293eeb577aabd09945a09d6d9cc0fc550ed7529056c2e32a"
+checksum = "375116bee2be9ed569afe2154ea6a99dfdffd257f533f187498c2a8f5feaf4ee"
 dependencies = [
  "bitflags 2.6.0",
  "errno",
