@@ -579,6 +579,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
 
 [[package]]
+name = "ddd"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "env_logger",
+ "itertools",
+ "lapin",
+ "log",
+ "postgres",
+ "redis",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tx-rs",
+]
+
+[[package]]
 name = "der"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2249,25 +2268,6 @@ name = "tracing-core"
 version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e672c95779cf947c5311f83787af4fa8fffd12fb27e4993211a84bdfd9610f9c"
-
-[[package]]
-name = "tx-rs"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "env_logger",
- "itertools",
- "lapin",
- "log",
- "postgres",
- "redis",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tx-rs 0.1.0 (git+https://github.com/cutsea110/fragments.git?branch=main)",
-]
 
 [[package]]
 name = "tx-rs"

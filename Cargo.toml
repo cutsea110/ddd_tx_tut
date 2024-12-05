@@ -1,5 +1,5 @@
 [package]
-name = "tx-rs"
+name = "ddd"
 version = "0.1.0"
 edition = "2021"
 
