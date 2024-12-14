@@ -14,7 +14,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 
     fn get_cao(&self) -> Self::C;
 
-    fn cached_register(
+    fn register(
         &'a mut self,
         name: &str,
         birth_date: NaiveDate,
@@ -31,7 +31,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let cao = self.get_cao();
         let reporter = self.get_reporter();
 
-        let result = self.register(name, birth_date, death_date, data);
+        let result = PersonService::register(self, name, birth_date, death_date, data);
         trace!("register person to db: {:?}", result);
 
         if let Ok((id, person)) = &result {
@@ -54,7 +54,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         result
     }
 
-    fn cached_find(&'a mut self, id: PersonId) -> Result<Option<PersonDto>, ServiceError> {
+    fn find(&'a mut self, id: PersonId) -> Result<Option<PersonDto>, ServiceError> {
         trace!("cached find: {}", id);
         let cao = self.get_cao();
         let reporter = self.get_reporter();
@@ -66,7 +66,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         }
         trace!("cache miss!: {}", id);
 
-        let result = self.find(id)?;
+        let result = PersonService::find(self, id)?;
         trace!("find person in db: {:?}", result);
 
         // if the person is found in the db, load it to the cache
@@ -90,7 +90,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         Ok(result)
     }
 
-    fn cached_batch_import(
+    fn batch_import(
         &'a mut self,
         persons: Vec<PersonDto>,
         out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
@@ -105,7 +105,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         let cao = self.get_cao();
         let reporter = self.get_reporter();
 
-        let ids = self.batch_import(persons.clone().into_iter(), out_port.clone())?;
+        let ids = PersonService::batch_import(self, persons.clone().into_iter(), out_port.clone())?;
 
         // load all persons to the cache
         for (id, person) in ids.iter().zip(persons.iter()) {
@@ -128,12 +128,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         Ok(ids)
     }
 
-    fn cached_list_all(&'a mut self) -> Result<Vec<(PersonId, PersonDto)>, ServiceError> {
+    fn list_all(&'a mut self) -> Result<Vec<(PersonId, PersonDto)>, ServiceError> {
         trace!("cached list all");
         let cao = self.get_cao();
         let reporter = self.get_reporter();
 
-        let result = self.list_all()?;
+        let result = PersonService::list_all(self)?;
 
         // load all persons to the cache
         for (id, person) in result.iter() {
@@ -156,12 +156,12 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         Ok(result)
     }
 
-    fn cached_death(&'a mut self, id: PersonId, death_date: NaiveDate) -> Result<(), ServiceError> {
+    fn death(&'a mut self, id: PersonId, death_date: NaiveDate) -> Result<(), ServiceError> {
         trace!("cached death: {} {}", id, death_date);
         let cao = self.get_cao();
         let reporter = self.get_reporter();
 
-        let _ = self.death(id, death_date)?;
+        let _ = PersonService::death(self, id, death_date)?;
         trace!("update death date in db: {} {}", id, death_date);
 
         // even if delete from db failed below, this cache clear is not a matter.
@@ -183,7 +183,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
         Ok(())
     }
 
-    fn cached_unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
+    fn unregister(&'a mut self, id: PersonId) -> Result<(), ServiceError> {
         trace!("cached unregister: {}", id);
         let cao = self.get_cao();
         let reporter = self.get_reporter();
@@ -204,7 +204,7 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
             trace!("unload from cache: {}", id);
         }
 
-        let result = self.unregister(id);
+        let result = PersonService::unregister(self, id);
         trace!("delete from db: {}", id);
 
         result

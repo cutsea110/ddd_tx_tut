@@ -1,9 +1,5 @@
-use log::{error, trace};
-use postgres::NoTls;
-use std::cell::RefCell;
 use std::env;
 use std::rc::Rc;
-use std::time::Duration;
 
 mod cache;
 mod cached_service;
@@ -19,121 +15,133 @@ mod reporter;
 mod service;
 mod usecase;
 
-use cached_service::PersonCachedService;
-use dao::HavePersonDao;
-use domain::date;
-use pg_db::PgPersonDao;
-use reporter::{DefaultReporter, Reporter};
-use service::{PersonOutputBoundary, PersonService, ServiceError};
-use usecase::{PersonUsecase, UsecaseError};
-
 use crate::dto::PersonDto;
+use domain::date;
 
-#[derive(Debug, Clone)]
-pub struct PersonUsecaseImpl {
-    dao: PgPersonDao,
-}
-impl PersonUsecaseImpl {
-    pub fn new(dao: PgPersonDao) -> Self {
-        Self { dao }
+mod person_impl {
+    use log::{error, trace};
+    use postgres::NoTls;
+    use std::cell::RefCell;
+    use std::time::Duration;
+
+    use super::cached_service::PersonCachedService;
+    use super::dao::{self, HavePersonDao};
+    use super::pg_db::PgPersonDao;
+    use super::rabbitmq;
+    use super::redis_cache;
+    use super::reporter::{DefaultReporter, Reporter};
+    use super::service::{PersonOutputBoundary, PersonService, ServiceError};
+    use super::usecase::{PersonUsecase, UsecaseError};
+
+    #[derive(Debug, Clone)]
+    pub struct PersonUsecaseImpl {
+        dao: PgPersonDao,
     }
-}
-impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
-impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
-    fn get_dao(&self) -> &impl dao::PersonDao<postgres::Transaction<'a>> {
-        &self.dao
-    }
-}
-
-pub struct PersonServiceImpl {
-    db_client: postgres::Client,
-    cache_client: redis::Client,
-    reporter: DefaultReporter<'static>,
-    usecase: RefCell<PersonUsecaseImpl>,
-}
-impl PersonServiceImpl {
-    pub fn new(db_uri: &str, cache_uri: &str, mq_uri: &str) -> Self {
-        let db_client = postgres::Client::connect(db_uri, NoTls).expect("create db client");
-        let cache_client = redis::Client::open(cache_uri).expect("create cache client");
-        let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
-        let mut reporter = DefaultReporter::new();
-        reporter.register(mq_client).expect("register observer");
-
-        let usecase = RefCell::new(PersonUsecaseImpl::new(PgPersonDao));
-
-        Self {
-            db_client,
-            cache_client,
-            reporter,
-            usecase,
+    impl PersonUsecaseImpl {
+        pub fn new(dao: PgPersonDao) -> Self {
+            Self { dao }
         }
     }
-}
-impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
-    type U = PersonUsecaseImpl;
-    type N = DefaultReporter<'a>;
+    impl<'a> PersonUsecase<postgres::Transaction<'a>> for PersonUsecaseImpl {}
+    impl<'a> HavePersonDao<postgres::Transaction<'a>> for PersonUsecaseImpl {
+        fn get_dao(&self) -> &impl dao::PersonDao<postgres::Transaction<'a>> {
+            &self.dao
+        }
+    }
 
-    // service is responsible for transaction management
-    fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
-    where
-        F: FnOnce(
-            &mut PersonUsecaseImpl,
-            &mut postgres::Transaction<'a>,
-        ) -> Result<T, UsecaseError>,
+    pub struct PersonServiceImpl {
+        db_client: postgres::Client,
+        cache_client: redis::Client,
+        reporter: DefaultReporter<'static>,
+        usecase: RefCell<PersonUsecaseImpl>,
+    }
+    impl PersonServiceImpl {
+        pub fn new(db_uri: &str, cache_uri: &str, mq_uri: &str) -> Self {
+            let db_client = postgres::Client::connect(db_uri, NoTls).expect("create db client");
+            let cache_client = redis::Client::open(cache_uri).expect("create cache client");
+            let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
+            let mut reporter = DefaultReporter::new();
+            reporter.register(mq_client).expect("register observer");
+
+            let usecase = RefCell::new(PersonUsecaseImpl::new(PgPersonDao));
+
+            Self {
+                db_client,
+                cache_client,
+                reporter,
+                usecase,
+            }
+        }
+    }
+    impl<'a> PersonService<'a, postgres::Transaction<'a>> for PersonServiceImpl {
+        type U = PersonUsecaseImpl;
+        type N = DefaultReporter<'a>;
+
+        // service is responsible for transaction management
+        fn run_tx<T, F>(&'a mut self, f: F) -> Result<T, ServiceError>
+        where
+            F: FnOnce(
+                &mut PersonUsecaseImpl,
+                &mut postgres::Transaction<'a>,
+            ) -> Result<T, UsecaseError>,
+        {
+            let mut ctx = self.db_client.transaction().map_err(|e| {
+                error!("failed to start transaction: {}", e);
+                ServiceError::ServiceUnavailable(format!("{}", e))
+            })?;
+            trace!("transaction started");
+
+            let mut usecase = self.usecase.borrow_mut();
+            let res = f(&mut usecase, &mut ctx);
+
+            match res {
+                Ok(v) => {
+                    ctx.commit().expect("commit");
+                    trace!("transaction committed");
+                    Ok(v)
+                }
+                Err(e) => {
+                    ctx.rollback().expect("rollback");
+                    error!("transaction rollbacked");
+                    Err(ServiceError::TransactionFailed(e))
+                }
+            }
+        }
+
+        fn get_reporter(&self) -> Self::N {
+            self.reporter.clone()
+        }
+    }
+    impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
+        for PersonServiceImpl
     {
-        let mut ctx = self.db_client.transaction().map_err(|e| {
-            error!("failed to start transaction: {}", e);
-            ServiceError::ServiceUnavailable(format!("{}", e))
-        })?;
-        trace!("transaction started");
+        type C = redis_cache::RedisPersonCao;
 
-        let mut usecase = self.usecase.borrow_mut();
-        let res = f(&mut usecase, &mut ctx);
-
-        match res {
-            Ok(v) => {
-                ctx.commit().expect("commit");
-                trace!("transaction committed");
-                Ok(v)
-            }
-            Err(e) => {
-                ctx.rollback().expect("rollback");
-                error!("transaction rollbacked");
-                Err(ServiceError::TransactionFailed(e))
-            }
+        fn get_cao(&self) -> Self::C {
+            redis_cache::RedisPersonCao::new(self.cache_client.clone(), Duration::from_secs(2))
         }
     }
 
-    fn get_reporter(&self) -> Self::N {
-        self.reporter.clone()
+    // a crude presenter
+    pub struct PersonBatchImportPresenterImpl;
+    impl PersonOutputBoundary<(u64, u64), ServiceError> for PersonBatchImportPresenterImpl {
+        fn started(&self) {
+            println!("service started");
+        }
+        fn in_progress(&self, progress: (u64, u64)) {
+            println!("{} of {} done", progress.0, progress.1);
+        }
+        fn completed(&self) {
+            println!("service completed");
+        }
+        fn aborted(&self, err: ServiceError) {
+            println!("service aborted: {}", err);
+        }
     }
 }
-impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
-    for PersonServiceImpl
-{
-    type C = redis_cache::RedisPersonCao;
 
-    fn get_cao(&self) -> Self::C {
-        redis_cache::RedisPersonCao::new(self.cache_client.clone(), Duration::from_secs(2))
-    }
-}
-
-// a crude presenter
-struct PersonBatchImportPresenterImpl;
-impl PersonOutputBoundary<(u64, u64), ServiceError> for PersonBatchImportPresenterImpl {
-    fn started(&self) {
-        println!("service started");
-    }
-    fn in_progress(&self, progress: (u64, u64)) {
-        println!("{} of {} done", progress.0, progress.1);
-    }
-    fn completed(&self) {
-        println!("service completed");
-    }
-    fn aborted(&self, err: ServiceError) {
-        println!("service aborted: {}", err);
-    }
-}
+use cached_service::PersonCachedService;
+use person_impl::{PersonBatchImportPresenterImpl, PersonServiceImpl};
 
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
@@ -162,22 +170,22 @@ fn main() {
     // register, find and death, then unregister
     {
         let (id, person) = service
-            .cached_register("poor man", date(2001, 9, 11), None, "one person")
+            .register("poor man", date(2001, 9, 11), None, "one person")
             .expect("register one person");
         println!("id:{} {:?}", id, person);
 
-        if let Some(p) = service.cached_find(id).expect("find person") {
+        if let Some(p) = service.find(id).expect("find person") {
             println!("cache hit:{:?}", p);
 
             let death_date = date(2011, 3, 11);
             println!("death {} at:{:?}", id, death_date);
-            service.cached_death(id, death_date).expect("kill person");
+            service.death(id, death_date).expect("kill person");
 
-            if let Some(p) = service.cached_find(id).expect("find dead person") {
+            if let Some(p) = service.find(id).expect("find dead person") {
                 println!("dead person: {:?}", p);
             }
         }
-        service.cached_unregister(id).expect("delete person");
+        service.unregister(id).expect("delete person");
     }
 
     // batch import
@@ -211,7 +219,7 @@ fn main() {
         .collect::<Vec<_>>();
 
         let ids = service
-            .cached_batch_import(persons.clone(), Rc::new(PersonBatchImportPresenterImpl))
+            .batch_import(persons.clone(), Rc::new(PersonBatchImportPresenterImpl))
             .expect("batch import");
         println!("batch import done");
 
@@ -220,9 +228,9 @@ fn main() {
 
     // list all
     {
-        let persons = service.cached_list_all().expect("list all");
+        let persons = service.list_all().expect("list all");
         for (id, _) in &persons {
-            if let Some(p) = service.cached_find(*id).expect("find person") {
+            if let Some(p) = service.find(*id).expect("find person") {
                 println!("cache hit:{} {:?}", id, p);
             }
         }
@@ -232,7 +240,7 @@ fn main() {
     {
         for id in ids {
             println!("unregister id:{}", id);
-            service.cached_unregister(id).expect("unregister");
+            service.unregister(id).expect("unregister");
         }
     }
 
