@@ -13,6 +13,7 @@ mod rabbitmq;
 mod redis_cache;
 mod reporter;
 mod service;
+mod syslog;
 mod usecase;
 
 use crate::dto::PersonDto;
@@ -22,6 +23,7 @@ mod person_impl {
     use log::{error, trace};
     use postgres::NoTls;
     use std::cell::RefCell;
+    use std::process;
     use std::time::Duration;
 
     use super::cached_service::PersonCachedService;
@@ -60,8 +62,15 @@ mod person_impl {
             let db_client = postgres::Client::connect(db_uri, NoTls).expect("create db client");
             let cache_client = redis::Client::open(cache_uri).expect("create cache client");
             let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
+            let syslog_client = crate::syslog::Client::new("ddd_tx_tut", process::id())
+                .expect("crate syslog client");
             let mut reporter = DefaultReporter::new();
-            reporter.register(mq_client).expect("register observer");
+            reporter
+                .register(mq_client)
+                .expect("register observer: rabbitmq");
+            reporter
+                .register(syslog_client)
+                .expect("register observer: syslog");
 
             let usecase = RefCell::new(PersonUsecaseImpl::new(PgPersonDao));
 
