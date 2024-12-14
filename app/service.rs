@@ -277,11 +277,10 @@ mod fake_tests {
 
     use super::*;
     use crate::{
-        dao::{DaoError, PersonDao},
+        dao::{DaoError, HavePersonDao, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
         reporter::{Location, ReporterError},
-        HavePersonDao,
     };
 
     struct DummyPersonDao;
@@ -701,11 +700,10 @@ mod spy_tests {
 
     use super::*;
     use crate::{
-        dao::{DaoError, PersonDao},
+        dao::{DaoError, HavePersonDao, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
         reporter::{Location, ReporterError},
-        HavePersonDao,
     };
 
     struct DummyPersonDao;
@@ -1201,11 +1199,10 @@ mod error_stub_tests {
 
     use super::*;
     use crate::{
-        dao::{DaoError, PersonDao},
+        dao::{DaoError, HavePersonDao, PersonDao},
         domain::{date, Revision},
         dto::PersonDto,
         reporter::{Location, ReporterError},
-        HavePersonDao,
     };
 
     struct DummyPersonDao;

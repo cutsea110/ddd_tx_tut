@@ -274,20 +274,20 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 //
 #[cfg(test)]
 mod fake_tests {
+    use chrono::NaiveDate;
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::rc::Rc;
 
-    use self::location::Location;
-
-    use super::*;
     use crate::{
-        cache::CaoError,
-        dao::{DaoError, PersonDao},
-        domain::{date, Revision},
+        cache::{CaoError, PersonCao},
+        cached_service::PersonCachedService,
+        dao::{DaoError, HavePersonDao, PersonDao},
+        domain::{date, PersonId, Revision},
         dto::PersonDto,
-        reporter::ReporterError,
-        HavePersonDao, PersonUsecase, UsecaseError,
+        location::Location,
+        reporter::{Level, Reporter, ReporterError},
+        usecase::{PersonUsecase, UsecaseError},
     };
 
     struct DummyPersonDao;
@@ -417,16 +417,16 @@ mod fake_tests {
         cao: FakePersonCao,
     }
     // フェイクのサービス実装です。ユースケースより先はダミーです。
-    impl PersonService<'_, ()> for TargetPersonService {
+    impl crate::service::PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
         type N = DummyReporter;
 
-        fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
+        fn run_tx<T, F>(&mut self, f: F) -> Result<T, crate::service::ServiceError>
         where
             F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
         {
             let mut usecase = self.usecase.borrow_mut();
-            f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+            f(&mut usecase, &mut ()).map_err(crate::service::ServiceError::TransactionFailed)
         }
 
         fn get_reporter(&self) -> Self::N {
@@ -439,7 +439,7 @@ mod fake_tests {
             birth_date: NaiveDate,
             death_date: Option<NaiveDate>,
             data: &str,
-        ) -> Result<(PersonId, PersonDto), ServiceError> {
+        ) -> Result<(PersonId, PersonDto), crate::service::ServiceError> {
             let id = self.next_id.replace_with(|&mut id| id + 1);
 
             let person = PersonDto::new(name, birth_date, death_date, Some(data), 0);
@@ -448,15 +448,20 @@ mod fake_tests {
             Ok((id, person))
         }
 
-        fn find(&'_ mut self, id: PersonId) -> Result<Option<PersonDto>, ServiceError> {
+        fn find(
+            &'_ mut self,
+            id: PersonId,
+        ) -> Result<Option<PersonDto>, crate::service::ServiceError> {
             Ok(self.db.borrow().get(&id).cloned())
         }
 
         fn batch_import(
             &'_ mut self,
             persons: impl Iterator<Item = PersonDto>,
-            _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
-        ) -> Result<Vec<PersonId>, ServiceError> {
+            _out_port: Rc<
+                impl crate::service::PersonOutputBoundary<(u64, u64), crate::service::ServiceError>,
+            >,
+        ) -> Result<Vec<PersonId>, crate::service::ServiceError> {
             let mut ids = vec![];
             for person in persons {
                 let id = self.next_id.replace_with(|&mut id| id + 1);
@@ -467,7 +472,9 @@ mod fake_tests {
             Ok(ids)
         }
 
-        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonDto)>, ServiceError> {
+        fn list_all(
+            &'_ mut self,
+        ) -> Result<Vec<(PersonId, PersonDto)>, crate::service::ServiceError> {
             Ok(self
                 .db
                 .borrow()
@@ -476,7 +483,7 @@ mod fake_tests {
                 .collect())
         }
 
-        fn unregister(&'_ mut self, id: PersonId) -> Result<(), ServiceError> {
+        fn unregister(&'_ mut self, id: PersonId) -> Result<(), crate::service::ServiceError> {
             self.db.borrow_mut().remove(&id);
             Ok(())
         }
@@ -527,15 +534,17 @@ mod fake_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
+    impl crate::service::PersonOutputBoundary<(u64, u64), crate::service::ServiceError>
+        for DummyPersonOutputBoundary
+    {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self, _err: ServiceError) {}
+        fn aborted(&self, _err: crate::service::ServiceError) {}
     }
 
     #[test]
-    fn test_cached_register() {
+    fn test_register() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(1),
             db: RefCell::new(HashMap::new()),
@@ -548,14 +557,14 @@ mod fake_tests {
         };
 
         let expected = PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0);
-        let result = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
+        let result = service.register("Alice", date(2000, 1, 1), None, "Alice is here");
 
         assert!(result.is_ok());
         assert_eq!(result, Ok((1, expected)));
     }
 
     #[test]
-    fn test_cached_find() {
+    fn test_find() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(1),
             db: RefCell::new(HashMap::new()),
@@ -567,7 +576,7 @@ mod fake_tests {
             },
         };
 
-        let result = service.cached_find(1);
+        let result = service.find(1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(None), "not found");
@@ -592,7 +601,7 @@ mod fake_tests {
         };
 
         let expected = PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0);
-        let result = service.cached_find(1);
+        let result = service.find(1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(Some(expected)), "hit cache");
@@ -616,14 +625,14 @@ mod fake_tests {
         };
 
         let expected = PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0);
-        let result = service.cached_find(1);
+        let result = service.find(1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(Some(expected)), "found db");
     }
 
     #[test]
-    fn test_cached_batch_import() {
+    fn test_batch_import() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(1),
             db: RefCell::new(HashMap::new()),
@@ -635,7 +644,7 @@ mod fake_tests {
             },
         };
 
-        let result = service.cached_batch_import(
+        let result = service.batch_import(
             vec![
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                 PersonDto::new("Bob", date(2000, 1, 2), None, Some("Bob is here"), 0),
@@ -648,7 +657,7 @@ mod fake_tests {
     }
 
     #[test]
-    fn test_cached_list_all() {
+    fn test_list_all() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(3),
             db: RefCell::new(
@@ -673,14 +682,14 @@ mod fake_tests {
             },
         };
 
-        let result = service.cached_list_all();
+        let result = service.list_all();
 
         assert!(result.is_ok());
         assert_eq!(result.clone().map(|v| v.len()), Ok(2), "list from db");
     }
 
     #[test]
-    fn test_cached_death() {
+    fn test_death() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(3),
             db: RefCell::new(
@@ -705,14 +714,14 @@ mod fake_tests {
             },
         };
 
-        let result = service.cached_death(1, date(2030, 11, 22));
+        let result = service.death(1, date(2030, 11, 22));
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(()));
     }
 
     #[test]
-    fn test_cached_unregister() {
+    fn test_unregister() {
         let mut service = TargetPersonService {
             next_id: RefCell::new(3),
             db: RefCell::new(
@@ -737,7 +746,7 @@ mod fake_tests {
             },
         };
 
-        let result = service.cached_unregister(1);
+        let result = service.unregister(1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(()));
@@ -816,19 +825,19 @@ mod fake_tests {
 //
 #[cfg(test)]
 mod spy_tests {
+    use chrono::NaiveDate;
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use self::location::Location;
-
-    use super::*;
     use crate::{
-        cache::CaoError,
-        dao::{DaoError, PersonDao},
-        domain::{date, Revision},
+        cache::{CaoError, PersonCao},
+        cached_service::PersonCachedService,
+        dao::{DaoError, HavePersonDao, PersonDao},
+        domain::{date, PersonId, Revision},
         dto::PersonDto,
-        reporter::ReporterError,
-        HavePersonDao, PersonUsecase, UsecaseError,
+        location::Location,
+        reporter::{Level, Reporter, ReporterError},
+        usecase::{PersonUsecase, UsecaseError},
     };
 
     struct DummyPersonDao;
@@ -959,33 +968,33 @@ mod spy_tests {
     /// テスト用のスパイサービスです。
     struct TargetPersonService {
         register: RefCell<Vec<(String, NaiveDate, Option<NaiveDate>, Option<String>)>>,
-        register_result: Result<(PersonId, PersonDto), ServiceError>,
+        register_result: Result<(PersonId, PersonDto), crate::service::ServiceError>,
         find: RefCell<Vec<PersonId>>,
-        find_result: Result<Option<PersonDto>, ServiceError>,
+        find_result: Result<Option<PersonDto>, crate::service::ServiceError>,
         batch_import: RefCell<Vec<Vec<PersonDto>>>,
-        batch_import_result: Result<Vec<PersonId>, ServiceError>,
+        batch_import_result: Result<Vec<PersonId>, crate::service::ServiceError>,
         list_all: RefCell<i32>,
-        list_all_result: Result<Vec<(PersonId, PersonDto)>, ServiceError>,
+        list_all_result: Result<Vec<(PersonId, PersonDto)>, crate::service::ServiceError>,
         death: RefCell<Vec<(PersonId, NaiveDate)>>,
-        death_result: Result<(), ServiceError>,
+        death_result: Result<(), crate::service::ServiceError>,
         unregister: RefCell<Vec<PersonId>>,
-        unregister_result: Result<(), ServiceError>,
+        unregister_result: Result<(), crate::service::ServiceError>,
 
         usecase: RefCell<DummyPersonUsecase>,
         cao: MockPersonCao,
         reporter: SpyReporter,
     }
     // スパイサービス実装です。ユースケースより先はダミーです。
-    impl PersonService<'_, ()> for TargetPersonService {
+    impl crate::service::PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
         type N = SpyReporter;
 
-        fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
+        fn run_tx<T, F>(&mut self, f: F) -> Result<T, crate::service::ServiceError>
         where
             F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
         {
             let mut usecase = self.usecase.borrow_mut();
-            f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+            f(&mut usecase, &mut ()).map_err(crate::service::ServiceError::TransactionFailed)
         }
 
         fn get_reporter(&self) -> Self::N {
@@ -998,7 +1007,7 @@ mod spy_tests {
             birth_date: NaiveDate,
             death_date: Option<NaiveDate>,
             data: &str,
-        ) -> Result<(PersonId, PersonDto), ServiceError> {
+        ) -> Result<(PersonId, PersonDto), crate::service::ServiceError> {
             self.register.borrow_mut().push((
                 name.to_string(),
                 birth_date,
@@ -1008,7 +1017,10 @@ mod spy_tests {
             self.register_result.clone()
         }
 
-        fn find(&'_ mut self, id: PersonId) -> Result<Option<PersonDto>, ServiceError> {
+        fn find(
+            &'_ mut self,
+            id: PersonId,
+        ) -> Result<Option<PersonDto>, crate::service::ServiceError> {
             self.find.borrow_mut().push(id);
             self.find_result.clone()
         }
@@ -1016,23 +1028,31 @@ mod spy_tests {
         fn batch_import(
             &'_ mut self,
             persons: impl Iterator<Item = PersonDto>,
-            _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
-        ) -> Result<Vec<PersonId>, ServiceError> {
+            _out_port: Rc<
+                impl crate::service::PersonOutputBoundary<(u64, u64), crate::service::ServiceError>,
+            >,
+        ) -> Result<Vec<PersonId>, crate::service::ServiceError> {
             self.batch_import.borrow_mut().push(persons.collect());
             self.batch_import_result.clone()
         }
 
-        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonDto)>, ServiceError> {
+        fn list_all(
+            &'_ mut self,
+        ) -> Result<Vec<(PersonId, PersonDto)>, crate::service::ServiceError> {
             *self.list_all.borrow_mut() += 1;
             self.list_all_result.clone()
         }
 
-        fn death(&'_ mut self, id: PersonId, date: NaiveDate) -> Result<(), ServiceError> {
+        fn death(
+            &'_ mut self,
+            id: PersonId,
+            date: NaiveDate,
+        ) -> Result<(), crate::service::ServiceError> {
             self.death.borrow_mut().push((id, date));
             self.death_result.clone()
         }
 
-        fn unregister(&'_ mut self, id: PersonId) -> Result<(), ServiceError> {
+        fn unregister(&'_ mut self, id: PersonId) -> Result<(), crate::service::ServiceError> {
             self.unregister.borrow_mut().push(id);
             self.unregister_result.clone()
         }
@@ -1092,15 +1112,17 @@ mod spy_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
+    impl crate::service::PersonOutputBoundary<(u64, u64), crate::service::ServiceError>
+        for DummyPersonOutputBoundary
+    {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self, _err: ServiceError) {}
+        fn aborted(&self, _err: crate::service::ServiceError) {}
     }
 
     #[test]
-    fn test_cached_register() {
+    fn test_register() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((
@@ -1133,7 +1155,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
+        let _ = service.register("Alice", date(2000, 1, 1), None, "Alice is here");
         assert_eq!(
             *service.register.borrow(),
             vec![(
@@ -1201,7 +1223,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_register("Alice", date(2000, 1, 1), None, "Alice is here");
+        let _ = service.register("Alice", date(2000, 1, 1), None, "Alice is here");
         assert_eq!(
             *service.register.borrow(),
             vec![(
@@ -1243,7 +1265,7 @@ mod spy_tests {
     }
 
     #[test]
-    fn test_cached_find() {
+    fn test_find() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
@@ -1279,7 +1301,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_find(1);
+        let _ = service.find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1335,7 +1357,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_find(1);
+        let _ = service.find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![1]);
         assert_eq!(
@@ -1398,7 +1420,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_find(1);
+        let _ = service.find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![1]);
         assert_eq!(
@@ -1461,7 +1483,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_find(1);
+        let _ = service.find(1);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![1]);
         assert_eq!(
@@ -1495,7 +1517,7 @@ mod spy_tests {
     }
 
     #[test]
-    fn test_cached_batch_import() {
+    fn test_batch_import() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
@@ -1525,7 +1547,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_batch_import(
+        let _ = service.batch_import(
             vec![
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"), 0),
                 PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver"), 0),
@@ -1603,7 +1625,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_batch_import(
+        let _ = service.batch_import(
             vec![
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"), 0),
                 PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver"), 0),
@@ -1650,7 +1672,7 @@ mod spy_tests {
     }
 
     #[test]
-    fn test_cached_list_all() {
+    fn test_list_all() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
@@ -1693,7 +1715,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_list_all();
+        let _ = service.list_all();
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1770,7 +1792,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_list_all();
+        let _ = service.list_all();
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1804,7 +1826,7 @@ mod spy_tests {
     }
 
     #[test]
-    fn test_cached_unregister() {
+    fn test_unregister() {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
@@ -1834,7 +1856,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_unregister(3);
+        let _ = service.unregister(3);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1885,7 +1907,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.cached_unregister(3);
+        let _ = service.unregister(3);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1979,18 +2001,19 @@ mod spy_tests {
 //
 #[cfg(test)]
 mod error_stub_tests {
+    use chrono::NaiveDate;
     use std::cell::RefCell;
+    use std::rc::Rc;
 
-    use self::location::Location;
-
-    use super::*;
     use crate::{
-        cache::CaoError,
-        dao::{DaoError, PersonDao},
-        domain::{date, Revision},
+        cache::{CaoError, PersonCao},
+        cached_service::PersonCachedService,
+        dao::{DaoError, HavePersonDao, PersonDao},
+        domain::{date, PersonId, Revision},
         dto::PersonDto,
-        reporter::ReporterError,
-        HavePersonDao, PersonUsecase, UsecaseError,
+        location::Location,
+        reporter::{Level, Reporter, ReporterError},
+        usecase::{PersonUsecase, UsecaseError},
     };
 
     struct DummyPersonDao;
@@ -2112,27 +2135,27 @@ mod error_stub_tests {
 
     /// テスト用のスタブサービスです。
     struct TargetPersonService {
-        register_result: Result<(PersonId, PersonDto), ServiceError>,
-        find_result: Result<Option<PersonDto>, ServiceError>,
-        batch_import_result: Result<Vec<PersonId>, ServiceError>,
-        list_all_result: Result<Vec<(PersonId, PersonDto)>, ServiceError>,
-        death_result: Result<(), ServiceError>,
-        unregister_result: Result<(), ServiceError>,
+        register_result: Result<(PersonId, PersonDto), crate::service::ServiceError>,
+        find_result: Result<Option<PersonDto>, crate::service::ServiceError>,
+        batch_import_result: Result<Vec<PersonId>, crate::service::ServiceError>,
+        list_all_result: Result<Vec<(PersonId, PersonDto)>, crate::service::ServiceError>,
+        death_result: Result<(), crate::service::ServiceError>,
+        unregister_result: Result<(), crate::service::ServiceError>,
 
         usecase: RefCell<DummyPersonUsecase>,
         cao: StubPersonCao,
     }
     // スタブサービス実装です。ユースケースより先はダミーです。
-    impl PersonService<'_, ()> for TargetPersonService {
+    impl crate::service::PersonService<'_, ()> for TargetPersonService {
         type U = DummyPersonUsecase;
         type N = DummyReporter;
 
-        fn run_tx<T, F>(&mut self, f: F) -> Result<T, ServiceError>
+        fn run_tx<T, F>(&mut self, f: F) -> Result<T, crate::service::ServiceError>
         where
             F: FnOnce(&mut Self::U, &mut ()) -> Result<T, UsecaseError>,
         {
             let mut usecase = self.usecase.borrow_mut();
-            f(&mut usecase, &mut ()).map_err(ServiceError::TransactionFailed)
+            f(&mut usecase, &mut ()).map_err(crate::service::ServiceError::TransactionFailed)
         }
 
         fn get_reporter(&self) -> Self::N {
@@ -2145,31 +2168,42 @@ mod error_stub_tests {
             _birth_date: NaiveDate,
             _death_date: Option<NaiveDate>,
             _data: &str,
-        ) -> Result<(PersonId, PersonDto), ServiceError> {
+        ) -> Result<(PersonId, PersonDto), crate::service::ServiceError> {
             self.register_result.clone()
         }
 
-        fn find(&'_ mut self, _id: PersonId) -> Result<Option<PersonDto>, ServiceError> {
+        fn find(
+            &'_ mut self,
+            _id: PersonId,
+        ) -> Result<Option<PersonDto>, crate::service::ServiceError> {
             self.find_result.clone()
         }
 
         fn batch_import(
             &'_ mut self,
             _persons: impl Iterator<Item = PersonDto>,
-            _out_port: Rc<impl PersonOutputBoundary<(u64, u64), ServiceError>>,
-        ) -> Result<Vec<PersonId>, ServiceError> {
+            _out_port: Rc<
+                impl crate::service::PersonOutputBoundary<(u64, u64), crate::service::ServiceError>,
+            >,
+        ) -> Result<Vec<PersonId>, crate::service::ServiceError> {
             self.batch_import_result.clone()
         }
 
-        fn list_all(&'_ mut self) -> Result<Vec<(PersonId, PersonDto)>, ServiceError> {
+        fn list_all(
+            &'_ mut self,
+        ) -> Result<Vec<(PersonId, PersonDto)>, crate::service::ServiceError> {
             self.list_all_result.clone()
         }
 
-        fn death(&'_ mut self, _id: PersonId, _date: NaiveDate) -> Result<(), ServiceError> {
+        fn death(
+            &'_ mut self,
+            _id: PersonId,
+            _date: NaiveDate,
+        ) -> Result<(), crate::service::ServiceError> {
             self.death_result.clone()
         }
 
-        fn unregister(&'_ mut self, _id: PersonId) -> Result<(), ServiceError> {
+        fn unregister(&'_ mut self, _id: PersonId) -> Result<(), crate::service::ServiceError> {
             self.unregister_result.clone()
         }
     }
@@ -2216,17 +2250,19 @@ mod error_stub_tests {
     }
 
     struct DummyPersonOutputBoundary;
-    impl PersonOutputBoundary<(u64, u64), ServiceError> for DummyPersonOutputBoundary {
+    impl crate::service::PersonOutputBoundary<(u64, u64), crate::service::ServiceError>
+        for DummyPersonOutputBoundary
+    {
         fn started(&self) {}
         fn in_progress(&self, _progress: (u64, u64)) {}
         fn completed(&self) {}
-        fn aborted(&self, _err: ServiceError) {}
+        fn aborted(&self, _err: crate::service::ServiceError) {}
     }
 
     #[test]
-    fn test_cached_register() {
+    fn test_register() {
         let mut service = TargetPersonService {
-            register_result: Err(ServiceError::TransactionFailed(
+            register_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
             )),
             find_result: Ok(None),
@@ -2243,10 +2279,10 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_register("test", date(2000, 1, 1), None, "test");
+        let result = service.register("test", date(2000, 1, 1), None, "test");
         assert_eq!(
             result,
-            Err(ServiceError::TransactionFailed(
+            Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string()))
             ))
         );
@@ -2270,7 +2306,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_register("test", date(2000, 1, 1), None, "test");
+        let result = service.register("test", date(2000, 1, 1), None, "test");
         assert_eq!(
             result,
             Ok((
@@ -2281,13 +2317,13 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_cached_find() {
+    fn test_find() {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
-            find_result: Err(ServiceError::TransactionFailed(
+            find_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::FindPersonFailed(DaoError::SelectError("valid dao".to_string())),
             )),
             batch_import_result: Ok(vec![]),
@@ -2303,10 +2339,10 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_find(1);
+        let result = service.find(1);
         assert_eq!(
             result,
-            Err(ServiceError::TransactionFailed(
+            Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::FindPersonFailed(DaoError::SelectError("valid dao".to_string()))
             ))
         );
@@ -2336,7 +2372,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_find(1);
+        let result = service.find(1);
         assert_eq!(
             result,
             Ok(Some(PersonDto::new(
@@ -2350,14 +2386,14 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_cached_batch_import() {
+    fn test_batch_import() {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
-            batch_import_result: Err(ServiceError::TransactionFailed(
+            batch_import_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
             )),
             list_all_result: Ok(vec![]),
@@ -2372,11 +2408,11 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(vec![], Rc::new(DummyPersonOutputBoundary));
+        let result = service.batch_import(vec![], Rc::new(DummyPersonOutputBoundary));
         assert_eq!(
             result,
-            Err(ServiceError::InvalidRequest(
-                InvalidErrorKind::EmptyArgument
+            Err(crate::service::ServiceError::InvalidRequest(
+                crate::service::InvalidErrorKind::EmptyArgument
             ))
         );
 
@@ -2386,7 +2422,7 @@ mod error_stub_tests {
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
-            batch_import_result: Err(ServiceError::TransactionFailed(
+            batch_import_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
             )),
             list_all_result: Ok(vec![]),
@@ -2401,7 +2437,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(
+        let result = service.batch_import(
             vec![PersonDto::new(
                 "Alice",
                 date(2000, 1, 1),
@@ -2413,7 +2449,7 @@ mod error_stub_tests {
         );
         assert_eq!(
             result,
-            Err(ServiceError::TransactionFailed(
+            Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string()))
             ))
         );
@@ -2437,7 +2473,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_batch_import(
+        let result = service.batch_import(
             vec![PersonDto::new(
                 "Alice",
                 date(2000, 1, 1),
@@ -2451,7 +2487,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_cached_list_all() {
+    fn test_list_all() {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
@@ -2459,7 +2495,7 @@ mod error_stub_tests {
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
-            list_all_result: Err(ServiceError::TransactionFailed(
+            list_all_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::CollectPersonFailed(DaoError::SelectError("valid dao".to_string())),
             )),
             death_result: Ok(()),
@@ -2473,10 +2509,10 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_list_all();
+        let result = service.list_all();
         assert_eq!(
             result,
-            Err(ServiceError::TransactionFailed(
+            Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::CollectPersonFailed(DaoError::SelectError("valid dao".to_string()))
             ))
         );
@@ -2503,7 +2539,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_list_all();
+        let result = service.list_all();
         assert_eq!(
             result,
             Ok(vec![(
@@ -2514,7 +2550,7 @@ mod error_stub_tests {
     }
 
     #[test]
-    fn test_cached_death() {
+    fn test_death() {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
@@ -2529,7 +2565,7 @@ mod error_stub_tests {
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
-            death_result: Err(ServiceError::TransactionFailed(
+            death_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::SavePersonFailed(DaoError::UpdateError("valid dao".to_string())),
             )),
             unregister_result: Ok(()),
@@ -2542,10 +2578,10 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_death(1, date(2030, 12, 31));
+        let result = service.death(1, date(2030, 12, 31));
         assert_eq!(
             result,
-            Err(ServiceError::TransactionFailed(
+            Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::SavePersonFailed(DaoError::UpdateError("valid dao".to_string()))
             ))
         );
@@ -2575,12 +2611,12 @@ mod error_stub_tests {
                 unload_result: Err(CaoError::Unavailable("valid cao".to_string())),
             },
         };
-        let result = service.cached_death(1, date(2030, 12, 31));
+        let result = service.death(1, date(2030, 12, 31));
         assert_eq!(result, Ok(()));
     }
 
     #[test]
-    fn test_cached_unregister() {
+    fn test_unregister() {
         let mut service = TargetPersonService {
             register_result: Ok((
                 1,
@@ -2590,7 +2626,7 @@ mod error_stub_tests {
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![]),
             death_result: Ok(()),
-            unregister_result: Err(ServiceError::TransactionFailed(
+            unregister_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::RemovePersonFailed(DaoError::DeleteError("valid dao".to_string())),
             )),
             usecase: RefCell::new(DummyPersonUsecase {
@@ -2602,10 +2638,10 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.cached_unregister(1);
+        let result = service.unregister(1);
         assert_eq!(
             result,
-            Err(ServiceError::TransactionFailed(
+            Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::RemovePersonFailed(DaoError::DeleteError("valid dao".to_string()))
             ))
         );
@@ -2629,7 +2665,7 @@ mod error_stub_tests {
                 unload_result: Err(CaoError::Unavailable("valid cao".to_string())),
             },
         };
-        let result = service.cached_unregister(1);
+        let result = service.unregister(1);
         assert_eq!(result, Ok(()));
     }
 }
