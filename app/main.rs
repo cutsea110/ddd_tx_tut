@@ -59,11 +59,13 @@ mod person_impl {
     }
     impl PersonServiceImpl {
         pub fn new(db_uri: &str, cache_uri: &str, mq_uri: &str) -> Self {
+            let pid = process::id();
+            trace!("pid: {}", pid);
             let db_client = postgres::Client::connect(db_uri, NoTls).expect("create db client");
             let cache_client = redis::Client::open(cache_uri).expect("create cache client");
             let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
-            let syslog_client = crate::syslog::Client::new("ddd_tx_tut", process::id())
-                .expect("crate syslog client");
+            let syslog_client =
+                crate::syslog::Client::new("ddd_tx_tut", pid).expect("crate syslog client");
             let mut reporter = DefaultReporter::new();
             reporter
                 .register(mq_client)
