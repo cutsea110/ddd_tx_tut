@@ -43,23 +43,33 @@ fn main() {
     // now on testing!!
     let dynamo = dynamodb::DynamoDbPersonDao::new(runtime.clone(), "http://localhost:18000");
     let new_id = dynamo
-        .insert(PersonDto::new("hage", date(2012, 11, 2), None, None, 1))
+        .insert(PersonDto::new("Alice", date(2012, 11, 2), None, None, 1))
         .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
 
-    match new_id.clone() {
+    let id = match new_id.clone() {
         Ok(new_id) => {
-            println!("OK! {}", new_id);
+            println!("Put OK! {}", new_id);
+            new_id
         }
         Err(e) => {
-            eprintln!("ERR! {:?}", e);
+            eprintln!("Put ERR! {:?}", e);
+            panic!("couldn't continue!");
+        }
+    };
+    match dynamo.fetch(id.clone()).run(&mut runtime.clone()) {
+        Ok(p) => {
+            println!("Fetch OK! {:#?}", p);
+        }
+        Err(e) => {
+            eprintln!("Fetch ERR! {:?}", e);
         }
     }
-    match dynamo.fetch(new_id.unwrap()).run(&mut runtime.clone()) {
+    match dynamo.delete(id.clone()).run(&mut runtime.clone()) {
         Ok(p) => {
-            println!("OK! {:#?}", p);
+            println!("Delete OK! {:#?}", p);
         }
         Err(e) => {
-            eprintln!("ERR! {:?}", e);
+            eprintln!("Delete ERR! {:?}", e);
         }
     }
 

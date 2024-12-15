@@ -1,5 +1,4 @@
 use aws_sdk_dynamodb::{
-    operation::get_item::GetItemOutput,
     types::{AttributeValue, ReturnValue},
     Client,
 };
@@ -208,6 +207,23 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
         id: PersonId,
     ) -> impl tx_rs::Tx<Rc<tokio::runtime::Runtime>, Item = (), Err = DaoError> {
         trace!("deleting person: {:?}", id);
-        tx_rs::with_tx(move |tx: &mut Rc<tokio::runtime::Runtime>| Ok(()))
+        tx_rs::with_tx(move |tx: &mut Rc<tokio::runtime::Runtime>| {
+            tx.block_on(async {
+                let req = self
+                    .client
+                    .delete_item()
+                    .table_name("person")
+                    .key("id", AttributeValue::N(id.to_string()));
+                trace!("request to delete-item person: {:?}", req);
+
+                let resp = req
+                    .send()
+                    .await
+                    .map_err(|e| DaoError::DeleteError(e.to_string()))?;
+                debug!("response of delete-item person: {:?}", resp);
+
+                Ok(())
+            })
+        })
     }
 }
