@@ -8,6 +8,7 @@ mod domain;
 mod dto;
 #[macro_use]
 mod location;
+mod dynamodb;
 mod pg_db;
 mod rabbitmq;
 mod redis_cache;
@@ -19,8 +20,10 @@ mod usecase;
 
 use crate::dto::PersonDto;
 use cached_service::PersonCachedService;
+use dao::PersonDao;
 use domain::date;
 use service_impl::{PersonBatchImportPresenterImpl, PersonServiceImpl};
+use tx_rs::Tx;
 
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
@@ -36,6 +39,20 @@ fn main() {
         .build()
         .unwrap()
         .into();
+
+    // now on testing!!
+    let dynamo = dynamodb::DynamoDbPersonDao::new(runtime.clone(), "http://localhost:18000");
+    match dynamo
+        .insert(PersonDto::new("hage", date(2012, 11, 2), None, None, 1))
+        .run(&mut runtime.clone()) // TODO: tx_run provide ctx got from dynamo
+    {
+        Ok(new_id) => {
+            println!("OK! {}", new_id);
+        }
+        Err(e) => {
+            eprintln!("ERR! {:?}", e);
+        }
+    }
 
     // Initialize service
     let mut service = {
