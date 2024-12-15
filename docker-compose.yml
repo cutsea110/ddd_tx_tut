@@ -1,4 +1,3 @@
-version: '3'
 services:
   db:
     image: postgres:17.2-alpine
@@ -29,3 +28,28 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=admin
       - RABBITMQ_DEFAULT_PASS=adminpass
+
+  dynamodb:
+    image: amazon/dynamodb-local
+    container_name: dynamodb
+    ports:
+      - 18000:8000
+    environment:
+      - AWS_PROFILE=local
+      - AWS_REGION=us-west-1
+    volumes:
+      - ./data:/data
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
+
+  dynamodb-init:
+    image: amazon/aws-cli:latest
+    container_name: dynamodb-init
+    depends_on:
+      - dynamodb
+    environment:
+      - AWS_PROFILE=local
+      - AWS_REGION=us-west-1
+    volumes:
+      - ./init-dynamodb.d:/init-dynamodb.d
+      - .aws:/root/.aws
+    entrypoint: ["/bin/sh", "/init-dynamodb.d/init.sh"]
