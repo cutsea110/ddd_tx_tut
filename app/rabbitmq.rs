@@ -10,12 +10,10 @@ pub struct Client {
     conn: Rc<lapin::Connection>,
 }
 impl Client {
-    pub fn open(addr: &str) -> Result<Self, reporter::ReporterError> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
+    pub fn open(
+        runtime: Rc<tokio::runtime::Runtime>,
+        addr: &str,
+    ) -> Result<Self, reporter::ReporterError> {
         trace!("connecting to rabbitmq: {}", addr);
         let conn = runtime.block_on(async {
             lapin::Connection::connect(addr, lapin::ConnectionProperties::default())
@@ -28,7 +26,7 @@ impl Client {
         trace!("connected to rabbitmq with {:?}", conn.configuration());
 
         Ok(Self {
-            async_runtime: Rc::new(runtime),
+            async_runtime: runtime,
             conn: Rc::new(conn),
         })
     }

@@ -2,6 +2,7 @@ use log::{error, trace};
 use postgres::NoTls;
 use std::cell::RefCell;
 use std::process;
+use std::rc::Rc;
 use std::time::Duration;
 
 use super::cached_service::PersonCachedService;
@@ -36,12 +37,17 @@ pub struct PersonServiceImpl {
     usecase: RefCell<PersonUsecaseImpl>,
 }
 impl PersonServiceImpl {
-    pub fn new(db_uri: &str, cache_uri: &str, mq_uri: &str) -> Self {
+    pub fn new(
+        runtime: Rc<tokio::runtime::Runtime>,
+        db_uri: &str,
+        cache_uri: &str,
+        mq_uri: &str,
+    ) -> Self {
         let pid = process::id();
         trace!("pid: {}", pid);
         let db_client = postgres::Client::connect(db_uri, NoTls).expect("create db client");
         let cache_client = redis::Client::open(cache_uri).expect("create cache client");
-        let mq_client = rabbitmq::Client::open(mq_uri).expect("create mq client");
+        let mq_client = rabbitmq::Client::open(runtime, mq_uri).expect("create mq client");
         let syslog_client =
             crate::syslog::Client::new("ddd_tx_tut", pid).expect("crate syslog client");
         let mut reporter = DefaultReporter::new();

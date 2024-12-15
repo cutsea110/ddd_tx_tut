@@ -30,6 +30,13 @@ fn main() {
     }
     env_logger::init();
 
+    // multi-thread runtime
+    let runtime: Rc<tokio::runtime::Runtime> = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .into();
+
     // Initialize service
     let mut service = {
         let cache_uri =
@@ -43,7 +50,7 @@ fn main() {
             "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
         );
 
-        PersonServiceImpl::new(&db_uri, &cache_uri, &mq_uri)
+        PersonServiceImpl::new(runtime.clone(), &db_uri, &cache_uri, &mq_uri)
     };
 
     // register, find and death, then unregister
