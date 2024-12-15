@@ -1,7 +1,9 @@
 use aws_sdk_dynamodb::{
+    operation::get_item::GetItemOutput,
     types::{AttributeValue, ReturnValue},
     Client,
 };
+use chrono::NaiveDate;
 use log::{debug, trace};
 use std::{collections::HashMap, rc::Rc};
 
@@ -47,7 +49,7 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .expression_attribute_values(":start", AttributeValue::N(0.to_string()))
                     .expression_attribute_values(":incr", AttributeValue::N(1.to_string()))
                     .return_values(ReturnValue::AllNew);
-                debug!("request to update-item counter: {:?}", req);
+                trace!("request to update-item counter: {:?}", req);
 
                 let resp = req
                     .send()
@@ -83,6 +85,9 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                         AttributeValue::S(death_date.to_string()),
                     );
                 }
+                if let Some(data) = person.data {
+                    item.insert("death_date".into(), AttributeValue::S(data));
+                }
                 debug!("new person: {:?}", item);
 
                 let req = self
@@ -116,7 +121,71 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
         id: PersonId,
     ) -> impl tx_rs::Tx<Rc<tokio::runtime::Runtime>, Item = Option<PersonDto>, Err = DaoError> {
         trace!("fetching person: {:?}", id);
-        tx_rs::with_tx(move |tx: &mut Rc<tokio::runtime::Runtime>| Ok(None))
+        tx_rs::with_tx(move |tx: &mut Rc<tokio::runtime::Runtime>| {
+            tx.block_on(async {
+                let req = self
+                    .client
+                    .get_item()
+                    .table_name("person")
+                    .key("id", AttributeValue::N(id.to_string()));
+                trace!("request to get-item person: {:?}", req);
+
+                let resp = req
+                    .send()
+                    .await
+                    .map_err(|e| DaoError::SelectError(e.to_string()))?;
+                debug!("response of get-item person: {:?}", resp);
+
+                match resp.item {
+                    None => Ok(None),
+                    Some(p) => {
+                        debug!("found person: {:?}", p);
+                        let name = p
+                            .get("name")
+                            .ok_or(DaoError::SelectError(
+                                "not found name attr in person".into(),
+                            ))?
+                            .as_s()
+                            .map_err(|e| {
+                                DaoError::SelectError(format!("invalid S value: {:?}", e))
+                            })?;
+                        let birth_date = p
+                            .get("birth_date")
+                            .ok_or(DaoError::SelectError(
+                                "not found birth_date attr in person".into(),
+                            ))?
+                            .as_s()
+                            .map_err(|e| DaoError::SelectError(format!("invalid S value: {:?}", e)))
+                            .and_then(|d| {
+                                d.parse::<NaiveDate>().map_err(|e| {
+                                    DaoError::SelectError(format!(
+                                        "failed to parse as NaiveDate: {:?}",
+                                        e
+                                    ))
+                                })
+                            })?;
+                        let death_date = p
+                            .get("birth_date")
+                            .map(|d| d.as_s().unwrap().parse::<NaiveDate>().unwrap());
+                        let data = p.get("data").map(|d| d.as_s().unwrap().as_str());
+                        let revision = p
+                            .get("revision")
+                            .ok_or(DaoError::SelectError(
+                                "not found revision attr in person".into(),
+                            ))?
+                            .as_n()
+                            .map(|r| r.parse::<i32>().unwrap())
+                            .map_err(|e| {
+                                DaoError::SelectError(format!("invalid N value: {:?}", e))
+                            })?;
+
+                        Ok(Some(PersonDto::new(
+                            name, birth_date, death_date, data, revision,
+                        )))
+                    }
+                }
+            })
+        })
     }
     fn select(
         &self,

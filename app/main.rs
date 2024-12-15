@@ -42,12 +42,21 @@ fn main() {
 
     // now on testing!!
     let dynamo = dynamodb::DynamoDbPersonDao::new(runtime.clone(), "http://localhost:18000");
-    match dynamo
+    let new_id = dynamo
         .insert(PersonDto::new("hage", date(2012, 11, 2), None, None, 1))
-        .run(&mut runtime.clone()) // TODO: tx_run provide ctx got from dynamo
-    {
+        .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
+
+    match new_id.clone() {
         Ok(new_id) => {
             println!("OK! {}", new_id);
+        }
+        Err(e) => {
+            eprintln!("ERR! {:?}", e);
+        }
+    }
+    match dynamo.fetch(new_id.unwrap()).run(&mut runtime.clone()) {
+        Ok(p) => {
+            println!("OK! {:#?}", p);
         }
         Err(e) => {
             eprintln!("ERR! {:?}", e);
