@@ -37,8 +37,6 @@ export AWS_ACCESS_KEY_ID=dummy
 export AWS_SECRET_ACCESS_KEY=dummy
 aws dynamodb --endpoint-url http://localhost:18000 list-tables
 
-aws dynamodb --endpoint-url http://localhost:18000 create-table --cli-input-json file://init-dynamodb.d/person.json
-
 aws dynamodb --endpoint-url http://localhost:18000 \
     put-item --table-name person \
 	--item "{\"id\":{\"N\":\"10001\"},\"name\":{\"S\":\"Abel\"},\"birth_date\":{\"N\":\"$(date --date '1802-08-05' +%s)\"},\"death_date\":{\"N\":\"$(date --date '1829-04-06' +%s)\"},\"data\":{\"B\":\"Abel's theorem\"}}"
