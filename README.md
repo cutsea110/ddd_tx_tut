@@ -81,7 +81,7 @@ docker exec $(docker ps -f "name=rabbitmq" --format "{{.ID}}") \
        rabbitmqadmin help subcommands
 ```
 
-The redis cache's named volumes are empty in `docker-compose.yml`, so you lost cache data after `docker compose down -v`.
+The redis cache's named volumes are empty in `docker-compose.yml`, so you lost cache data after `docker compose down -v` and then, `rm data/shared-local-instance.db`.
 
 ## Run
 
