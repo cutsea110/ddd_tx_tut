@@ -8,6 +8,7 @@ mod domain;
 mod dto;
 #[macro_use]
 mod location;
+mod dynamodb;
 mod pg_db;
 mod rabbitmq;
 mod redis_cache;
