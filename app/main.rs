@@ -42,6 +42,16 @@ fn main() {
 
     // now on testing!!
     let dynamo = dynamodb::DynamoDbPersonDao::new(runtime.clone(), "http://localhost:18000");
+    let _ = dynamo
+        .insert(PersonDto::new(
+            "Bob",
+            date(1970, 11, 6),
+            None,
+            Some("Rust,Haskell,Scheme"),
+            1,
+        ))
+        .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
+
     let new_id = dynamo
         .insert(PersonDto::new("Alice", date(2012, 11, 2), None, None, 1))
         .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
@@ -62,6 +72,14 @@ fn main() {
         }
         Err(e) => {
             eprintln!("Fetch ERR! {:?}", e);
+        }
+    }
+    match dynamo.select().run(&mut runtime.clone()) {
+        Ok(ps) => {
+            println!("Select OK! {:#?}", ps);
+        }
+        Err(e) => {
+            eprintln!("Select ERR! {:?}", e);
         }
     }
     match dynamo.delete(id.clone()).run(&mut runtime.clone()) {
