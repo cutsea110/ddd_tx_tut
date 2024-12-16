@@ -53,6 +53,32 @@ fn main() {
         .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
 
     let new_id = dynamo
+        .insert(PersonDto::new(
+            "Charlie",
+            date(1618, 4, 16),
+            None,
+            Some("Drill Baby Drill"),
+            1,
+        ))
+        .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
+
+    if let Ok(id) = new_id {
+        let _ = dynamo
+            .save(
+                id,
+                2,
+                PersonDto::new(
+                    "Charlie.Jr",
+                    date(1618, 4, 16),
+                    Some(date(1700, 1, 3)),
+                    Some("R.I.P."),
+                    2,
+                ),
+            )
+            .run(&mut runtime.clone());
+    }
+
+    let new_id = dynamo
         .insert(PersonDto::new("Alice", date(2012, 11, 2), None, None, 1))
         .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
 

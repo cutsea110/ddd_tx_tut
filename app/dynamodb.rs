@@ -1,5 +1,5 @@
 use aws_sdk_dynamodb::{
-    types::{AttributeValue, ReturnValue},
+    types::{AttributeValue, AttributeValueUpdate, ReturnValue},
     Client,
 };
 use chrono::NaiveDate;
@@ -271,7 +271,62 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
         person: PersonDto,
     ) -> impl tx_rs::Tx<Rc<tokio::runtime::Runtime>, Item = (), Err = DaoError> {
         trace!("saving person: {:?}", id);
-        tx_rs::with_tx(move |tx: &mut Rc<tokio::runtime::Runtime>| Ok(()))
+        tx_rs::with_tx(move |tx: &mut Rc<tokio::runtime::Runtime>| {
+            tx.block_on(async {
+                let attr_name_upd = AttributeValueUpdate::builder()
+                    .action(aws_sdk_dynamodb::types::AttributeAction::Put)
+                    .value(AttributeValue::S(person.name))
+                    .build();
+                let attr_birth_upd = AttributeValueUpdate::builder()
+                    .action(aws_sdk_dynamodb::types::AttributeAction::Put)
+                    .value(AttributeValue::S(person.birth_date.to_string()))
+                    .build();
+                let attr_death_upd = match person.death_date {
+                    Some(d) => AttributeValueUpdate::builder()
+                        .action(aws_sdk_dynamodb::types::AttributeAction::Put)
+                        .value(AttributeValue::S(d.to_string()))
+                        .build(),
+                    None => AttributeValueUpdate::builder()
+                        .action(aws_sdk_dynamodb::types::AttributeAction::Delete)
+                        .build(),
+                };
+                let attr_data_upd = match person.data {
+                    Some(d) => AttributeValueUpdate::builder()
+                        .action(aws_sdk_dynamodb::types::AttributeAction::Put)
+                        .value(AttributeValue::S(d.to_string()))
+                        .build(),
+                    None => AttributeValueUpdate::builder()
+                        .action(aws_sdk_dynamodb::types::AttributeAction::Delete)
+                        .build(),
+                };
+                let attr_revision_upd = AttributeValueUpdate::builder()
+                    .action(aws_sdk_dynamodb::types::AttributeAction::Put)
+                    .value(AttributeValue::N(revision.to_string()))
+                    .build();
+
+                let req = self
+                    .client
+                    .update_item()
+                    .table_name("person")
+                    .key("id", AttributeValue::N(id.to_string()))
+                    .attribute_updates("name", attr_name_upd)
+                    .attribute_updates("birth_date", attr_birth_upd)
+                    .attribute_updates("death_date", attr_death_upd)
+                    .attribute_updates("data", attr_data_upd)
+                    .attribute_updates("revision", attr_revision_upd)
+                    .return_values(ReturnValue::None);
+
+                debug!("request for update-item person: {:?}", req);
+
+                let resp = req
+                    .send()
+                    .await
+                    .map_err(|e| DaoError::UpdateError(e.to_string()))?;
+                debug!("response of update-item person: {:?}", resp);
+
+                Ok(())
+            })
+        })
     }
     fn delete(
         &self,
