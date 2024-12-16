@@ -31,6 +31,56 @@ impl DynamoDbPersonDao {
         }
     }
 }
+
+fn convert(hm: HashMap<String, AttributeValue>) -> Result<(PersonId, PersonDto), DaoError> {
+    debug!("found person: {:?}", hm);
+    let id = hm
+        .get("id")
+        .ok_or(DaoError::SelectError("not found id attr in person".into()))?
+        .as_n()
+        .map_err(|e| DaoError::SelectError(format!("invalid N value: {:?}", e)))
+        .and_then(|d| {
+            d.parse::<i32>()
+                .map_err(|e| DaoError::SelectError(format!("failed to parse as i32: {:?}", e)))
+        })?;
+    let name = hm
+        .get("name")
+        .ok_or(DaoError::SelectError(
+            "not found name attr in person".into(),
+        ))?
+        .as_s()
+        .map_err(|e| DaoError::SelectError(format!("invalid S value: {:?}", e)))?;
+    let birth_date = hm
+        .get("birth_date")
+        .ok_or(DaoError::SelectError(
+            "not found birth_date attr in person".into(),
+        ))?
+        .as_s()
+        .map_err(|e| DaoError::SelectError(format!("invalid S value: {:?}", e)))
+        .and_then(|d| {
+            d.parse::<NaiveDate>().map_err(|e| {
+                DaoError::SelectError(format!("failed to parse as NaiveDate: {:?}", e))
+            })
+        })?;
+    let death_date = hm
+        .get("birth_date")
+        .map(|d| d.as_s().unwrap().parse::<NaiveDate>().unwrap());
+    let data = hm.get("data").map(|d| d.as_s().unwrap().as_str());
+    let revision = hm
+        .get("revision")
+        .ok_or(DaoError::SelectError(
+            "not found revision attr in person".into(),
+        ))?
+        .as_n()
+        .map(|r| r.parse::<i32>().unwrap())
+        .map_err(|e| DaoError::SelectError(format!("invalid N value: {:?}", e)))?;
+
+    Ok((
+        id,
+        PersonDto::new(name, birth_date, death_date, data, revision),
+    ))
+}
+
 impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
     fn insert(
         &self,
@@ -137,51 +187,7 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
 
                 match resp.item {
                     None => Ok(None),
-                    Some(p) => {
-                        debug!("found person: {:?}", p);
-                        let name = p
-                            .get("name")
-                            .ok_or(DaoError::SelectError(
-                                "not found name attr in person".into(),
-                            ))?
-                            .as_s()
-                            .map_err(|e| {
-                                DaoError::SelectError(format!("invalid S value: {:?}", e))
-                            })?;
-                        let birth_date = p
-                            .get("birth_date")
-                            .ok_or(DaoError::SelectError(
-                                "not found birth_date attr in person".into(),
-                            ))?
-                            .as_s()
-                            .map_err(|e| DaoError::SelectError(format!("invalid S value: {:?}", e)))
-                            .and_then(|d| {
-                                d.parse::<NaiveDate>().map_err(|e| {
-                                    DaoError::SelectError(format!(
-                                        "failed to parse as NaiveDate: {:?}",
-                                        e
-                                    ))
-                                })
-                            })?;
-                        let death_date = p
-                            .get("birth_date")
-                            .map(|d| d.as_s().unwrap().parse::<NaiveDate>().unwrap());
-                        let data = p.get("data").map(|d| d.as_s().unwrap().as_str());
-                        let revision = p
-                            .get("revision")
-                            .ok_or(DaoError::SelectError(
-                                "not found revision attr in person".into(),
-                            ))?
-                            .as_n()
-                            .map(|r| r.parse::<i32>().unwrap())
-                            .map_err(|e| {
-                                DaoError::SelectError(format!("invalid N value: {:?}", e))
-                            })?;
-
-                        Ok(Some(PersonDto::new(
-                            name, birth_date, death_date, data, revision,
-                        )))
-                    }
+                    Some(hm) => Ok(convert(hm).map(|(_, p)| Some(p))?),
                 }
             })
         })
@@ -200,6 +206,7 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .limit(100)
                     .into_paginator()
                     .items();
+
                 let resp: Vec<_> = req
                     .send()
                     .collect::<Result<Vec<_>, _>>()
@@ -209,55 +216,7 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
 
                 let mut ret_val = vec![];
                 for p in resp {
-                    let id = p
-                        .get("id")
-                        .ok_or(DaoError::SelectError("not found id attr in person".into()))?
-                        .as_n()
-                        .map_err(|e| DaoError::SelectError(format!("invalid N value: {:?}", e)))
-                        .and_then(|d| {
-                            d.parse::<i32>().map_err(|e| {
-                                DaoError::SelectError(format!("failed to parse as i32: {:?}", e))
-                            })
-                        })?;
-                    let name = p
-                        .get("name")
-                        .ok_or(DaoError::SelectError(
-                            "not found name attr in person".into(),
-                        ))?
-                        .as_s()
-                        .map_err(|e| DaoError::SelectError(format!("invalid S value: {:?}", e)))?;
-                    let birth_date = p
-                        .get("birth_date")
-                        .ok_or(DaoError::SelectError(
-                            "not found birth_date attr in person".into(),
-                        ))?
-                        .as_s()
-                        .map_err(|e| DaoError::SelectError(format!("invalid S value: {:?}", e)))
-                        .and_then(|d| {
-                            d.parse::<NaiveDate>().map_err(|e| {
-                                DaoError::SelectError(format!(
-                                    "failed to parse as NaiveDate: {:?}",
-                                    e
-                                ))
-                            })
-                        })?;
-                    let death_date = p
-                        .get("birth_date")
-                        .map(|d| d.as_s().unwrap().parse::<NaiveDate>().unwrap());
-                    let data = p.get("data").map(|d| d.as_s().unwrap().as_str());
-                    let revision = p
-                        .get("revision")
-                        .ok_or(DaoError::SelectError(
-                            "not found revision attr in person".into(),
-                        ))?
-                        .as_n()
-                        .map(|r| r.parse::<i32>().unwrap())
-                        .map_err(|e| DaoError::SelectError(format!("invalid N value: {:?}", e)))?;
-                    let item = (
-                        id,
-                        PersonDto::new(name, birth_date, death_date, data, revision),
-                    );
-                    ret_val.push(item);
+                    ret_val.push(convert(p)?);
                 }
 
                 Ok(ret_val)
@@ -315,7 +274,6 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .attribute_updates("data", attr_data_upd)
                     .attribute_updates("revision", attr_revision_upd)
                     .return_values(ReturnValue::None);
-
                 debug!("request for update-item person: {:?}", req);
 
                 let resp = req
