@@ -1,7 +1,4 @@
-use aws_sdk_dynamodb::{
-    types::{AttributeValue, AttributeValueUpdate, ReturnValue},
-    Client,
-};
+use aws_sdk_dynamodb::types::{AttributeValue, AttributeValueUpdate, ReturnValue};
 use chrono::NaiveDate;
 use log::{debug, trace};
 use std::{collections::HashMap, rc::Rc};
@@ -13,7 +10,7 @@ use crate::dto::PersonDto;
 #[derive(Debug, Clone)]
 pub struct DynamoDbPersonDao {
     async_runtime: Rc<tokio::runtime::Runtime>,
-    client: Client,
+    client: aws_sdk_dynamodb::Client,
 }
 impl DynamoDbPersonDao {
     pub fn new(runtime: Rc<tokio::runtime::Runtime>, endpoint_url: &str) -> Self {
@@ -24,7 +21,7 @@ impl DynamoDbPersonDao {
                 .await
         });
         trace!("SdkConfig: {:?}", config);
-        let client = Client::new(&config);
+        let client = aws_sdk_dynamodb::Client::new(&config);
         Self {
             async_runtime: runtime,
             client,
