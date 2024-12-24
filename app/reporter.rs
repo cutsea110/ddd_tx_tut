@@ -78,10 +78,10 @@ mod test {
     use std::cell::RefCell;
 
     #[derive(Debug, Clone)]
-    struct MockObserver {
+    struct SpyObserver {
         messages: Rc<RefCell<Vec<(Level, String, String)>>>,
     }
-    impl Observer for MockObserver {
+    impl Observer for SpyObserver {
         fn handle_notification(
             &self,
             level: Level,
@@ -98,7 +98,7 @@ mod test {
 
     #[test]
     fn test_reporter_for_single_observer() {
-        let observer = MockObserver {
+        let observer = SpyObserver {
             messages: Rc::new(RefCell::new(Vec::new())),
         };
         let mut reporter = DefaultReporter::new();
@@ -114,10 +114,10 @@ mod test {
 
     #[test]
     fn test_reporter_for_multi_observers() {
-        let observer1 = MockObserver {
+        let observer1 = SpyObserver {
             messages: Rc::new(RefCell::new(Vec::new())),
         };
-        let observer2 = MockObserver {
+        let observer2 = SpyObserver {
             messages: Rc::new(RefCell::new(Vec::new())),
         };
         let mut reporter = DefaultReporter::new();
