@@ -59,9 +59,12 @@ fn convert(hm: HashMap<String, AttributeValue>) -> Result<(PersonId, PersonDto),
                 DaoError::SelectError(format!("failed to parse as NaiveDate: {:?}", e))
             })
         })?;
-    let death_date = hm
-        .get("birth_date")
-        .map(|d| d.as_s().unwrap().parse::<NaiveDate>().unwrap());
+    let death_date = hm.get("death_date").map(|d| {
+        d.as_s()
+            .expect("death_date type is S")
+            .parse::<NaiveDate>()
+            .expect("parse NaiveDate")
+    });
     let data = hm.get("data").map(|d| d.as_s().unwrap().as_str());
     let revision = hm
         .get("revision")
@@ -89,9 +92,10 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                 let req = self
                     .client
                     .update_item()
-                    .table_name("counter")
-                    .key("table_name", AttributeValue::S("person".into()))
-                    .update_expression("SET id = if_not_exists(id, :start) + :incr")
+                    .table_name("person")
+                    .key("PK", AttributeValue::S("person-counter".into()))
+                    .key("SK", AttributeValue::S("person_id".into()))
+                    .update_expression("SET person_id = if_not_exists(person_id, :start) + :incr")
                     .expression_attribute_values(":start", AttributeValue::N(0.to_string()))
                     .expression_attribute_values(":incr", AttributeValue::N(1.to_string()))
                     .return_values(ReturnValue::AllNew);
@@ -106,14 +110,24 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                 let new_id = resp
                     .attributes
                     .ok_or(DaoError::InsertError("not found person counter".into()))?
-                    .get("id")
+                    .get("person_id")
                     .ok_or(DaoError::InsertError(
                         "not found id attr in person counter".into(),
                     ))?
                     .clone();
                 debug!("new id: {:?}", new_id);
 
+                let id = new_id
+                    .as_n()
+                    .map_err(|e| DaoError::InsertError(format!("invalid N value: {:?}", e)))?
+                    .parse::<i32>()
+                    .map_err(|e| {
+                        DaoError::InsertError(format!("failed to parse as i32: {:?}", e))
+                    })?;
+
                 let mut item = HashMap::from([
+                    ("PK".into(), AttributeValue::S(format!("person#{}", id))),
+                    ("SK".into(), AttributeValue::S("person".into())),
                     ("id".into(), new_id.clone()),
                     ("name".into(), AttributeValue::S(person.name)),
                     (
@@ -132,7 +146,7 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     );
                 }
                 if let Some(data) = person.data {
-                    item.insert("death_date".into(), AttributeValue::S(data));
+                    item.insert("data".into(), AttributeValue::S(data));
                 }
                 debug!("new person: {:?}", item);
 
@@ -150,14 +164,6 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .map_err(|e| DaoError::InsertError(e.to_string()))?;
                 debug!("response of put-item person: {:?}", resp);
 
-                let id = new_id
-                    .as_n()
-                    .map_err(|e| DaoError::InsertError(format!("invalid N value: {:?}", e)))?
-                    .parse::<i32>()
-                    .map_err(|e| {
-                        DaoError::InsertError(format!("failed to parse as i32: {:?}", e))
-                    })?;
-
                 Ok(id)
             })
         })
@@ -173,7 +179,8 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .client
                     .get_item()
                     .table_name("person")
-                    .key("id", AttributeValue::N(id.to_string()));
+                    .key("PK", AttributeValue::S(format!("person#{}", id)))
+                    .key("SK", AttributeValue::S("person".into()));
                 trace!("request to get-item person: {:?}", req);
 
                 let resp = req
@@ -200,6 +207,8 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .client
                     .scan()
                     .table_name("person")
+                    .filter_expression("SK = :sk")
+                    .expression_attribute_values(":sk", AttributeValue::S("person".into()))
                     .limit(100)
                     .into_paginator()
                     .items();
@@ -264,7 +273,8 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .client
                     .update_item()
                     .table_name("person")
-                    .key("id", AttributeValue::N(id.to_string()))
+                    .key("PK", AttributeValue::S(format!("person#{}", id)))
+                    .key("SK", AttributeValue::S("person".into()))
                     .attribute_updates("name", attr_name_upd)
                     .attribute_updates("birth_date", attr_birth_upd)
                     .attribute_updates("death_date", attr_death_upd)
@@ -294,7 +304,8 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .client
                     .delete_item()
                     .table_name("person")
-                    .key("id", AttributeValue::N(id.to_string()));
+                    .key("PK", AttributeValue::S(format!("person#{}", id)))
+                    .key("SK", AttributeValue::S("person".into()));
                 trace!("request to delete-item person: {:?}", req);
 
                 let resp = req

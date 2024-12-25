@@ -37,13 +37,24 @@ export AWS_ACCESS_KEY_ID=dummy
 export AWS_SECRET_ACCESS_KEY=dummy
 aws dynamodb --endpoint-url http://localhost:18000 list-tables
 
+# person_id の次のカウントをインクリメント
+aws dynamodb --endpoint-url http://localhost:18000 \
+	update-item \
+    --table-name person \
+    --key '{"PK": {"S": "person-counter"}, "SK": {"S": "person_id"}}' \
+    --update-expression "ADD person_id :incr" \
+    --expression-attribute-values '{":incr": {"N": "1"}}' \
+    --return-values UPDATED_NEW
+					
+# 上で返ってきた person_id - 1 を使ってよい
+# person_id が 4 なら 3 を使う
 aws dynamodb --endpoint-url http://localhost:18000 \
     put-item --table-name person \
-	--item "{\"id\":{\"N\":\"10001\"},\"name\":{\"S\":\"Abel\"},\"birth_date\":{\"N\":\"$(date --date '1802-08-05' +%s)\"},\"death_date\":{\"N\":\"$(date --date '1829-04-06' +%s)\"},\"data\":{\"B\":\"Abel's theorem\"}}"
+	--item '{"PK":{"S":"person#3"},"SK":{"S":"person"},"id":{"N":"3"},"name":{"S":"Abel"},"birth_date":{"S":"1802-08-05"},"death_date":{"S":"1829-04-06"},"data":{"S":"Abel's theorem"}}'
 aws dynamodb --endpoint-url http://localhost:18000 \
     scan --table-name person
 aws dynamodb --endpoint-url http://localhost:18000 \
-    get-item --table-name person --key '{"id":{"N":"10001"},"name":{"S":"Abel"}}'
+    get-item --table-name person --key '{"PK":{"S":"person#1"},"SK":{"S":"person"}}'
 ```
 
 If you check cache(redis), do like this:
