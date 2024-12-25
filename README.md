@@ -54,6 +54,10 @@ aws dynamodb --endpoint-url http://localhost:18000 \
 aws dynamodb --endpoint-url http://localhost:18000 \
     scan --table-name person
 aws dynamodb --endpoint-url http://localhost:18000 \
+    scan --table-name person \
+    --filter-expression "SK = :sk" \
+    --expression-attribute-values '{":sk":{"S":"person"}}'
+aws dynamodb --endpoint-url http://localhost:18000 \
     get-item --table-name person --key '{"PK":{"S":"person#1"},"SK":{"S":"person"}}'
 ```
 

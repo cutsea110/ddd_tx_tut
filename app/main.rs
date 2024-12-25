@@ -80,15 +80,16 @@ fn main() {
 
     let new_id = dynamo
         .insert(PersonDto::new("Alice", date(2012, 11, 2), None, None, 1))
-        .run(&mut runtime.clone())
-        .expect("insert Alice"); // TODO: tx_run provide ctx got from dynamo
+        .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
 
-    match dynamo.fetch(new_id.clone()).run(&mut runtime.clone()) {
-        Ok(p) => {
-            println!("Fetch OK! {:#?}", p);
-        }
-        Err(e) => {
-            eprintln!("Fetch ERR! {:?}", e);
+    if let Ok(id) = new_id {
+        match dynamo.fetch(id).run(&mut runtime.clone()) {
+            Ok(p) => {
+                println!("Fetch OK! {:#?}", p);
+            }
+            Err(e) => {
+                eprintln!("Fetch ERR! {:?}", e);
+            }
         }
     }
     match dynamo.select().run(&mut runtime.clone()) {
@@ -99,12 +100,14 @@ fn main() {
             eprintln!("Select ERR! {:?}", e);
         }
     }
-    match dynamo.delete(new_id.clone()).run(&mut runtime.clone()) {
-        Ok(p) => {
-            println!("Delete OK! {:#?}", p);
-        }
-        Err(e) => {
-            eprintln!("Delete ERR! {:?}", e);
+    if let Ok(id) = new_id {
+        match dynamo.delete(id).run(&mut runtime.clone()) {
+            Ok(p) => {
+                println!("Delete OK! {:#?}", p);
+            }
+            Err(e) => {
+                eprintln!("Delete ERR! {:?}", e);
+            }
         }
     }
 
