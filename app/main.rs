@@ -22,7 +22,7 @@ use crate::dto::PersonDto;
 use cached_service::PersonCachedService;
 use dao::PersonDao;
 use domain::date;
-use service_impl::db_base::{PersonBatchImportPresenterImpl, PersonServiceImpl};
+use service_impl::db_base;
 use tx_rs::Tx;
 
 fn main() {
@@ -124,7 +124,7 @@ fn main() {
             "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
         );
 
-        PersonServiceImpl::new(runtime.clone(), &db_uri, &cache_uri, &mq_uri)
+        db_base::PersonServiceImpl::new(runtime.clone(), &db_uri, &cache_uri, &mq_uri)
     };
 
     // register, find and death, then unregister
@@ -179,7 +179,10 @@ fn main() {
         .collect::<Vec<_>>();
 
         let ids = service
-            .batch_import(persons.clone(), Rc::new(PersonBatchImportPresenterImpl))
+            .batch_import(
+                persons.clone(),
+                Rc::new(db_base::PersonBatchImportPresenterImpl),
+            )
             .expect("batch import");
         println!("batch import done");
 
