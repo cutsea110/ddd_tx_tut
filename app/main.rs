@@ -22,7 +22,7 @@ use crate::dto::PersonDto;
 use cached_service::PersonCachedService;
 use dao::PersonDao;
 use domain::date;
-use service_impl::{PersonBatchImportPresenterImpl, PersonServiceImpl};
+use service_impl::db_base::{PersonBatchImportPresenterImpl, PersonServiceImpl};
 use tx_rs::Tx;
 
 fn main() {
