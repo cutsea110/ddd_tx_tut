@@ -118,15 +118,22 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                 }
                 debug!("new person: {:?}", item);
 
-                let req = self
-                    .client
-                    .put_item()
-                    .table_name("person")
-                    .set_item(Some(item))
-                    .return_values(ReturnValue::None);
-                trace!("request to put-item person: {:?}", req);
+                let put_item = aws_sdk_dynamodb::types::TransactWriteItem::builder()
+                    .put(
+                        aws_sdk_dynamodb::types::Put::builder()
+                            .table_name("person")
+                            .set_item(Some(item))
+                            .condition_expression("attribute_not_exists(PK)")
+                            .build()
+                            .map_err(|e| DaoError::InsertError(e.to_string()))?,
+                    )
+                    .build();
+                trace!("request to put-item person: {:?}", put_item);
 
-                let resp = req
+                let resp = self
+                    .client
+                    .transact_write_items()
+                    .transact_items(put_item)
                     .send()
                     .await
                     .map_err(|e| DaoError::InsertError(e.to_string()))?;
