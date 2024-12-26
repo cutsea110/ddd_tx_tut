@@ -2,6 +2,7 @@ use chrono::NaiveDate;
 use core::fmt;
 use log::{trace, warn};
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::dto::PersonDto;
 
@@ -18,7 +19,7 @@ pub enum PersonDomainError {
     AlreadyDead,
 }
 
-pub type PersonId = i32;
+pub type PersonId = Uuid;
 pub type Revision = i32;
 /// Person entity (as domain object)
 #[derive(Debug, Clone, PartialEq, Eq)]

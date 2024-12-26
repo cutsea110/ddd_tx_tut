@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use log::trace;
 use std::str;
+use uuid::Uuid;
 
 use crate::dao::{DaoError, PersonDao};
 use crate::domain::{PersonId, Revision};
@@ -15,16 +16,19 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
     ) -> impl tx_rs::Tx<postgres::Transaction<'a>, Item = PersonId, Err = DaoError> {
         trace!("inserting person: {:?}", person);
         tx_rs::with_tx(move |tx: &mut postgres::Transaction<'_>| {
+            let id = Uuid::now_v7();
             tx.query_one(
-                r#"INSERT INTO person ( name
+                r#"INSERT INTO person ( id
+                                      , name
                                       , birth_date
                                       , death_date
                                       , data
                                       , revision
                                       )
-                   VALUES ($1, $2, $3, $4, $5)
+                   VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id"#,
                 &[
+                    &id,
                     &person.name,
                     &person.birth_date,
                     &person.death_date,
@@ -32,7 +36,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
                     &person.revision,
                 ],
             )
-            .map(|row| row.get::<usize, PersonId>(0))
+            .map(|row| row.get::<usize, Uuid>(0))
             .map_err(|e| DaoError::InsertError(e.to_string()))
         })
     }
@@ -85,7 +89,7 @@ impl<'a> PersonDao<postgres::Transaction<'a>> for PgPersonDao {
             .map(|rows| {
                 rows.iter()
                     .map(|row| {
-                        let id = row.get::<usize, PersonId>(0);
+                        let id = row.get::<usize, Uuid>(0);
                         let name = row.get::<usize, &str>(1);
                         let birth_date = row.get::<usize, NaiveDate>(2);
                         let death_date = row.get::<usize, Option<NaiveDate>>(3);

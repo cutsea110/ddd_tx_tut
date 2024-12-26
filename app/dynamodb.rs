@@ -2,6 +2,7 @@ use aws_sdk_dynamodb::types::{AttributeValue, AttributeValueUpdate, ReturnValue}
 use chrono::NaiveDate;
 use log::{debug, trace};
 use std::{collections::HashMap, rc::Rc};
+use uuid::Uuid;
 
 use crate::dao::{DaoError, PersonDao};
 use crate::domain::{PersonId, Revision};
@@ -34,11 +35,11 @@ fn convert(hm: HashMap<String, AttributeValue>) -> Result<(PersonId, PersonDto),
     let id = hm
         .get("id")
         .ok_or(DaoError::SelectError("not found id attr in person".into()))?
-        .as_n()
-        .map_err(|e| DaoError::SelectError(format!("invalid N value: {:?}", e)))
+        .as_s()
+        .map_err(|e| DaoError::SelectError(format!("invalid S value: {:?}", e)))
         .and_then(|d| {
-            d.parse::<i32>()
-                .map_err(|e| DaoError::SelectError(format!("failed to parse as i32: {:?}", e)))
+            Uuid::parse_str(d)
+                .map_err(|e| DaoError::SelectError(format!("failed to parse as UUID: {:?}", e)))
         })?;
     let name = hm
         .get("name")
@@ -89,46 +90,13 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
         trace!("inserting person: {:?}", person);
         tx_rs::with_tx(move |tx: &mut Rc<tokio::runtime::Runtime>| {
             tx.block_on(async {
-                let req = self
-                    .client
-                    .update_item()
-                    .table_name("person")
-                    .key("PK", AttributeValue::S("person-counter".into()))
-                    .key("SK", AttributeValue::S("person_id".into()))
-                    .update_expression("SET person_id = if_not_exists(person_id, :start) + :incr")
-                    .expression_attribute_values(":start", AttributeValue::N(0.to_string()))
-                    .expression_attribute_values(":incr", AttributeValue::N(1.to_string()))
-                    .return_values(ReturnValue::AllNew);
-                trace!("request to update-item counter: {:?}", req);
-
-                let resp = req
-                    .send()
-                    .await
-                    .map_err(|e| DaoError::InsertError(e.to_string()))?;
-                debug!("response of update-item counter: {:?}", resp);
-
-                let new_id = resp
-                    .attributes
-                    .ok_or(DaoError::InsertError("not found person counter".into()))?
-                    .get("person_id")
-                    .ok_or(DaoError::InsertError(
-                        "not found id attr in person counter".into(),
-                    ))?
-                    .clone();
-                debug!("new id: {:?}", new_id);
-
-                let id = new_id
-                    .as_n()
-                    .map_err(|e| DaoError::InsertError(format!("invalid N value: {:?}", e)))?
-                    .parse::<i32>()
-                    .map_err(|e| {
-                        DaoError::InsertError(format!("failed to parse as i32: {:?}", e))
-                    })?;
+                let id = Uuid::now_v7();
+                debug!("new id: {:?}", id);
 
                 let mut item = HashMap::from([
                     ("PK".into(), AttributeValue::S(format!("person#{}", id))),
                     ("SK".into(), AttributeValue::S("person".into())),
-                    ("id".into(), new_id.clone()),
+                    ("id".into(), AttributeValue::S(id.into())),
                     ("name".into(), AttributeValue::S(person.name)),
                     (
                         "birth_date".into(),
