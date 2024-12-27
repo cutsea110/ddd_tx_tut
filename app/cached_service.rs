@@ -275,9 +275,10 @@ pub trait PersonCachedService<'a, Conn, Ctx>: PersonService<'a, Ctx> {
 #[cfg(test)]
 mod fake_tests {
     use chrono::NaiveDate;
-    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::rc::Rc;
+    use std::{cell::RefCell, collections::VecDeque};
+    use uuid::Uuid;
 
     use crate::{
         cache::{CaoError, PersonCao},
@@ -296,7 +297,7 @@ mod fake_tests {
             &self,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn fetch(
             &self,
@@ -336,7 +337,7 @@ mod fake_tests {
         where
             (): 'a,
         {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn find<'a>(
             &'a mut self,
@@ -354,7 +355,7 @@ mod fake_tests {
         where
             (): 'a,
         {
-            tx_rs::with_tx(move |&mut ()| Ok((1, person)))
+            tx_rs::with_tx(move |&mut ()| Ok((Uuid::now_v7(), person)))
         }
         fn collect<'a>(
             &'a mut self,
@@ -411,7 +412,7 @@ mod fake_tests {
     /// Clone できるようにしていないので基本は Rc でラップしていません。
     /// FakePersonCao のみ get_cao() で clone されるため内部データを Rc でラップしています。
     struct TargetPersonService {
-        next_id: RefCell<PersonId>,
+        next_id: RefCell<VecDeque<PersonId>>,
         db: RefCell<HashMap<PersonId, PersonDto>>,
         usecase: Rc<RefCell<DummyPersonUsecase>>,
         cao: FakePersonCao,
@@ -440,7 +441,7 @@ mod fake_tests {
             death_date: Option<NaiveDate>,
             data: &str,
         ) -> Result<(PersonId, PersonDto), crate::service::ServiceError> {
-            let id = self.next_id.replace_with(|&mut id| id + 1);
+            let id = self.next_id.borrow_mut().pop_front().unwrap();
 
             let person = PersonDto::new(name, birth_date, death_date, Some(data), 0);
 
@@ -464,7 +465,7 @@ mod fake_tests {
         ) -> Result<Vec<PersonId>, crate::service::ServiceError> {
             let mut ids = vec![];
             for person in persons {
-                let id = self.next_id.replace_with(|&mut id| id + 1);
+                let id = self.next_id.borrow_mut().pop_front().unwrap();
 
                 self.db.borrow_mut().insert(id, person.clone());
                 ids.push(id);
@@ -545,8 +546,9 @@ mod fake_tests {
 
     #[test]
     fn test_register() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![id])),
             db: RefCell::new(HashMap::new()),
             usecase: Rc::new(RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -560,13 +562,15 @@ mod fake_tests {
         let result = service.register("Alice", date(2000, 1, 1), None, "Alice is here");
 
         assert!(result.is_ok());
-        assert_eq!(result, Ok((1, expected)));
+        assert_eq!(result, Ok((id, expected)));
     }
 
     #[test]
     fn test_find() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
         let mut service = TargetPersonService {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![id1])),
             db: RefCell::new(HashMap::new()),
             usecase: Rc::new(RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -576,13 +580,13 @@ mod fake_tests {
             },
         };
 
-        let result = service.find(1);
+        let result = service.find(id1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(None), "not found");
 
         let mut service = TargetPersonService {
-            next_id: RefCell::new(2),
+            next_id: RefCell::new(VecDeque::from(vec![id2])),
             db: RefCell::new(HashMap::new()),
             usecase: Rc::new(RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -590,7 +594,7 @@ mod fake_tests {
             cao: FakePersonCao {
                 cache: RefCell::new(
                     vec![(
-                        1,
+                        id1,
                         PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                     )]
                     .into_iter()
@@ -601,16 +605,16 @@ mod fake_tests {
         };
 
         let expected = PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0);
-        let result = service.find(1);
+        let result = service.find(id1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(Some(expected)), "hit cache");
 
         let mut service = TargetPersonService {
-            next_id: RefCell::new(2),
+            next_id: RefCell::new(VecDeque::from(vec![id2])),
             db: RefCell::new(
                 vec![(
-                    1,
+                    id1,
                     PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                 )]
                 .into_iter()
@@ -625,7 +629,7 @@ mod fake_tests {
         };
 
         let expected = PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0);
-        let result = service.find(1);
+        let result = service.find(id1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(Some(expected)), "found db");
@@ -633,8 +637,10 @@ mod fake_tests {
 
     #[test]
     fn test_batch_import() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
         let mut service = TargetPersonService {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![id1, id2])),
             db: RefCell::new(HashMap::new()),
             usecase: Rc::new(RefCell::new(DummyPersonUsecase {
                 dao: DummyPersonDao,
@@ -653,21 +659,23 @@ mod fake_tests {
         );
 
         assert!(result.is_ok());
-        assert_eq!(result, Ok(vec![1, 2]));
+        assert_eq!(result, Ok(vec![id1, id2]));
     }
 
     #[test]
     fn test_list_all() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
         let mut service = TargetPersonService {
-            next_id: RefCell::new(3),
+            next_id: RefCell::new(VecDeque::from(vec![Uuid::now_v7()])),
             db: RefCell::new(
                 vec![
                     (
-                        1,
+                        id1,
                         PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                     ),
                     (
-                        2,
+                        id2,
                         PersonDto::new("Bob", date(2000, 1, 2), None, Some("Bob is here"), 0),
                     ),
                 ]
@@ -690,11 +698,12 @@ mod fake_tests {
 
     #[test]
     fn test_death() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
-            next_id: RefCell::new(3),
+            next_id: RefCell::new(VecDeque::from(vec![Uuid::now_v7()])),
             db: RefCell::new(
                 vec![(
-                    1,
+                    id,
                     PersonDto::new(
                         "poor man",
                         date(2000, 1, 1),
@@ -714,7 +723,7 @@ mod fake_tests {
             },
         };
 
-        let result = service.death(1, date(2030, 11, 22));
+        let result = service.death(id, date(2030, 11, 22));
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(()));
@@ -722,16 +731,18 @@ mod fake_tests {
 
     #[test]
     fn test_unregister() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
         let mut service = TargetPersonService {
-            next_id: RefCell::new(3),
+            next_id: RefCell::new(VecDeque::from(vec![Uuid::now_v7()])),
             db: RefCell::new(
                 vec![
                     (
-                        1,
+                        id1,
                         PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                     ),
                     (
-                        2,
+                        id2,
                         PersonDto::new("Bob", date(2000, 1, 2), None, Some("Bob is here"), 0),
                     ),
                 ]
@@ -746,7 +757,7 @@ mod fake_tests {
             },
         };
 
-        let result = service.unregister(1);
+        let result = service.unregister(id1);
 
         assert!(result.is_ok());
         assert_eq!(result, Ok(()));
@@ -828,6 +839,7 @@ mod spy_tests {
     use chrono::NaiveDate;
     use std::cell::RefCell;
     use std::rc::Rc;
+    use uuid::Uuid;
 
     use crate::{
         cache::{CaoError, PersonCao},
@@ -846,7 +858,7 @@ mod spy_tests {
             &self,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn fetch(
             &self,
@@ -886,7 +898,7 @@ mod spy_tests {
         where
             (): 'a,
         {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn find<'a>(
             &'a mut self,
@@ -904,7 +916,7 @@ mod spy_tests {
         where
             (): 'a,
         {
-            tx_rs::with_tx(move |&mut ()| Ok((1, person)))
+            tx_rs::with_tx(move |&mut ()| Ok((Uuid::now_v7(), person)))
         }
         fn collect<'a>(
             &'a mut self,
@@ -1123,10 +1135,11 @@ mod spy_tests {
 
     #[test]
     fn test_register() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find: RefCell::new(vec![]),
@@ -1181,7 +1194,7 @@ mod spy_tests {
         assert_eq!(
             *service.cao.load.borrow(),
             vec![(
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0)
             )]
         );
@@ -1194,7 +1207,7 @@ mod spy_tests {
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find: RefCell::new(vec![]),
@@ -1249,7 +1262,7 @@ mod spy_tests {
         assert_eq!(
             *service.cao.load.borrow(),
             vec![(
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0)
             )]
         );
@@ -1266,9 +1279,13 @@ mod spy_tests {
 
     #[test]
     fn test_find() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1301,7 +1318,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.find(1);
+        let _ = service.find(id);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1311,7 +1328,7 @@ mod spy_tests {
         assert_eq!(*service.list_all.borrow(), 0);
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(*service.cao.find.borrow(), vec![id]);
         assert_eq!(
             *service.cao.load.borrow(),
             vec![] as Vec<(PersonId, PersonDto)>
@@ -1324,7 +1341,10 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(Some(PersonDto::new(
                 "Alice",
@@ -1357,9 +1377,9 @@ mod spy_tests {
             },
         };
 
-        let _ = service.find(1);
+        let _ = service.find(id);
         assert_eq!(*service.register.borrow(), vec![]);
-        assert_eq!(*service.find.borrow(), vec![1]);
+        assert_eq!(*service.find.borrow(), vec![id]);
         assert_eq!(
             *service.batch_import.borrow(),
             vec![] as Vec<Vec<PersonDto>>
@@ -1371,11 +1391,11 @@ mod spy_tests {
         );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(*service.cao.find.borrow(), vec![id]);
         assert_eq!(
             *service.cao.load.borrow(),
             vec![(
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0)
             )]
         );
@@ -1387,7 +1407,10 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(Some(PersonDto::new(
                 "Alice",
@@ -1420,9 +1443,9 @@ mod spy_tests {
             },
         };
 
-        let _ = service.find(1);
+        let _ = service.find(id);
         assert_eq!(*service.register.borrow(), vec![]);
-        assert_eq!(*service.find.borrow(), vec![1]);
+        assert_eq!(*service.find.borrow(), vec![id]);
         assert_eq!(
             *service.batch_import.borrow(),
             vec![] as Vec<Vec<PersonDto>>
@@ -1434,11 +1457,11 @@ mod spy_tests {
         );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(*service.cao.find.borrow(), vec![id]);
         assert_eq!(
             *service.cao.load.borrow(),
             vec![(
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0)
             )]
         );
@@ -1450,7 +1473,10 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(Some(PersonDto::new(
                 "Alice",
@@ -1483,9 +1509,9 @@ mod spy_tests {
             },
         };
 
-        let _ = service.find(1);
+        let _ = service.find(id);
         assert_eq!(*service.register.borrow(), vec![]);
-        assert_eq!(*service.find.borrow(), vec![1]);
+        assert_eq!(*service.find.borrow(), vec![id]);
         assert_eq!(
             *service.batch_import.borrow(),
             vec![] as Vec<Vec<PersonDto>>
@@ -1497,11 +1523,11 @@ mod spy_tests {
         );
         assert_eq!(*service.unregister.borrow(), vec![] as Vec<PersonId>);
 
-        assert_eq!(*service.cao.find.borrow(), vec![1]);
+        assert_eq!(*service.cao.find.borrow(), vec![id]);
         assert_eq!(
             *service.cao.load.borrow(),
             vec![(
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0)
             )]
         );
@@ -1518,13 +1544,19 @@ mod spy_tests {
 
     #[test]
     fn test_batch_import() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
+        let id3 = Uuid::now_v7();
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
-            batch_import_result: Ok(vec![3, 4, 5]),
+            batch_import_result: Ok(vec![id1, id2, id3]),
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
             death: RefCell::new(vec![]),
@@ -1577,15 +1609,15 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![
                 (
-                    3,
+                    id1,
                     PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"), 0)
                 ),
                 (
-                    4,
+                    id2,
                     PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is receiver"), 0)
                 ),
                 (
-                    5,
+                    id3,
                     PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is interceptor"), 0)
                 ),
             ]
@@ -1598,11 +1630,14 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
-            batch_import_result: Ok(vec![3, 4, 5]),
+            batch_import_result: Ok(vec![id1, id2, id3]),
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![]), // 使われない
             death: RefCell::new(vec![]),
@@ -1656,7 +1691,7 @@ mod spy_tests {
             // 一つ目はロードされて、そのあとはエラーにより中断されている状態
             // 実際の場面では空であることが多いと思うが不定であるため、この値の検証にはあまり意味はない
             vec![(
-                3,
+                id1,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is sender"), 0)
             ),]
         );
@@ -1673,9 +1708,15 @@ mod spy_tests {
 
     #[test]
     fn test_list_all() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
+        let id3 = Uuid::now_v7();
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1683,15 +1724,15 @@ mod spy_tests {
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![
                 (
-                    3,
+                    id1,
                     PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                 ),
                 (
-                    4,
+                    id2,
                     PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is here"), 0),
                 ),
                 (
-                    5,
+                    id3,
                     PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is here"), 0),
                 ),
             ]),
@@ -1734,15 +1775,15 @@ mod spy_tests {
             *service.cao.load.borrow(),
             vec![
                 (
-                    3,
+                    id1,
                     PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                 ),
                 (
-                    4,
+                    id2,
                     PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is here"), 0),
                 ),
                 (
-                    5,
+                    id3,
                     PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is here"), 0),
                 ),
             ]
@@ -1752,7 +1793,10 @@ mod spy_tests {
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1760,15 +1804,15 @@ mod spy_tests {
             list_all: RefCell::new(0),
             list_all_result: Ok(vec![
                 (
-                    3,
+                    id1,
                     PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
                 ),
                 (
-                    4,
+                    id2,
                     PersonDto::new("Bob", date(2001, 2, 2), None, Some("Bob is here"), 0),
                 ),
                 (
-                    5,
+                    id3,
                     PersonDto::new("Eve", date(2002, 3, 3), None, Some("Eve is here"), 0),
                 ),
             ]),
@@ -1810,7 +1854,7 @@ mod spy_tests {
         assert_eq!(
             *service.cao.load.borrow(),
             vec![(
-                3,
+                id1,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             ),]
         );
@@ -1827,9 +1871,13 @@ mod spy_tests {
 
     #[test]
     fn test_unregister() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1856,7 +1904,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.unregister(3);
+        let _ = service.unregister(id);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1868,19 +1916,22 @@ mod spy_tests {
             *service.death.borrow(),
             vec![] as Vec<(PersonId, NaiveDate)>
         );
-        assert_eq!(*service.unregister.borrow(), vec![3]);
+        assert_eq!(*service.unregister.borrow(), vec![id]);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
             vec![] as Vec<(PersonId, PersonDto)>
         );
-        assert_eq!(*service.cao.unload.borrow(), vec![3]);
+        assert_eq!(*service.cao.unload.borrow(), vec![id]);
         assert_eq!(*service.reporter.report.borrow(), vec![]);
 
         let mut service = TargetPersonService {
             register: RefCell::new(vec![]),
-            register_result: Ok((1, PersonDto::new("", date(2000, 1, 1), None, Some(""), 0))), // 使われない
+            register_result: Ok((
+                Uuid::now_v7(),
+                PersonDto::new("", date(2000, 1, 1), None, Some(""), 0),
+            )), // 使われない
             find: RefCell::new(vec![]),
             find_result: Ok(None), // 使われない
             batch_import: RefCell::new(vec![]),
@@ -1907,7 +1958,7 @@ mod spy_tests {
             },
         };
 
-        let _ = service.unregister(3);
+        let _ = service.unregister(id);
         assert_eq!(*service.register.borrow(), vec![]);
         assert_eq!(*service.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
@@ -1919,14 +1970,14 @@ mod spy_tests {
             *service.death.borrow(),
             vec![] as Vec<(PersonId, NaiveDate)>
         );
-        assert_eq!(*service.unregister.borrow(), vec![3]);
+        assert_eq!(*service.unregister.borrow(), vec![id]);
 
         assert_eq!(*service.cao.find.borrow(), vec![] as Vec<PersonId>);
         assert_eq!(
             *service.cao.load.borrow(),
             vec![] as Vec<(PersonId, PersonDto)>
         );
-        assert_eq!(*service.cao.unload.borrow(), vec![3]);
+        assert_eq!(*service.cao.unload.borrow(), vec![id]);
         assert_eq!(
             *service.reporter.report.borrow(),
             vec![(
@@ -2004,6 +2055,7 @@ mod error_stub_tests {
     use chrono::NaiveDate;
     use std::cell::RefCell;
     use std::rc::Rc;
+    use uuid::Uuid;
 
     use crate::{
         cache::{CaoError, PersonCao},
@@ -2022,7 +2074,7 @@ mod error_stub_tests {
             &self,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn fetch(
             &self,
@@ -2062,7 +2114,7 @@ mod error_stub_tests {
         where
             (): 'a,
         {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn find<'a>(
             &'a mut self,
@@ -2080,7 +2132,7 @@ mod error_stub_tests {
         where
             (): 'a,
         {
-            tx_rs::with_tx(move |&mut ()| Ok((1, person)))
+            tx_rs::with_tx(move |&mut ()| Ok((Uuid::now_v7(), person)))
         }
         fn collect<'a>(
             &'a mut self,
@@ -2261,6 +2313,7 @@ mod error_stub_tests {
 
     #[test]
     fn test_register() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register_result: Err(crate::service::ServiceError::TransactionFailed(
                 UsecaseError::EntryPersonFailed(DaoError::InsertError("valid dao".to_string())),
@@ -2289,7 +2342,7 @@ mod error_stub_tests {
 
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
@@ -2310,7 +2363,7 @@ mod error_stub_tests {
         assert_eq!(
             result,
             Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0)
             ))
         );
@@ -2318,9 +2371,10 @@ mod error_stub_tests {
 
     #[test]
     fn test_find() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Err(crate::service::ServiceError::TransactionFailed(
@@ -2339,7 +2393,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.find(1);
+        let result = service.find(id);
         assert_eq!(
             result,
             Err(crate::service::ServiceError::TransactionFailed(
@@ -2349,7 +2403,7 @@ mod error_stub_tests {
 
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(Some(PersonDto::new(
@@ -2372,7 +2426,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.find(1);
+        let result = service.find(id);
         assert_eq!(
             result,
             Ok(Some(PersonDto::new(
@@ -2387,9 +2441,10 @@ mod error_stub_tests {
 
     #[test]
     fn test_batch_import() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
@@ -2418,7 +2473,7 @@ mod error_stub_tests {
 
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
@@ -2456,11 +2511,11 @@ mod error_stub_tests {
 
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
-            batch_import_result: Ok(vec![1]),
+            batch_import_result: Ok(vec![id]),
             list_all_result: Ok(vec![]),
             death_result: Ok(()),
             unregister_result: Ok(()),
@@ -2483,14 +2538,15 @@ mod error_stub_tests {
             )],
             Rc::new(DummyPersonOutputBoundary),
         );
-        assert_eq!(result, Ok(vec![1]));
+        assert_eq!(result, Ok(vec![id]));
     }
 
     #[test]
     fn test_list_all() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
@@ -2519,13 +2575,13 @@ mod error_stub_tests {
 
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
             batch_import_result: Ok(vec![]),
             list_all_result: Ok(vec![(
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )]),
             death_result: Ok(()),
@@ -2543,7 +2599,7 @@ mod error_stub_tests {
         assert_eq!(
             result,
             Ok(vec![(
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )])
         );
@@ -2551,9 +2607,10 @@ mod error_stub_tests {
 
     #[test]
     fn test_death() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new(
                     "poor man",
                     date(2000, 1, 1),
@@ -2578,7 +2635,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.death(1, date(2030, 12, 31));
+        let result = service.death(id, date(2030, 12, 31));
         assert_eq!(
             result,
             Err(crate::service::ServiceError::TransactionFailed(
@@ -2588,7 +2645,7 @@ mod error_stub_tests {
 
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new(
                     "poor man",
                     date(2000, 1, 1),
@@ -2611,15 +2668,16 @@ mod error_stub_tests {
                 unload_result: Err(CaoError::Unavailable("valid cao".to_string())),
             },
         };
-        let result = service.death(1, date(2030, 12, 31));
+        let result = service.death(id, date(2030, 12, 31));
         assert_eq!(result, Ok(()));
     }
 
     #[test]
     fn test_unregister() {
+        let id = Uuid::now_v7();
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
@@ -2638,7 +2696,7 @@ mod error_stub_tests {
                 unload_result: Ok(()),
             },
         };
-        let result = service.unregister(1);
+        let result = service.unregister(id);
         assert_eq!(
             result,
             Err(crate::service::ServiceError::TransactionFailed(
@@ -2648,7 +2706,7 @@ mod error_stub_tests {
 
         let mut service = TargetPersonService {
             register_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2000, 1, 1), None, Some("Alice is here"), 0),
             )),
             find_result: Ok(None),
@@ -2665,7 +2723,7 @@ mod error_stub_tests {
                 unload_result: Err(CaoError::Unavailable("valid cao".to_string())),
             },
         };
-        let result = service.unregister(1);
+        let result = service.unregister(id);
         assert_eq!(result, Ok(()));
     }
 }

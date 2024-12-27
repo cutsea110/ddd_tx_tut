@@ -167,19 +167,22 @@ pub trait PersonUsecase<Ctx>: HavePersonDao<Ctx> {
 #[cfg(test)]
 mod fake_tests {
     use std::cell::RefCell;
+    use std::collections::VecDeque;
+
+    use uuid::Uuid;
 
     use super::*;
     use crate::domain::{date, Revision};
     use crate::dto::PersonDto;
 
     struct FakePersonDao {
-        next_id: RefCell<PersonId>,
+        next_id: RefCell<VecDeque<PersonId>>,
         data: RefCell<Vec<(PersonId, PersonDto)>>,
     }
     // Ctx 不要なので () にしている
     impl PersonDao<()> for FakePersonDao {
         fn insert(&self, person: PersonDto) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            let id = self.next_id.replace_with(|&mut id| id + 1);
+            let id = self.next_id.borrow_mut().pop_front().unwrap();
             self.data.borrow_mut().push((id, person));
 
             tx_rs::with_tx(move |()| Ok(id))
@@ -233,8 +236,9 @@ mod fake_tests {
 
     #[test]
     fn test_entry() {
+        let id = Uuid::now_v7();
         let dao = FakePersonDao {
-            next_id: RefCell::new(42),
+            next_id: RefCell::new(VecDeque::from(vec![id])),
             data: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
@@ -247,7 +251,7 @@ mod fake_tests {
             0,
         );
         let expected = person.clone().into();
-        let expected_id = 42;
+        let expected_id = id;
 
         let result = usecase.entry(person).run(&mut ());
         assert_eq!(result, Ok(expected_id));
@@ -256,19 +260,22 @@ mod fake_tests {
     }
     #[test]
     fn test_find() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
+        let id3 = Uuid::now_v7();
         let dao = FakePersonDao {
-            next_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(VecDeque::from(vec![Uuid::now_v7()])), // 使わない
             data: RefCell::new(vec![
                 (
-                    13,
+                    id1,
                     PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
                 ),
                 (
-                    24,
+                    id2,
                     PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
                 ),
                 (
-                    99,
+                    id3,
                     PersonDto::new(
                         "Eve",
                         date(1996, 12, 15),
@@ -281,7 +288,7 @@ mod fake_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let result = usecase.find(13).run(&mut ());
+        let result = usecase.find(id1).run(&mut ());
         let expected = Some(PersonDto::new(
             "Alice",
             date(2012, 11, 2),
@@ -293,8 +300,9 @@ mod fake_tests {
     }
     #[test]
     fn test_entry_and_verify() {
+        let id = Uuid::now_v7();
         let dao = FakePersonDao {
-            next_id: RefCell::new(13),
+            next_id: RefCell::new(VecDeque::from(vec![id])),
             data: RefCell::new(vec![]),
         };
         let mut usecase = TargetPersonUsecase { dao };
@@ -306,24 +314,27 @@ mod fake_tests {
             Some("Alice wonderland"),
             3,
         );
-        let expected = (13, person.clone());
+        let expected = (id, person.clone());
 
         let result = usecase.entry_and_verify(person).run(&mut ());
         assert_eq!(result, Ok(expected));
     }
     #[test]
     fn test_collect() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
+        let id3 = Uuid::now_v7();
         let data = vec![
             (
-                13,
+                id1,
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
             ),
             (
-                24,
+                id2,
                 PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
             ),
             (
-                99,
+                id3,
                 PersonDto::new(
                     "Eve",
                     date(1996, 12, 15),
@@ -340,7 +351,7 @@ mod fake_tests {
             .collect::<Vec<_>>();
 
         let dao = FakePersonDao {
-            next_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(VecDeque::from(vec![Uuid::now_v7()])), // 使わない
             data: RefCell::new(data),
         };
         let mut usecase = TargetPersonUsecase { dao };
@@ -356,18 +367,19 @@ mod fake_tests {
     }
     #[test]
     fn test_death() {
+        let id = Uuid::now_v7();
         let dao = FakePersonDao {
-            next_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(VecDeque::from(vec![])), // 使わない
             data: RefCell::new(vec![(
-                13,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
             )]),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let result = usecase.death(13, date(2020, 12, 30)).run(&mut ());
+        let result = usecase.death(id, date(2020, 12, 30)).run(&mut ());
         let expected = vec![(
-            13,
+            id,
             PersonDto::new(
                 "Alice",
                 date(2012, 11, 2),
@@ -381,17 +393,20 @@ mod fake_tests {
     }
     #[test]
     fn test_remove() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
+        let id3 = Uuid::now_v7();
         let data = vec![
             (
-                13,
+                id1,
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
             ),
             (
-                24,
+                id2,
                 PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
             ),
             (
-                99,
+                id3,
                 PersonDto::new(
                     "Eve",
                     date(1996, 12, 15),
@@ -403,19 +418,19 @@ mod fake_tests {
         ];
 
         let dao = FakePersonDao {
-            next_id: RefCell::new(0), // 使わない
+            next_id: RefCell::new(VecDeque::from(vec![])), // 使わない
             data: RefCell::new(data),
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let result = usecase.remove(24).run(&mut ());
+        let result = usecase.remove(id2).run(&mut ());
         let expected = vec![
             (
-                13,
+                id1,
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
             ),
             (
-                99,
+                id3,
                 PersonDto::new(
                     "Eve",
                     date(1996, 12, 15),
@@ -482,6 +497,8 @@ mod fake_tests {
 mod spy_tests {
     use std::cell::RefCell;
 
+    use uuid::Uuid;
+
     use super::*;
     use crate::domain::{date, Revision};
     use crate::dto::PersonDto;
@@ -500,8 +517,7 @@ mod spy_tests {
         fn insert(&self, person: PersonDto) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
             self.insert.borrow_mut().push(person);
 
-            // 返り値には意味なし
-            tx_rs::with_tx(|()| Ok(42 as PersonId))
+            tx_rs::with_tx(|()| Ok(self.inserted_id))
         }
         fn fetch(
             &self,
@@ -548,9 +564,10 @@ mod spy_tests {
 
     #[test]
     fn test_entry() {
+        let id = Uuid::now_v7();
         let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
-            inserted_id: 0, // 使わない
+            inserted_id: id, // 使わない
             fetch: RefCell::new(vec![]),
             fetch_result: Ok(None),
             select: RefCell::new(0),
@@ -577,9 +594,10 @@ mod spy_tests {
 
     #[test]
     fn test_find() {
+        let id = Uuid::now_v7();
         let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
-            inserted_id: 0, // 使わない
+            inserted_id: id, // 使わない
             fetch: RefCell::new(vec![]),
             fetch_result: Ok(None),
             select: RefCell::new(0),
@@ -588,7 +606,6 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let id: PersonId = 42;
         let expected = id;
         let _ = usecase.find(id).run(&mut ());
 
@@ -605,9 +622,10 @@ mod spy_tests {
 
     #[test]
     fn test_entry_and_verify() {
+        let id = Uuid::now_v7();
         let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
-            inserted_id: 42,
+            inserted_id: id,
             fetch: RefCell::new(vec![]),
             fetch_result: Ok(None),
             select: RefCell::new(0),
@@ -636,9 +654,10 @@ mod spy_tests {
 
     #[test]
     fn test_collect() {
+        let id = Uuid::now_v7();
         let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
-            inserted_id: 0, // 使わない
+            inserted_id: id, // 使わない
             fetch: RefCell::new(vec![]),
             fetch_result: Ok(None),
             select: RefCell::new(0),
@@ -658,9 +677,10 @@ mod spy_tests {
     }
     #[test]
     fn test_death() {
+        let id = Uuid::now_v7();
         let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
-            inserted_id: 0, // 使わない
+            inserted_id: id, // 使わない
             fetch: RefCell::new(vec![]),
             fetch_result: Ok(Some(PersonDto::new(
                 "Alice",
@@ -675,7 +695,6 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let id: PersonId = 42;
         let rev = 17;
         let expected = (
             id,
@@ -702,9 +721,10 @@ mod spy_tests {
     }
     #[test]
     fn test_remove() {
+        let id = Uuid::now_v7();
         let dao = SpyPersonDao {
             insert: RefCell::new(vec![]),
-            inserted_id: 0, // 使わない
+            inserted_id: id, // 使わない
             fetch: RefCell::new(vec![]),
             fetch_result: Ok(None),
             select: RefCell::new(0),
@@ -713,7 +733,6 @@ mod spy_tests {
         };
         let mut usecase = TargetPersonUsecase { dao };
 
-        let id: PersonId = 42;
         let expected = id;
         let _ = usecase.remove(id).run(&mut ());
 
@@ -765,6 +784,8 @@ mod spy_tests {
 //
 #[cfg(test)]
 mod error_stub_tests {
+    use uuid::Uuid;
+
     use super::*;
     use crate::domain::{date, Revision};
     use crate::dto::PersonDto;
@@ -838,8 +859,9 @@ mod error_stub_tests {
 
     #[test]
     fn test_find() {
+        let id = Uuid::now_v7();
         let dao = StubPersonDao {
-            insert_result: Ok(42), // 使わない
+            insert_result: Ok(id), // 使わない
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
             save_result: Ok(()),       // 使わない
@@ -849,7 +871,6 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let id: PersonId = 42;
         let result = usecase.find(id).run(&mut ());
 
         assert!(result.is_err());
@@ -879,8 +900,9 @@ mod error_stub_tests {
 
     #[test]
     fn test_entry_and_verify_fetch_error() {
+        let id = Uuid::now_v7();
         let dao = StubPersonDao {
-            insert_result: Ok(42),
+            insert_result: Ok(id),
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
             save_result: Ok(()),       // 使わない
@@ -900,8 +922,9 @@ mod error_stub_tests {
 
     #[test]
     fn test_collect() {
+        let id = Uuid::now_v7();
         let dao = StubPersonDao {
-            insert_result: Ok(42),  // 使わない
+            insert_result: Ok(id),  // 使わない
             fetch_result: Ok(None), // 使わない
             select_result: Err(DaoError::SelectError("valid dao".to_string())),
             save_result: Ok(()),   // 使わない
@@ -918,8 +941,9 @@ mod error_stub_tests {
     }
     #[test]
     fn test_death_save_error() {
+        let id = Uuid::now_v7();
         let dao = StubPersonDao {
-            insert_result: Ok(42), // 使わない
+            insert_result: Ok(id), // 使わない
             fetch_result: Ok(Some(PersonDto::new(
                 "Alice",
                 date(2020, 5, 5),
@@ -936,7 +960,6 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let id: PersonId = 42;
         let result = usecase.death(id, date(2100, 10, 15)).run(&mut ());
 
         assert!(result.is_err());
@@ -944,8 +967,9 @@ mod error_stub_tests {
     }
     #[test]
     fn test_death_fetch_error() {
+        let id = Uuid::now_v7();
         let dao = StubPersonDao {
-            insert_result: Ok(42), // 使わない
+            insert_result: Ok(id), // 使わない
             fetch_result: Err(DaoError::SelectError("valid dao".to_string())),
             select_result: Ok(vec![]), // 使わない
             save_result: Ok(()),       // 使わない
@@ -956,7 +980,6 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let id: PersonId = 42;
         let result = usecase.death(id, date(2100, 10, 15)).run(&mut ());
 
         assert!(result.is_err());
@@ -964,8 +987,9 @@ mod error_stub_tests {
     }
     #[test]
     fn test_remove() {
+        let id = Uuid::now_v7();
         let dao = StubPersonDao {
-            insert_result: Ok(42),     // 使わない
+            insert_result: Ok(id),     // 使わない
             fetch_result: Ok(None),    // 使わない
             select_result: Ok(vec![]), // 使わない
             save_result: Ok(()),       // 使わない
@@ -975,7 +999,6 @@ mod error_stub_tests {
 
         let mut usecase = TargetPersonUsecase { dao };
 
-        let id: PersonId = 42;
         let result = usecase.remove(id).run(&mut ());
 
         assert!(result.is_err());

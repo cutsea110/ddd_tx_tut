@@ -272,8 +272,10 @@ pub trait PersonService<'a, Ctx> {
 //
 #[cfg(test)]
 mod fake_tests {
-    use std::cell::RefCell;
     use std::rc::Rc;
+    use std::{cell::RefCell, collections::VecDeque};
+
+    use uuid::Uuid;
 
     use super::*;
     use crate::{
@@ -289,7 +291,7 @@ mod fake_tests {
             &self,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn fetch(
             &self,
@@ -314,7 +316,7 @@ mod fake_tests {
     }
 
     struct FakePersonUsecase {
-        next_id: RefCell<PersonId>,
+        next_id: RefCell<VecDeque<PersonId>>,
         db: Vec<(PersonId, PersonDto)>,
         dao: DummyPersonDao,
     }
@@ -331,7 +333,7 @@ mod fake_tests {
         where
             (): 'a,
         {
-            let id = self.next_id.replace_with(|&mut i| i + 1);
+            let id = self.next_id.borrow_mut().pop_front().unwrap();
             self.db.push((id, person));
 
             tx_rs::with_tx(move |&mut ()| Ok(id))
@@ -358,7 +360,7 @@ mod fake_tests {
         where
             (): 'a,
         {
-            let id = self.next_id.replace_with(|&mut i| i + 1);
+            let id = self.next_id.borrow_mut().pop_front().unwrap();
             self.db.push((id, person.clone()));
 
             tx_rs::with_tx(move |&mut ()| Ok((id, person)))
@@ -454,15 +456,16 @@ mod fake_tests {
 
     #[test]
     fn test_register() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![id])),
             db: vec![],
             dao: DummyPersonDao,
         }));
         let mut service = TargetPersonService {
             usecase: usecase.clone(),
         };
-        let expected_id = 1;
+        let expected_id = id;
         let expected = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0);
 
         let res = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
@@ -472,7 +475,11 @@ mod fake_tests {
     #[test]
     fn test_batch_import() {
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![
+                Uuid::now_v7(),
+                Uuid::now_v7(),
+                Uuid::now_v7(),
+            ])),
             db: vec![],
             dao: DummyPersonDao,
         }));
@@ -506,19 +513,22 @@ mod fake_tests {
 
     #[test]
     fn test_list_all() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
+        let id3 = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![id1, id2, id3])),
             db: vec![
                 (
-                    1,
+                    id1,
                     PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
                 ),
                 (
-                    2,
+                    id2,
                     PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
                 ),
                 (
-                    3,
+                    id3,
                     PersonDto::new(
                         "Eve",
                         date(1996, 12, 15),
@@ -546,10 +556,11 @@ mod fake_tests {
     }
     #[test]
     fn test_death() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![id])),
             db: vec![(
-                1,
+                id,
                 PersonDto::new(
                     "poor man",
                     date(2020, 5, 7),
@@ -564,9 +575,9 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
 
-        let _ = service.death(1, date(2100, 4, 7));
+        let _ = service.death(id, date(2100, 4, 7));
         let expected = vec![(
-            1,
+            id,
             PersonDto::new(
                 "poor man",
                 date(2020, 5, 7),
@@ -580,19 +591,22 @@ mod fake_tests {
     }
     #[test]
     fn test_unregister() {
+        let id1 = Uuid::now_v7();
+        let id2 = Uuid::now_v7();
+        let id3 = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(FakePersonUsecase {
-            next_id: RefCell::new(1),
+            next_id: RefCell::new(VecDeque::from(vec![id1, id2, id3])),
             db: vec![
                 (
-                    1,
+                    id1,
                     PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
                 ),
                 (
-                    2,
+                    id2,
                     PersonDto::new("Bob", date(1995, 11, 6), None, Some("Bob is receiver"), 1),
                 ),
                 (
-                    3,
+                    id3,
                     PersonDto::new(
                         "Eve",
                         date(1996, 12, 15),
@@ -608,14 +622,14 @@ mod fake_tests {
             usecase: usecase.clone(),
         };
 
-        let _ = service.unregister(2);
+        let _ = service.unregister(id2);
         let expected = vec![
             (
-                1,
+                id1,
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 3),
             ),
             (
-                3,
+                id3,
                 PersonDto::new(
                     "Eve",
                     date(1996, 12, 15),
@@ -698,6 +712,8 @@ mod spy_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use uuid::Uuid;
+
     use super::*;
     use crate::{
         dao::{DaoError, HavePersonDao, PersonDao},
@@ -712,7 +728,7 @@ mod spy_tests {
             &self,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn fetch(
             &self,
@@ -761,7 +777,7 @@ mod spy_tests {
             self.entry.borrow_mut().push(person);
 
             // 返り値に意味はない
-            tx_rs::with_tx(|&mut ()| Ok(42 as PersonId))
+            tx_rs::with_tx(|&mut ()| Ok(Uuid::now_v7()))
         }
         fn find<'a>(
             &'a mut self,
@@ -785,7 +801,7 @@ mod spy_tests {
             self.entry_and_verify.borrow_mut().push(person.clone());
 
             // 返り値に意味はない
-            tx_rs::with_tx(move |&mut ()| Ok((42, person)))
+            tx_rs::with_tx(move |&mut ()| Ok((Uuid::now_v7(), person)))
         }
         fn collect<'a>(
             &'a mut self,
@@ -919,7 +935,7 @@ mod spy_tests {
 
         let expected = PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0);
 
-        let _ = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
+        let ret_val = service.register("Alice", date(2012, 11, 2), None, "Alice is sender");
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 0);
@@ -936,11 +952,12 @@ mod spy_tests {
         assert_eq!(service.get_reporter().report.borrow().len(), 1);
 
         // Service の引数が Reporter にそのまま渡されていることを検証
+        let id = ret_val.unwrap().0;
         assert_eq!(
             service.get_reporter().report.borrow()[0],
             (
                 "entry_person".to_string(),
-                "registered person_id: 42".to_string()
+                format!("registered person_id: {}", id),
             )
         );
     }
@@ -978,7 +995,7 @@ mod spy_tests {
         let expected = persons.clone();
         let out_port = Rc::new(SpyPersonOutputBoundary::default());
 
-        let _ = service.batch_import(persons.into_iter(), out_port.clone());
+        let ids = service.batch_import(persons.into_iter(), out_port.clone());
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 3);
@@ -995,20 +1012,21 @@ mod spy_tests {
         assert_eq!(service.get_reporter().report.borrow().len(), 3);
 
         // Service の引数が Reporter にそのまま渡されていることを検証
+        let ids = ids.unwrap();
         assert_eq!(
             *service.get_reporter().report.borrow(),
             vec![
                 (
                     "entry_person".to_string(),
-                    "registered person_id: 42".to_string()
+                    format!("registered person_id: {}", ids[0])
                 ),
                 (
                     "entry_person".to_string(),
-                    "registered person_id: 42".to_string()
+                    format!("registered person_id: {}", ids[1])
                 ),
                 (
                     "entry_person".to_string(),
-                    "registered person_id: 42".to_string()
+                    format!("registered person_id: {}", ids[2])
                 )
             ]
         );
@@ -1057,6 +1075,7 @@ mod spy_tests {
     }
     #[test]
     fn test_death() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(SpyPersonUsecase {
             dao: DummyPersonDao,
             entry: RefCell::new(vec![]),
@@ -1074,7 +1093,7 @@ mod spy_tests {
             reporter,
         };
 
-        let _ = service.death(42, date(2020, 7, 19));
+        let _ = service.death(id, date(2020, 7, 19));
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 0);
@@ -1084,7 +1103,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().remove.borrow().len(), 0);
 
         // Service の引数が Usecase にそのまま渡されていることを検証
-        assert_eq!(usecase.borrow().death.borrow()[0], (42, date(2020, 7, 19)));
+        assert_eq!(usecase.borrow().death.borrow()[0], (id, date(2020, 7, 19)));
 
         // Reporter のメソッド呼び出しの記録の検証
         assert_eq!(service.get_reporter().report.borrow().len(), 1);
@@ -1094,12 +1113,13 @@ mod spy_tests {
             service.get_reporter().report.borrow()[0],
             (
                 "death_person".to_string(),
-                "death person_id: 42, death_date: 2020-07-19".to_string()
+                format!("death person_id: {}, death_date: 2020-07-19", id),
             )
         );
     }
     #[test]
     fn test_unregister() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(SpyPersonUsecase {
             dao: DummyPersonDao,
             entry: RefCell::new(vec![]),
@@ -1117,7 +1137,7 @@ mod spy_tests {
             reporter,
         };
 
-        let _ = service.unregister(42);
+        let _ = service.unregister(id);
 
         // Usecase のメソッドの呼び出し記録の検証
         assert_eq!(usecase.borrow().entry.borrow().len(), 0);
@@ -1128,7 +1148,7 @@ mod spy_tests {
         assert_eq!(usecase.borrow().remove.borrow().len(), 1);
 
         // Service の引数が Usecase にそのまま渡されていることを検証
-        assert_eq!(usecase.borrow().remove.borrow()[0], 42);
+        assert_eq!(usecase.borrow().remove.borrow()[0], id);
 
         // Reporter のメソッド呼び出しの記録の検証
         assert_eq!(service.get_reporter().report.borrow().len(), 1);
@@ -1138,7 +1158,7 @@ mod spy_tests {
             *service.get_reporter().report.borrow(),
             vec![(
                 "unregister_person".to_string(),
-                "unregistered person_id: 42".to_string()
+                format!("unregistered person_id: {}", id),
             )]
         );
     }
@@ -1197,6 +1217,8 @@ mod error_stub_tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use uuid::Uuid;
+
     use super::*;
     use crate::{
         dao::{DaoError, HavePersonDao, PersonDao},
@@ -1211,7 +1233,7 @@ mod error_stub_tests {
             &self,
             _person: PersonDto,
         ) -> impl tx_rs::Tx<(), Item = PersonId, Err = DaoError> {
-            tx_rs::with_tx(move |&mut ()| Ok(1))
+            tx_rs::with_tx(move |&mut ()| Ok(Uuid::now_v7()))
         }
         fn fetch(
             &self,
@@ -1374,8 +1396,8 @@ mod error_stub_tests {
     fn test_register_entry_and_verify_error() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Err(UsecaseError::EntryAndVerifyPersonFailed(
                 DaoError::InsertError("valid dao".to_string()),
             )),
@@ -1407,12 +1429,13 @@ mod error_stub_tests {
 
     #[test]
     fn test_register_entry_and_verify_repoter_error_for_entry_person() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
+            entry_result: Ok(id),  // 使わない
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
-                1,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, Some("Alice is sender"), 0),
             )),
             collect_result: Ok(vec![]), // 使わない
@@ -1440,8 +1463,8 @@ mod error_stub_tests {
     fn test_register_entry_and_verify_reporter_error_for_admin() {
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Err(UsecaseError::EntryAndVerifyPersonFailed(
                 DaoError::InsertError("valid dao".to_string()),
             )),
@@ -1473,6 +1496,7 @@ mod error_stub_tests {
 
     #[test]
     fn test_batch_import() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Err(UsecaseError::EntryPersonFailed(DaoError::InsertError(
@@ -1480,7 +1504,7 @@ mod error_stub_tests {
             ))),
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
@@ -1514,12 +1538,13 @@ mod error_stub_tests {
 
     #[test]
     fn test_batch_import_reporter_error_for_entry_person() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(42),
+            entry_result: Ok(id),
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
@@ -1552,6 +1577,7 @@ mod error_stub_tests {
 
     #[test]
     fn test_batch_import_reporter_error_for_admin() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
             entry_result: Err(UsecaseError::EntryPersonFailed(DaoError::InsertError(
@@ -1559,7 +1585,7 @@ mod error_stub_tests {
             ))),
             find_result: Ok(None), // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Ok(vec![]), // 使わない
@@ -1595,12 +1621,13 @@ mod error_stub_tests {
 
     #[test]
     fn test_list_all() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
@@ -1629,12 +1656,13 @@ mod error_stub_tests {
 
     #[test]
     fn test_list_all_reporter_for_admin() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
             collect_result: Err(UsecaseError::CollectPersonFailed(DaoError::SelectError(
@@ -1663,16 +1691,17 @@ mod error_stub_tests {
 
     #[test]
     fn test_unregister() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
-            collect_result: Ok(vec![]), // 使わない
-            death_result: Ok(()),  // 使わない
+            collect_result: Ok(vec![]),       // 使わない
+            death_result: Ok(()),             // 使わない
             remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
                 "valid dao".to_string(),
             ))),
@@ -1689,7 +1718,7 @@ mod error_stub_tests {
             reporter,
         };
 
-        let result = service.unregister(42);
+        let result = service.unregister(id);
         let expected = usecase.borrow().remove_result.clone().unwrap_err();
 
         assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
@@ -1697,15 +1726,16 @@ mod error_stub_tests {
 
     #[test]
     fn test_death_reporter_for_unregister_person() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
-            collect_result: Ok(vec![]), // 使わない
+            collect_result: Ok(vec![]),       // 使わない
             death_result: Ok(()),
             remove_result: Ok(()), // 使わない
         }));
@@ -1721,22 +1751,23 @@ mod error_stub_tests {
             reporter,
         };
 
-        let result = service.death(42, date(2020, 8, 30));
+        let result = service.death(id, date(2020, 8, 30));
 
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_death_reporter_for_admin() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
-            collect_result: Ok(vec![]), // 使わない
+            collect_result: Ok(vec![]),       // 使わない
             death_result: Err(UsecaseError::SavePersonFailed(DaoError::UpdateError(
                 "valid dao".to_string(),
             ))),
@@ -1754,7 +1785,7 @@ mod error_stub_tests {
             reporter,
         };
 
-        let result = service.death(42, date(2020, 8, 30));
+        let result = service.death(id, date(2020, 8, 30));
         let expected = usecase.borrow().death_result.clone().unwrap_err();
 
         assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
@@ -1762,16 +1793,17 @@ mod error_stub_tests {
 
     #[test]
     fn test_unregister_reporter_for_unregister_person() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
-            collect_result: Ok(vec![]), // 使わない
-            death_result: Ok(()),  // 使わない
+            collect_result: Ok(vec![]),       // 使わない
+            death_result: Ok(()),             // 使わない
             remove_result: Ok(()),
         }));
         let reporter = StubReporter {
@@ -1786,23 +1818,24 @@ mod error_stub_tests {
             reporter,
         };
 
-        let result = service.unregister(42);
+        let result = service.unregister(id);
 
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_unregister_reporter_for_admin() {
+        let id = Uuid::now_v7();
         let usecase = Rc::new(RefCell::new(StubPersonUsecase {
             dao: DummyPersonDao,
-            entry_result: Ok(1),   // 使わない
-            find_result: Ok(None), // 使わない
+            entry_result: Ok(Uuid::now_v7()), // 使わない
+            find_result: Ok(None),            // 使わない
             entry_and_verify_result: Ok((
-                42,
+                id,
                 PersonDto::new("Alice", date(2012, 11, 2), None, None, 0),
             )), // 使わない
-            collect_result: Ok(vec![]), // 使わない
-            death_result: Ok(()),  // 使わない
+            collect_result: Ok(vec![]),       // 使わない
+            death_result: Ok(()),             // 使わない
             remove_result: Err(UsecaseError::RemovePersonFailed(DaoError::DeleteError(
                 "valid dao".to_string(),
             ))),
@@ -1819,7 +1852,7 @@ mod error_stub_tests {
             reporter,
         };
 
-        let result = service.unregister(42);
+        let result = service.unregister(id);
         let expected = usecase.borrow().remove_result.clone().unwrap_err();
 
         assert_eq!(result, Err(ServiceError::TransactionFailed(expected)));
