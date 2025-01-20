@@ -1,5 +1,4 @@
-use std::env;
-use std::rc::Rc;
+use std::{env, rc::Rc};
 
 mod cache;
 mod cached_service;
@@ -18,9 +17,9 @@ mod service_impl;
 mod syslog;
 mod usecase;
 
-use crate::dto::PersonDto;
 use cached_service::PersonCachedService;
 use domain::date;
+use dto::PersonDto;
 
 #[cfg(feature = "use_pq")]
 pub fn make_service(
@@ -65,9 +64,7 @@ pub fn make_batch_import_presenter() -> service_impl::nosql_base::PersonBatchImp
 
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
-        unsafe {
-            std::env::set_var("RUST_LOG", "info");
-        };
+        std::env::set_var("RUST_LOG", "info");
     }
     env_logger::init();
 

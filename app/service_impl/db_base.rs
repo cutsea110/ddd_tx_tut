@@ -19,6 +19,7 @@ pub struct PersonUsecaseImpl {
     dao: PgPersonDao,
 }
 impl PersonUsecaseImpl {
+    #[cfg_attr(feature = "use_dynamo", allow(unused))]
     pub fn new(dao: PgPersonDao) -> Self {
         Self { dao }
     }
@@ -37,6 +38,7 @@ pub struct PersonServiceImpl {
     usecase: RefCell<PersonUsecaseImpl>,
 }
 impl PersonServiceImpl {
+    #[cfg_attr(feature = "use_dynamo", allow(unused))]
     pub fn new(
         runtime: Rc<tokio::runtime::Runtime>,
         db_uri: &str,
