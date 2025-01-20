@@ -27,3 +27,7 @@ uuid = { version = "1.11.0", features = ["serde", "v7"] }
 [[bin]]
 name = "app"
 path = "app/main.rs"
+
+[features]
+use_pq = []
+use_dynamo = []

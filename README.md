@@ -91,22 +91,36 @@ docker exec $(docker ps -f "name=rabbitmq" --format "{{.ID}}") \
 
 If you use rabbitmqadmin(administrator control cli), this command is in container too, do like this:
 
-```
+```bash
 docker exec $(docker ps -f "name=rabbitmq" --format "{{.ID}}") \
        rabbitmqadmin help subcommands
 ```
 
 The redis cache's named volumes are empty in `docker-compose.yml`, so you lost cache data after `docker compose down -v` and then, `rm data/shared-local-instance.db`.
 
+## Build
+
+If you want to use postgresql as backend, then you should build with features flag with `use_pq`.
+
+```bash
+cargo build --features=use_pq
+```
+
+Alternatively, if you want to use dynamodb as backend, then you should build with features flag with `use_dynamo`.
+
+```bash
+cargo build --features=use_dynamo
+```
+
 ## Run
 
-```
+```bash
 cargo run
 ```
 
 if you want to see log message
 
-```
+```bash
 RUST_LOG=app=debug cargo run
 ```
 
@@ -114,7 +128,7 @@ RUST_LOG=app=debug cargo run
 
 run unit test without rdb.
 
-```
+```bash
 cargo test
 ```
 

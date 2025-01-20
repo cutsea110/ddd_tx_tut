@@ -23,6 +23,45 @@ use cached_service::PersonCachedService;
 use domain::date;
 use service_impl::{db_base, nosql_base};
 
+#[cfg(feature = "use_pq")]
+pub fn make_service(runtime: Rc<tokio::runtime::Runtime>) -> db_base::PersonServiceImpl {
+    let cache_uri =
+        env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
+    let db_uri = env::var("DATABASE_URI").unwrap_or(
+        // connect_timeout is in seconds
+        "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string(),
+    );
+    let mq_uri = env::var("AMQP_URI").unwrap_or(
+        // connection_timeout is in milliseconds
+        "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
+    );
+
+    db_base::PersonServiceImpl::new(runtime, &db_uri, &cache_uri, &mq_uri)
+}
+#[cfg(feature = "use_pq")]
+pub fn make_batch_import_presenter() -> db_base::PersonBatchImportPresenterImpl {
+    db_base::PersonBatchImportPresenterImpl
+}
+
+#[cfg(feature = "use_dynamo")]
+pub fn make_service(runtime: Rc<tokio::runtime::Runtime>) -> nosql_base::PersonServiceImpl {
+    use service_impl::nosql_base;
+
+    let cache_uri =
+        env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
+    let dynamo_uri = env::var("DYNAMO_URI").unwrap_or("http://localhost:18000".to_string());
+    let mq_uri = env::var("AMQP_URI").unwrap_or(
+        // connection_timeout is in milliseconds
+        "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
+    );
+
+    nosql_base::PersonServiceImpl::new(runtime, &dynamo_uri, &cache_uri, &mq_uri)
+}
+#[cfg(feature = "use_dynamo")]
+pub fn make_batch_import_presenter() -> nosql_base::PersonBatchImportPresenterImpl {
+    nosql_base::PersonBatchImportPresenterImpl
+}
+
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
         unsafe {
@@ -39,22 +78,7 @@ fn main() {
         .into();
 
     // Initialize service
-    let mut service = {
-        let cache_uri =
-            env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
-        let db_uri = env::var("DATABASE_URI").unwrap_or(
-            // connect_timeout is in seconds
-            "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string(),
-        );
-        let dynamo_uri = env::var("DYNAMO_URI").unwrap_or("http://localhost:18000".to_string());
-        let mq_uri = env::var("AMQP_URI").unwrap_or(
-            // connection_timeout is in milliseconds
-            "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
-        );
-
-        // db_base::PersonServiceImpl::new(runtime.clone(), &db_uri, &cache_uri, &mq_uri)
-        nosql_base::PersonServiceImpl::new(runtime.clone(), &dynamo_uri, &cache_uri, &mq_uri)
-    };
+    let mut service = make_service(runtime.clone());
 
     // register, find and death, then unregister
     {
@@ -108,10 +132,7 @@ fn main() {
         .collect::<Vec<_>>();
 
         let ids = service
-            .batch_import(
-                persons.clone(),
-                Rc::new(db_base::PersonBatchImportPresenterImpl),
-            )
+            .batch_import(persons.clone(), Rc::new(make_batch_import_presenter()))
             .expect("batch import");
         println!("batch import done");
 
