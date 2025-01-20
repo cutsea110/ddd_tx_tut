@@ -21,10 +21,11 @@ mod usecase;
 use crate::dto::PersonDto;
 use cached_service::PersonCachedService;
 use domain::date;
-use service_impl::{db_base, nosql_base};
 
 #[cfg(feature = "use_pq")]
-pub fn make_service(runtime: Rc<tokio::runtime::Runtime>) -> db_base::PersonServiceImpl {
+pub fn make_service(
+    runtime: Rc<tokio::runtime::Runtime>,
+) -> service_impl::db_base::PersonServiceImpl {
     let cache_uri =
         env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
     let db_uri = env::var("DATABASE_URI").unwrap_or(
@@ -36,17 +37,17 @@ pub fn make_service(runtime: Rc<tokio::runtime::Runtime>) -> db_base::PersonServ
         "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
     );
 
-    db_base::PersonServiceImpl::new(runtime, &db_uri, &cache_uri, &mq_uri)
+    service_impl::db_base::PersonServiceImpl::new(runtime, &db_uri, &cache_uri, &mq_uri)
 }
 #[cfg(feature = "use_pq")]
-pub fn make_batch_import_presenter() -> db_base::PersonBatchImportPresenterImpl {
-    db_base::PersonBatchImportPresenterImpl
+pub fn make_batch_import_presenter() -> service_impl::db_base::PersonBatchImportPresenterImpl {
+    service_impl::db_base::PersonBatchImportPresenterImpl
 }
 
 #[cfg(feature = "use_dynamo")]
-pub fn make_service(runtime: Rc<tokio::runtime::Runtime>) -> nosql_base::PersonServiceImpl {
-    use service_impl::nosql_base;
-
+pub fn make_service(
+    runtime: Rc<tokio::runtime::Runtime>,
+) -> service_impl::nosql_base::PersonServiceImpl {
     let cache_uri =
         env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
     let dynamo_uri = env::var("DYNAMO_URI").unwrap_or("http://localhost:18000".to_string());
@@ -55,11 +56,11 @@ pub fn make_service(runtime: Rc<tokio::runtime::Runtime>) -> nosql_base::PersonS
         "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
     );
 
-    nosql_base::PersonServiceImpl::new(runtime, &dynamo_uri, &cache_uri, &mq_uri)
+    service_impl::nosql_base::PersonServiceImpl::new(runtime, &dynamo_uri, &cache_uri, &mq_uri)
 }
 #[cfg(feature = "use_dynamo")]
-pub fn make_batch_import_presenter() -> nosql_base::PersonBatchImportPresenterImpl {
-    nosql_base::PersonBatchImportPresenterImpl
+pub fn make_batch_import_presenter() -> service_impl::nosql_base::PersonBatchImportPresenterImpl {
+    service_impl::nosql_base::PersonBatchImportPresenterImpl
 }
 
 fn main() {

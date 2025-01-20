@@ -103,13 +103,13 @@ The redis cache's named volumes are empty in `docker-compose.yml`, so you lost c
 If you want to use postgresql as backend, then you should build with features flag with `use_pq`.
 
 ```bash
-cargo build --features=use_pq
+cargo build --bin app-pq --features=use_pq
 ```
 
 Alternatively, if you want to use dynamodb as backend, then you should build with features flag with `use_dynamo`.
 
 ```bash
-cargo build --features=use_dynamo
+cargo build --bin app-dynamo --features=use_dynamo
 ```
 
 ## Run
