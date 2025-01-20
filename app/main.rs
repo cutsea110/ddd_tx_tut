@@ -20,10 +20,8 @@ mod usecase;
 
 use crate::dto::PersonDto;
 use cached_service::PersonCachedService;
-use dao::PersonDao;
 use domain::date;
-use service_impl::db_base;
-use tx_rs::Tx;
+use service_impl::{db_base, nosql_base};
 
 fn main() {
     if std::env::var("RUST_LOG").is_err() {
@@ -40,77 +38,6 @@ fn main() {
         .unwrap()
         .into();
 
-    // now on testing!!
-    let dynamo = dynamodb::DynamoDbPersonDao::new(runtime.clone(), "http://localhost:18000");
-    let _ = dynamo
-        .insert(PersonDto::new(
-            "Bob",
-            date(1970, 11, 6),
-            None,
-            Some("Rust,Haskell,Scheme"),
-            1,
-        ))
-        .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
-
-    let new_id = dynamo
-        .insert(PersonDto::new(
-            "Charlie",
-            date(1618, 4, 16),
-            None,
-            Some("Drill Baby Drill"),
-            1,
-        ))
-        .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
-
-    if let Ok(id) = new_id {
-        let _ = dynamo
-            .save(
-                id,
-                2,
-                PersonDto::new(
-                    "Charlie.Jr",
-                    date(1618, 4, 16),
-                    Some(date(1700, 1, 3)),
-                    Some("R.I.P."),
-                    2,
-                ),
-            )
-            .run(&mut runtime.clone());
-    }
-
-    let new_id = dynamo
-        .insert(PersonDto::new("Alice", date(2012, 11, 2), None, None, 1))
-        .run(&mut runtime.clone()); // TODO: tx_run provide ctx got from dynamo
-
-    if let Ok(id) = new_id {
-        match dynamo.fetch(id).run(&mut runtime.clone()) {
-            Ok(p) => {
-                println!("Fetch OK! {:#?}", p);
-            }
-            Err(e) => {
-                eprintln!("Fetch ERR! {:?}", e);
-            }
-        }
-    }
-    match dynamo.select().run(&mut runtime.clone()) {
-        Ok(ps) => {
-            println!("Select OK! {:#?}", ps);
-        }
-        Err(e) => {
-            eprintln!("Select ERR! {:?}", e);
-        }
-    }
-    if let Ok(id) = new_id {
-        match dynamo.delete(id).run(&mut runtime.clone()) {
-            Ok(p) => {
-                println!("Delete OK! {:#?}", p);
-            }
-            Err(e) => {
-                eprintln!("Delete ERR! {:?}", e);
-            }
-        }
-    }
-
     // Initialize service
     let mut service = {
         let cache_uri =
@@ -119,12 +46,14 @@ fn main() {
             // connect_timeout is in seconds
             "postgres://admin:adminpass@localhost:15432/sampledb?connect_timeout=2".to_string(),
         );
+        let dynamo_uri = env::var("DYNAMO_URI").unwrap_or("http://localhost:18000".to_string());
         let mq_uri = env::var("AMQP_URI").unwrap_or(
             // connection_timeout is in milliseconds
             "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
         );
 
-        db_base::PersonServiceImpl::new(runtime.clone(), &db_uri, &cache_uri, &mq_uri)
+        // db_base::PersonServiceImpl::new(runtime.clone(), &db_uri, &cache_uri, &mq_uri)
+        nosql_base::PersonServiceImpl::new(runtime.clone(), &dynamo_uri, &cache_uri, &mq_uri)
     };
 
     // register, find and death, then unregister

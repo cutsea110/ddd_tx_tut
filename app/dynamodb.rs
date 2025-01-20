@@ -10,7 +10,6 @@ use crate::dto::PersonDto;
 
 #[derive(Debug, Clone)]
 pub struct DynamoDbPersonDao {
-    async_runtime: Rc<tokio::runtime::Runtime>,
     client: aws_sdk_dynamodb::Client,
 }
 impl DynamoDbPersonDao {
@@ -23,10 +22,7 @@ impl DynamoDbPersonDao {
         });
         trace!("SdkConfig: {:?}", config);
         let client = aws_sdk_dynamodb::Client::new(&config);
-        Self {
-            async_runtime: runtime,
-            client,
-        }
+        Self { client }
     }
 }
 
