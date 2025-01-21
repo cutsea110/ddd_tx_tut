@@ -115,13 +115,13 @@ cargo build --bin app-dynamo --features=use_dynamo
 ## Run
 
 ```bash
-cargo run
+cargo run --bin app-pq --features=use_pq
 ```
 
 if you want to see log message
 
 ```bash
-RUST_LOG=app=debug cargo run
+RUST_LOG=app=debug cargo run --bin app-pq --features=use_pq
 ```
 
 ## Test
@@ -129,7 +129,7 @@ RUST_LOG=app=debug cargo run
 run unit test without rdb.
 
 ```bash
-cargo test
+cargo test --features=use_pq
 ```
 
 ## More Information
