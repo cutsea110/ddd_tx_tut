@@ -6,6 +6,7 @@ all:
 
 test:
 	cargo test --features use_pq
+	cargo test --features use_dynamo
 
 clean:
 	cargo clean
