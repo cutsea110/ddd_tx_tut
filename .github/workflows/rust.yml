@@ -17,6 +17,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build
-      run: cargo build --verbose
+      run: |
+         cargo build --bin app-pq --features use_pq --verbose \
+         cargo build --bin app-dynamo --features use_dynamo --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        cargo test --features use_pq --verbose \
+        cargo test --features use_dynamo --verbose
