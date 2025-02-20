@@ -126,7 +126,7 @@ RUST_LOG=app=debug cargo run --bin app-pq --features=use_pq
 
 ## Test
 
-run unit test without rdb.
+run unit test with rdb.
 
 ```bash
 cargo test --features=use_pq
