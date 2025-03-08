@@ -1727,9 +1727,9 @@ dependencies = [
 
 [[package]]
 name = "lapin"
-version = "2.5.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "209b09a06f4bd4952a0fd0594f90d53cf4496b062f59acc838a2823e1bb7d95c"
+checksum = "3551b363b2fcf985fa39c47114333fa12fbb6518f863d4fd9556d0e19f48c1c9"
 dependencies = [
  "amq-protocol",
  "async-global-executor-trait",
@@ -2989,7 +2989,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "tx-rs"
 version = "0.1.0"
-source = "git+https://github.com/cutsea110/fragments.git?branch=main#ef46a0020de0fd491b8a482d518981d24b5e1cd8"
+source = "git+https://github.com/cutsea110/fragments.git?branch=main#4f96ee0ea979799ea638abe9bc777a91fc8fc735"
 
 [[package]]
 name = "typenum"
