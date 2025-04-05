@@ -30,7 +30,7 @@ services:
       - RABBITMQ_DEFAULT_PASS=adminpass
 
   dynamodb:
-    image: amazon/dynamodb-local
+    image: amazon/dynamodb-local:2.5.4
     container_name: dynamodb
     ports:
       - 18000:8000
