@@ -10,4 +10,4 @@ test:
 
 clean:
 	cargo clean
-	rm data/shared-local-instance.db
+	rm -f data/shared-local-instance.db
