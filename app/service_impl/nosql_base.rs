@@ -15,7 +15,7 @@ pub struct PersonUsecaseImpl {
     dao: DynamoDbPersonDao,
 }
 impl PersonUsecaseImpl {
-    #[cfg_attr(feature = "use_pq", allow(unused))]
+    #[cfg_attr(any(feature = "use_pq", feature = "use_hash"), allow(unused))]
     pub fn new(dao: DynamoDbPersonDao) -> Self {
         Self { dao }
     }
@@ -35,7 +35,7 @@ pub struct PersonServiceImpl {
     usecase: RefCell<PersonUsecaseImpl>,
 }
 impl PersonServiceImpl {
-    #[cfg_attr(feature = "use_pq", allow(unused))]
+    #[cfg_attr(any(feature = "use_pq", feature = "use_hash"), allow(unused))]
     pub fn new(
         runtime: Rc<tokio::runtime::Runtime>,
         dynamo_uri: &str,

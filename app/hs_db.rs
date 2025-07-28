@@ -2,6 +2,7 @@ use log::trace;
 use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
+    rc::Rc,
 };
 use uuid::Uuid;
 
@@ -11,7 +12,14 @@ use crate::dto::PersonDto;
 
 #[derive(Debug, Clone)]
 pub struct HashDB {
-    persons: RefCell<HashMap<PersonId, PersonDto>>,
+    pub persons: Rc<RefCell<HashMap<PersonId, PersonDto>>>,
+}
+impl HashDB {
+    pub fn new() -> Self {
+        Self {
+            persons: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
 }
 impl<'a> PersonDao<RefMut<'a, HashMap<PersonId, PersonDto>>> for HashDB {
     fn insert(

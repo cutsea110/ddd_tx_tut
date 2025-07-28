@@ -22,6 +22,24 @@ use cached_service::PersonCachedService;
 use domain::date;
 use dto::PersonDto;
 
+#[cfg(feature = "use_hash")]
+pub fn make_service(
+    runtime: Rc<tokio::runtime::Runtime>,
+) -> service_impl::hash_base::PersonServiceImpl {
+    let cache_uri =
+        env::var("CACHE_URI").unwrap_or("redis://:adminpass@localhost:16379".to_string());
+    let mq_uri = env::var("AMQP_URI").unwrap_or(
+        // connection_timeout is in milliseconds
+        "amqp://admin:adminpass@localhost:5672/%2f?connection_timeout=2000".to_string(),
+    );
+
+    service_impl::hash_base::PersonServiceImpl::new(runtime, &cache_uri, &mq_uri)
+}
+#[cfg(feature = "use_hash")]
+pub fn make_batch_import_presenter() -> service_impl::hash_base::PersonBatchImportPresenterImpl {
+    service_impl::hash_base::PersonBatchImportPresenterImpl
+}
+
 #[cfg(feature = "use_pq")]
 pub fn make_service(
     runtime: Rc<tokio::runtime::Runtime>,

@@ -25,6 +25,11 @@ tx-rs = { git = "https://github.com/cutsea110/fragments.git", package = "tx-rs",
 uuid = { version = "1.11.0", features = ["serde", "v7"] }
 
 [[bin]]
+name = "app-hs"
+path = "app/main.rs"
+required-features = ["use_hash"]
+
+[[bin]]
 name = "app-pq"
 path = "app/main.rs"
 required-features = ["use_pq"]
@@ -35,5 +40,6 @@ path = "app/main.rs"
 required-features = ["use_dynamo"]
 
 [features]
+use_hash = []
 use_pq = []
 use_dynamo = []
