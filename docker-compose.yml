@@ -20,7 +20,7 @@ services:
     command: redis-server --save 20 1 --loglevel warning --requirepass adminpass
 
   mq:
-    image: rabbitmq:4.1.1-management-alpine
+    image: rabbitmq:4.1.2-management-alpine
     container_name: rabbitmq
     ports:
       - 5672:5672
@@ -30,7 +30,7 @@ services:
       - RABBITMQ_DEFAULT_PASS=adminpass
 
   dynamodb:
-    image: amazon/dynamodb-local:2.6.1
+    image: amazon/dynamodb-local:3.0.0
     container_name: dynamodb
     ports:
       - 18000:8000
