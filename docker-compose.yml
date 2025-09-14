@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17.5-alpine
+    image: postgres:17.6-alpine
     container_name: postgres
     ports:
       - 15432:5432
@@ -13,14 +13,14 @@ services:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
   cache:
-    image: redis:8.0-alpine
+    image: redis:8.2-alpine
     container_name: redis
     ports:
       - 16379:6379
     command: redis-server --save 20 1 --loglevel warning --requirepass adminpass
 
   mq:
-    image: rabbitmq:4.1.2-management-alpine
+    image: rabbitmq:4.1.4-management-alpine
     container_name: rabbitmq
     ports:
       - 5672:5672
@@ -30,7 +30,7 @@ services:
       - RABBITMQ_DEFAULT_PASS=adminpass
 
   dynamodb:
-    image: amazon/dynamodb-local:3.0.0
+    image: amazon/dynamodb-local:3.1.0
     container_name: dynamodb
     ports:
       - 18000:8000
