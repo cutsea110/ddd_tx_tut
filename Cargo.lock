@@ -3256,7 +3256,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "tx-rs"
 version = "0.1.0"
-source = "git+https://github.com/cutsea110/fragments.git?branch=main#e8812e0d5485ffd281ba1e5e4ec57dfda0ee9523"
+source = "git+https://github.com/cutsea110/fragments.git?branch=main#6ef7143ed5f6c1eb15bc7b8dd62cf0a71509fba6"
 
 [[package]]
 name = "typenum"
