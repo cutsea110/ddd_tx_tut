@@ -120,6 +120,7 @@ impl<'a> PersonCachedService<'a, redis::Connection, postgres::Transaction<'a>>
 }
 
 // a crude presenter
+#[cfg_attr(any(feature = "use_dynamo", feature = "use_hash"), allow(unused))]
 pub struct PersonBatchImportPresenterImpl;
 impl PersonOutputBoundary<(u64, u64), ServiceError> for PersonBatchImportPresenterImpl {
     fn started(&self) {

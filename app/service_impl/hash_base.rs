@@ -109,6 +109,7 @@ impl<'a> PersonCachedService<'a, redis::Connection, RefMut<'a, HashMap<PersonId,
 }
 
 // a crude presenter
+#[cfg_attr(any(feature = "use_pq", feature = "use_dynamo"), allow(unused))]
 pub struct PersonBatchImportPresenterImpl;
 impl PersonOutputBoundary<(u64, u64), ServiceError> for PersonBatchImportPresenterImpl {
     fn started(&self) {

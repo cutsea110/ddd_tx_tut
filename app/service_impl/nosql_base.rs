@@ -107,6 +107,7 @@ impl<'a> PersonCachedService<'a, redis::Connection, Rc<tokio::runtime::Runtime>>
 }
 
 // a crude presenter
+#[cfg_attr(any(feature = "use_pq", feature = "use_hash"), allow(unused))]
 pub struct PersonBatchImportPresenterImpl;
 impl PersonOutputBoundary<(u64, u64), ServiceError> for PersonBatchImportPresenterImpl {
     fn started(&self) {
