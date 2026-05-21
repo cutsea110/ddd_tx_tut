@@ -28,7 +28,6 @@ create_table_if_not_exists() {
     --key-schema \
       AttributeName=PK,KeyType=HASH \
       AttributeName=SK,KeyType=RANGE \
-    --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
     --billing-mode PAY_PER_REQUEST
   echo "Table '$table' created."
 }
