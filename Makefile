@@ -1,4 +1,4 @@
-.PHONY: all
+.PHONY: all setup
 
 all:
 	cargo build --bin app-hs --features use_hash
@@ -9,6 +9,9 @@ test:
 	cargo test --features use_hash
 	cargo test --features use_pq
 	cargo test --features use_dynamo
+
+setup:
+	mkdir -p data
 
 clean:
 	cargo clean

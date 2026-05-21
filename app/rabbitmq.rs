@@ -57,7 +57,10 @@ impl Observer for Client {
             trace!("channel created");
             chan.queue_declare(
                 to,
-                lapin::options::QueueDeclareOptions::default(),
+                lapin::options::QueueDeclareOptions {
+                    durable: true,
+                    ..Default::default()
+                },
                 lapin::types::FieldTable::default(),
             )
             .await
