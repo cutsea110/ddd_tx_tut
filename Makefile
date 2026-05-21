@@ -1,4 +1,4 @@
-.PHONY: all setup
+.PHONY: all setup test clean
 
 all:
 	cargo build --bin app-hs --features use_hash
