@@ -1,4 +1,6 @@
-use aws_sdk_dynamodb::types::{AttributeValue, AttributeValueUpdate, ReturnValue};
+use aws_sdk_dynamodb::types::{
+    AttributeValue, AttributeValueUpdate, ExpectedAttributeValue, ReturnValue,
+};
 use chrono::NaiveDate;
 use log::{debug, trace};
 use std::{collections::HashMap, rc::Rc};
@@ -230,6 +232,11 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                 };
                 let attr_revision_upd = AttributeValueUpdate::builder()
                     .action(aws_sdk_dynamodb::types::AttributeAction::Put)
+                    .value(AttributeValue::N(person.revision.to_string()))
+                    .build();
+                // optimistic lock: update only if the stored revision is still the one
+                // the caller read. This also fails if the item doesn't exist.
+                let expected_revision = ExpectedAttributeValue::builder()
                     .value(AttributeValue::N(revision.to_string()))
                     .build();
 
@@ -244,13 +251,22 @@ impl PersonDao<Rc<tokio::runtime::Runtime>> for DynamoDbPersonDao {
                     .attribute_updates("death_date", attr_death_upd)
                     .attribute_updates("data", attr_data_upd)
                     .attribute_updates("revision", attr_revision_upd)
+                    .expected("revision", expected_revision)
                     .return_values(ReturnValue::None);
                 debug!("request for update-item person: {:?}", req);
 
-                let resp = req
-                    .send()
-                    .await
-                    .map_err(|e| DaoError::UpdateError(e.to_string()))?;
+                let resp = req.send().await.map_err(|e| {
+                    if e.as_service_error()
+                        .is_some_and(|se| se.is_conditional_check_failed_exception())
+                    {
+                        DaoError::UpdateError(format!(
+                            "revision mismatch or person not found: id={}, expected revision {}",
+                            id, revision
+                        ))
+                    } else {
+                        DaoError::UpdateError(e.to_string())
+                    }
+                })?;
                 debug!("response of update-item person: {:?}", resp);
 
                 Ok(())
