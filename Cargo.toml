@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.92"
-aws-config = { version = "1.13.0", features = ["behavior-version-latest"] }
-aws-sdk-dynamodb = "1.137.0"
+aws-config = { version = "1.13.1", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.138.0"
 chrono = { version = "0.4.45", features = ["serde"] }
 env_logger = "0.11.11"
 itertools = "0.13"
@@ -22,7 +22,7 @@ syslog = "7.0.0"
 thiserror = "1.0.69"
 tokio = { version = "1", features = ["full"] }
 tx-rs = { git = "https://github.com/cutsea110/fragments.git", package = "tx-rs", branch = "main" }
-uuid = { version = "1.29.0", features = ["serde", "v7"] }
+uuid = { version = "1.29.2", features = ["serde", "v7"] }
 
 [[bin]]
 name = "app-hs"
