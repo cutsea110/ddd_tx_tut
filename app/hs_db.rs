@@ -71,7 +71,9 @@ impl<'a> PersonDao<RefMut<'a, HashMap<PersonId, PersonDto>>> for HashDB {
         trace!("saving person: {:?}", person);
         tx_rs::with_tx(move |ctx: &mut RefMut<'a, HashMap<PersonId, PersonDto>>| {
             if let Some(existing) = ctx.get_mut(&id) {
-                if existing.revision >= revision {
+                // `revision` is the revision the caller read (optimistic lock),
+                // so the stored one must be exactly the same.
+                if existing.revision != revision {
                     return Err(DaoError::UpdateError(format!(
                         "revision mismatch: expected {}, found {}",
                         revision, existing.revision
@@ -97,5 +99,49 @@ impl<'a> PersonDao<RefMut<'a, HashMap<PersonId, PersonDto>>> for HashDB {
             ctx.remove(&id);
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tx_rs::Tx;
+
+    use super::*;
+    use crate::domain::date;
+
+    fn person(revision: Revision) -> PersonDto {
+        PersonDto::new("poor man", date(2001, 9, 11), None, None, revision)
+    }
+
+    #[test]
+    fn test_save_with_current_revision() {
+        let db = HashDB::new();
+        let mut ctx = db.persons.borrow_mut();
+        let id = db.insert(person(0)).run(&mut ctx).unwrap();
+
+        let result = db.save(id, 0, person(1)).run(&mut ctx);
+        assert!(result.is_ok());
+        assert_eq!(ctx.get(&id).unwrap().revision, 1);
+    }
+
+    #[test]
+    fn test_save_with_stale_revision() {
+        let db = HashDB::new();
+        let mut ctx = db.persons.borrow_mut();
+        let id = db.insert(person(0)).run(&mut ctx).unwrap();
+        db.save(id, 0, person(1)).run(&mut ctx).unwrap();
+
+        let result = db.save(id, 0, person(1)).run(&mut ctx);
+        assert!(matches!(result, Err(DaoError::UpdateError(_))));
+        assert_eq!(ctx.get(&id).unwrap().revision, 1);
+    }
+
+    #[test]
+    fn test_save_not_found() {
+        let db = HashDB::new();
+        let mut ctx = db.persons.borrow_mut();
+
+        let result = db.save(Uuid::now_v7(), 0, person(1)).run(&mut ctx);
+        assert!(matches!(result, Err(DaoError::UpdateError(_))));
     }
 }
