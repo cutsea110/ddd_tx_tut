@@ -13,14 +13,14 @@ services:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
   cache:
-    image: redis:8.10.1-alpine
+    image: redis:8.10.3-alpine
     container_name: redis
     ports:
       - 16379:6379
     command: redis-server --save 20 1 --loglevel warning --requirepass adminpass
 
   mq:
-    image: rabbitmq:4.3.5-management-alpine
+    image: rabbitmq:4.4.0-management-alpine
     container_name: rabbitmq
     ports:
       - 5672:5672
@@ -37,7 +37,7 @@ services:
       - ./data:/data
 
   dynamodb:
-    image: amazon/dynamodb-local:3.3.1
+    image: amazon/dynamodb-local:3.3.2
     container_name: dynamodb
     user: "1000:1000"
     ports:
@@ -53,7 +53,7 @@ services:
         condition: service_completed_successfully
 
   dynamodb-init:
-    image: amazon/aws-cli:2.36.46
+    image: amazon/aws-cli:2.39.7
     container_name: dynamodb-init
     depends_on:
       - dynamodb
